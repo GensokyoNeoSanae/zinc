@@ -1,4 +1,4 @@
-package main
+package app
 
 // Messages 是所有用户可见文案的集合。
 // 约束：同一字段在 zh/en 中 %s / %d / %v / %q / %w 的数量和顺序必须一致。
@@ -159,6 +159,39 @@ type Messages struct {
 	Init7zipMissing string
 	InitHint        string
 
+	// install / uninstall（独立可执行文件，与主程序共用这套消息表）
+	FlagInstall7zip  string
+	FlagNoPause      string
+	FlagYesUninstall string
+	FlagKeepSchedule string
+
+	InstallHeader    string
+	Install7zipOK    string
+	PromptSevenZip   string
+	SevenZipMissing  string
+	SevenZipNotFound string
+	InstallDone      string
+	PressEnter       string
+
+	UninstallHeader        string
+	UninstallTasks         string
+	UninstallTaskItem      string
+	UninstallNoTasks       string
+	UninstallTaskRemoved   string
+	UninstallTaskFail      string
+	UninstallKeepSchedule  string
+	UninstallNoNotify      string
+	UninstallNotifyRemoved string
+	UninstallNotifySkip    string
+	UninstallNotifyFail    string
+	UninstallPathRemoved   string
+	UninstallPathMissing   string
+	UninstallPathFail      string
+	UninstallConfirm       string
+	UninstallNeedYes       string
+	UninstallAbort         string
+	UninstallDone          string
+
 	// settings / config
 	LoadSettingsFailed  string
 	ParseSettingsFailed string
@@ -284,6 +317,7 @@ var zhMessages = &Messages{
   - 索引只是缓存，丢了用 zinc reindex 从包本身重建
   - 输出默认落在 <root>\<name>，用 zinc root 设置
   - 解压后先跑一次 zinc init，之后在任意终端直接敲 zinc
+  - 安装/卸载用同目录的 zinc-install.exe / zinc-uninstall.exe；zinc init 是轻量版，不强制 7-Zip
 `,
 
 	ErrPrefix:         "[错误] ",
@@ -428,6 +462,38 @@ var zhMessages = &Messages{
 	Init7zipMissing: "[警告] 找不到 7za: %s（可用 zinc config set 7zip_path 指定）\n",
 	InitHint:        "\n完成。新开一个终端就能直接敲 zinc；通知不弹就再跑一次 zinc init --force。\n",
 
+	FlagInstall7zip:  "指定 7z.exe / 7za.exe 的路径",
+	FlagNoPause:      "结束后不等待按键（给脚本用）",
+	FlagYesUninstall: "不再询问确认",
+	FlagKeepSchedule: "保留计划任务（默认删除）",
+
+	InstallHeader:    "zinc 安装\n程序目录: %s\n\n",
+	Install7zipOK:    "[ok] 7-Zip: %s\n",
+	PromptSevenZip:   "没有找到 7-Zip。请先安装（https://www.7-zip.org/），或输入 7z.exe / 7za.exe 的完整路径（留空退出）: ",
+	SevenZipMissing:  "[失败] 没有可用的 7-Zip。zinc 依赖 7z.exe 或 7za.exe；装好后重跑 zinc-install.exe，或用 --7zip <路径> 指定。",
+	SevenZipNotFound: "[失败] 7-Zip 路径不可用: %s",
+	InstallDone:      "\n完成。新开一个终端就能直接敲 zinc；接下来设置备份根目录：\n  zinc root D:\\Backup\\zinc\n",
+	PressEnter:       "\n按 Enter 关闭窗口……",
+
+	UninstallHeader:        "zinc 卸载\n程序目录: %s\n\n",
+	UninstallTasks:         "将删除 %d 个计划任务：\n",
+	UninstallTaskItem:      "  %s\n",
+	UninstallNoTasks:       "[跳过] 没有指向本目录的计划任务\n",
+	UninstallTaskRemoved:   "[ok] 已删除 %d 个计划任务\n",
+	UninstallTaskFail:      "[失败] 处理计划任务: %v\n",
+	UninstallKeepSchedule:  "[跳过] 按 --keep-schedule 保留计划任务\n",
+	UninstallNoNotify:      "[跳过] 没有通知注册\n",
+	UninstallNotifyRemoved: "[ok] 已删除通知注册（快捷方式、AppUserModelId、标记文件）\n",
+	UninstallNotifySkip:    "[跳过] 通知注册属于另一个目录，未改动: %s\n",
+	UninstallNotifyFail:    "[失败] 删除通知注册: %v\n",
+	UninstallPathRemoved:   "[ok] 已从用户 PATH 移除: %s（新开的终端生效）\n",
+	UninstallPathMissing:   "[跳过] 用户 PATH 里没有: %s\n",
+	UninstallPathFail:      "[失败] 写用户 PATH: %v\n",
+	UninstallConfirm:       "\n继续卸载？备份数据和设置文件都不会删除 [y/N]: ",
+	UninstallNeedYes:       "[失败] 非交互环境需要加 --yes 才会卸载",
+	UninstallAbort:         "已取消。\n",
+	UninstallDone:          "\n卸载完成。程序文件还在 %s，可以直接删掉这个文件夹；备份数据（输出目录里的 .7z）没有被改动。\n",
+
 	LoadSettingsFailed:  "读取设置文件 %s 失败: %w",
 	ParseSettingsFailed: "解析设置文件 %s 失败: %w",
 	ConfigUnknownKey:    "未知的设置项: %s",
@@ -545,6 +611,7 @@ Notes:
   - the index is a cache; zinc reindex rebuilds it from the packs themselves
   - output defaults to <root>\<name>; set it with zinc root
   - run zinc init once after unzipping; then just type zinc in any terminal
+  - use zinc-install.exe / zinc-uninstall.exe from the same folder for install and removal; zinc init is the light version that does not require 7-Zip
 `,
 
 	ErrPrefix:         "[error] ",
@@ -688,6 +755,38 @@ Notes:
 	Init7zipOK:      "[ok] 7za: %s\n",
 	Init7zipMissing: "[warn] 7za not found: %s (set it with zinc config set 7zip_path)\n",
 	InitHint:        "\nDone. Open a new terminal and type zinc; if notifications still fail, run zinc init --force again.\n",
+
+	FlagInstall7zip:  "path to 7z.exe / 7za.exe",
+	FlagNoPause:      "do not wait for a key press (for scripts)",
+	FlagYesUninstall: "do not ask for confirmation",
+	FlagKeepSchedule: "keep scheduled tasks (removed by default)",
+
+	InstallHeader:    "zinc install\nprogram dir: %s\n\n",
+	Install7zipOK:    "[ok] 7-Zip: %s\n",
+	PromptSevenZip:   "7-Zip was not found. Install it first (https://www.7-zip.org/), or type the full path to 7z.exe / 7za.exe (empty to abort): ",
+	SevenZipMissing:  "[failed] no usable 7-Zip. zinc needs 7z.exe or 7za.exe; install it and re-run zinc-install.exe, or pass --7zip <path>.",
+	SevenZipNotFound: "[failed] not a usable 7-Zip path: %s",
+	InstallDone:      "\nDone. Open a new terminal and type zinc. Next, pick a backup root:\n  zinc root D:\\Backup\\zinc\n",
+	PressEnter:       "\nPress Enter to close this window...",
+
+	UninstallHeader:        "zinc uninstall\nprogram dir: %s\n\n",
+	UninstallTasks:         "%d scheduled task(s) will be removed:\n",
+	UninstallTaskItem:      "  %s\n",
+	UninstallNoTasks:       "[skip] no scheduled tasks point at this directory\n",
+	UninstallTaskRemoved:   "[ok] removed %d scheduled task(s)\n",
+	UninstallTaskFail:      "[failed] handling scheduled tasks: %v\n",
+	UninstallKeepSchedule:  "[skip] scheduled tasks kept (--keep-schedule)\n",
+	UninstallNoNotify:      "[skip] no notification registration\n",
+	UninstallNotifyRemoved: "[ok] notification registration removed (shortcut, AppUserModelId, marker)\n",
+	UninstallNotifySkip:    "[skip] notification registration belongs to another directory, left alone: %s\n",
+	UninstallNotifyFail:    "[failed] removing notification registration: %v\n",
+	UninstallPathRemoved:   "[ok] removed from user PATH: %s (takes effect in new terminals)\n",
+	UninstallPathMissing:   "[skip] user PATH does not contain: %s\n",
+	UninstallPathFail:      "[failed] writing user PATH: %v\n",
+	UninstallConfirm:       "\nContinue? Backup data and settings are kept [y/N]: ",
+	UninstallNeedYes:       "[failed] non-interactive run: pass --yes to uninstall",
+	UninstallAbort:         "cancelled.\n",
+	UninstallDone:          "\nUninstalled. The program files are still in %s; delete that folder whenever you like. Backup data (the .7z packs) was not touched.\n",
 
 	LoadSettingsFailed:  "failed to read settings file %s: %w",
 	ParseSettingsFailed: "failed to parse settings file %s: %w",

@@ -1,8 +1,8 @@
-package main
+package app
 
 import "os"
 
-func main() {
+func Main() {
 	rotateLogs()
 	args := initLang(os.Args[1:])
 	if len(args) < 1 {

@@ -15,16 +15,17 @@ Please do not paste real passwords. Replace them with `xxxx`.
 
 ## Building
 
-Requires Go 1.27+ and 7-Zip (`7za.exe`).
+Requires Go 1.27+ and 7-Zip (`7z.exe` or `7za.exe`).
 
 ```powershell
 git clone https://github.com/GensokyoNeoSanae/zinc.git
 cd zinc
-go build -ldflags "-s -w" -o zinc.exe .
-go build -ldflags "-s -w -H=windowsgui" -o zincw.exe .
+.\build.ps1
 ```
 
-`build.ps1` does the same thing with a single command.
+`build.ps1` produces the four binaries (`zinc.exe`, `zincw.exe`, `zinc-install.exe`, `zinc-uninstall.exe`); `package.ps1` also assembles the release zip under `dist/`.
+
+Layout: `cmd/` holds the four entry points and `internal/app` holds all shared code. The installer and uninstaller are thin wrappers around `registerSetup` and `UninstallMain`; anything that writes to the registry, the Start Menu or the user `PATH` belongs there, not in the CLI.
 
 Before opening a pull request:
 

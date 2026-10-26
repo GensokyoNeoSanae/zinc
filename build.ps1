@@ -1,4 +1,8 @@
-# 编译两个可执行文件：zinc.exe（控制台版）与 zincw.exe（GUI 子系统，计划任务用）
+# 编译四个可执行文件：
+#   zinc.exe          控制台版主程序
+#   zincw.exe         GUI 子系统版主程序（计划任务用，不弹窗口）
+#   zinc-install.exe  安装：检查 7-Zip、注册通知、写用户 PATH
+#   zinc-uninstall.exe 卸载：删计划任务、通知注册、PATH 项（不碰备份数据）
 # 用法：.\build.ps1                用 PATH 里的 go
 #       .\build.ps1 -Go C:\Go\bin\go.exe
 param(
@@ -9,10 +13,16 @@ $ErrorActionPreference = 'Stop'
 $env:GOCACHE = Join-Path $PSScriptRoot '.gocache'
 New-Item -ItemType Directory -Force -Path $env:GOCACHE | Out-Null
 
-& $Go build -C $PSScriptRoot -ldflags "-s -w" -o zinc.exe .
-if ($LASTEXITCODE -ne 0) { throw 'console build failed' }
+& $Go build -C $PSScriptRoot -ldflags "-s -w" -o zinc.exe ./cmd/zinc
+if ($LASTEXITCODE -ne 0) { throw 'zinc build failed' }
 
-& $Go build -C $PSScriptRoot -ldflags "-s -w -H=windowsgui" -o zincw.exe .
+& $Go build -C $PSScriptRoot -ldflags "-s -w -H=windowsgui" -o zincw.exe ./cmd/zinc
 if ($LASTEXITCODE -ne 0) { throw 'GUI build failed' }
 
-Write-Host 'built zinc.exe and zincw.exe'
+& $Go build -C $PSScriptRoot -ldflags "-s -w" -o zinc-install.exe ./cmd/install
+if ($LASTEXITCODE -ne 0) { throw 'installer build failed' }
+
+& $Go build -C $PSScriptRoot -ldflags "-s -w" -o zinc-uninstall.exe ./cmd/uninstall
+if ($LASTEXITCODE -ne 0) { throw 'uninstaller build failed' }
+
+Write-Host 'built zinc.exe, zincw.exe, zinc-install.exe, zinc-uninstall.exe'

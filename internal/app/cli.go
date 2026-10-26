@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"flag"
@@ -17,6 +17,7 @@ var flagNeedsValue = map[string]bool{
 	"sample": true, "at": true, "weekly": true, "monthly": true,
 	"max-pack-byte": true, "compress": true, "exclude": true,
 	"pack-start": true, "pack-end": true, "only": true, "from": true,
+	"7zip": true,
 }
 
 // multiFlag 是可重复的字符串 flag（--exclude a --exclude b）

@@ -24,6 +24,7 @@ zinc 把一个或多个源目录（称为“仓库”）备份到同一个输出
 - [恢复](#恢复)
 - [定时任务与通知](#定时任务与通知)
 - [文件位置](#文件位置)
+- [卸载](#卸载)
 - [已知限制](#已知限制)
 - [常见问题](#常见问题)
 - [从源码构建](#从源码构建)
@@ -107,27 +108,21 @@ zinc reindex 图片 --yes    # 覆盖已有索引（旧文件会留一份 .bak�
 ## 环境要求
 
 - **Windows 10 / 11，64 位。** zinc 用到计划任务、Windows 通知和 Win32 控制台接口，不在其他平台上构建或运行。
-- **7-Zip。** 只调用命令行版 `7za.exe`。内置默认路径是 `E:\Tools\7zip\7za.exe`，可以用 `zinc config set 7zip_path <路径>` 改。
+- **7-Zip。** zinc 调用 `7z.exe` 或 `7za.exe`，装官方 7-Zip 就够。`zinc-install.exe` 会依次在 `PATH`、`Program Files`、旧的 `E:\Tools\7zip` 里找，并把找到的路径写进 `settings.json`。
 - **Go 1.27 或更新**，仅从源码构建时需要。
 
 ## 安装
 
-1. 从 [releases 页面](https://github.com/GensokyoNeoSanae/zinc/releases) 下载 `zinc.exe`、`zincw.exe`、`zinc.ico`（或者自己编译），放进同一个目录，例如 `C:\Tools\zinc`。
-2. 在该目录下跑一次初始化：
+zinc 是绿色程序：解压到任意目录，跑一次安装程序就能用。除了程序目录、`HKCU` 和开始菜单，不往别处写东西，也不需要管理员权限。
 
-   ```powershell
-   C:\Tools\zinc\zinc.exe init
-   ```
-
-   `init` 会注册通知身份，并把程序目录加进**当前用户**的 `PATH`，之后任意终端里直接敲 `zinc` 即可。它不复制、不移动任何文件，只写注册表和开始菜单快捷方式。`PATH` 变更对新开的终端生效。
-
-3. 如果 7-Zip 不在默认路径，指定一下：
-
-   ```powershell
-   zinc config set 7zip_path 'C:\Program Files\7-Zip\7za.exe'
-   ```
-
-4. 选一个备份的输出根目录：
+1. 把 `zinc-<版本>-windows-amd64.zip` 解压到一个你打算长期保留的目录，例如 `C:\Tools\zinc`。别直接在“下载”目录里装：这个目录会被写进 `PATH`。
+2. 确认装了 7-Zip（<https://www.7-zip.org/>）。官方安装包里的 `7z.exe` 就够用，7-Zip Extra 里的 `7za.exe` 也行。
+3. 在该目录下运行 `zinc-install.exe`——双击，或者在终端里调用。它会：
+   - 依次在 `PATH`、`Program Files`、内置回落路径里找 7-Zip，找不到就问你要路径
+   - 注册通知身份：开始菜单快捷方式 + `AppUserModelId` 注册表项
+   - 把本目录加进**当前用户**的 `PATH`
+   并把找到的 7-Zip 路径写进 `settings.json`。如果找不到、你也给不出可用路径，它会在改动任何系统状态之前停下。
+4. 开一个**新**终端，选备份根目录：
 
    ```powershell
    zinc root D:\Backup\zinc
@@ -135,7 +130,7 @@ zinc reindex 图片 --yes    # 覆盖已有索引（旧文件会留一份 .bak�
 
    之后新建的仓库默认输出到 `<root>\<仓库名>`。
 
-全程不需要管理员权限：zinc 写的东西只在程序目录、`HKCU` 和当前用户的开始菜单里。
+`zinc init` 做同样的注册，只是 7-Zip 缺失时仅提示、不阻断；它是留给已经手动配好 `7zip_path` 的人的轻量版。第一次用，直接跑 `zinc-install.exe`。
 
 ## 快速开始
 
@@ -384,6 +379,8 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 |---|---|
 | `zinc.exe` | 控制台版，手动跑 |
 | `zincw.exe` | GUI 版，计划任务用 |
+| `zinc-install.exe` | 安装：检查 7-Zip、注册通知、写用户 `PATH` |
+| `zinc-uninstall.exe` | 卸载：清计划任务、通知注册、`PATH` 项 |
 | `zinc.ico` | 可选，通知快捷方式图标 |
 | `repos.json` | 仓库注册表，首次 `add` 时生成 |
 | `settings.json` | 全局默认值，首次 `config set` 时生成 |
@@ -407,12 +404,29 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 
 ### 换机
 
-1. 装 7-Zip（或把 `7za.exe` 放到某个位置）
-2. 把 `zinc.exe`、`zincw.exe`、`zinc.ico` 复制过去
+1. 装 7-Zip（或把 `7z.exe` / `7za.exe` 放到某个位置）
+2. 整个程序目录复制过去（或重新解压一份），跑 `zinc-install.exe`
 3. `zinc root <新根目录>`
 4. 复制 `repos.json`、`settings.json`，或者重新 `add` 和 `config`
 5. 重新 `schedule` 建任务（计划任务属于本机，不跟着走）
-6. 第一次 `--notify` 会自动重建通知注册
+
+## 卸载
+
+在程序目录里运行 `zinc-uninstall.exe`（双击，或脚本里加 `--yes`）。它会清掉：
+
+- 命令行指向本目录的计划任务——程序没了，备份不会还在后台跑
+- 通知注册：开始菜单快捷方式、`HKCU\Software\Classes\AppUserModelId\zinc.backup`、`.aumid_ok`
+- 用户 `PATH` 里的这个目录
+
+它**不动**备份数据、`index.tsv` / `manifest.json`、`settings.json`、`repos.json` 和 `logs`。这些想删的话，卸载完直接删文件夹。
+
+| 参数 | 说明 |
+|---|---|
+| `--yes` | 不再询问确认 |
+| `--keep-schedule` | 保留计划任务 |
+| `--no-pause` | 结束后不等待按键 |
+
+如果装完之后移动过程序目录，计划任务还指着旧路径，卸载时匹配不到：要么把目录放回原处，要么先 `zinc unschedule --all` 清掉。
 
 ## 已知限制
 
@@ -447,22 +461,24 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 ```powershell
 git clone https://github.com/GensokyoNeoSanae/zinc.git
 cd zinc
-go build -ldflags "-s -w" -o zinc.exe .
-go build -ldflags "-s -w -H=windowsgui" -o zincw.exe .
+go build -o zinc.exe ./cmd/zinc
+go build -ldflags "-s -w -H=windowsgui" -o zincw.exe ./cmd/zinc
+go build -o zinc-install.exe ./cmd/install
+go build -o zinc-uninstall.exe ./cmd/uninstall
 ```
 
-同样的命令也包在 `build.ps1` 里：
+`build.ps1` 把上面四条包成一条命令，`package.ps1` 负责出发布包：
 
 ```powershell
-.\build.ps1            # 用 PATH 里的 go
-.\build.ps1 -Go C:\Go\bin\go.exe
+.\build.ps1
+.\package.ps1 -Version 0.1.0        # 生成 dist\zinc-0.1.0-windows-amd64.zip
 ```
 
-两个 exe 只差子系统：`zinc.exe` 是控制台程序，手动跑能看输出；`zincw.exe` 是 GUI 子系统，计划任务执行时不闪窗口、不抢焦点。项目没有第三方依赖，`go.mod` 只声明了 Go 版本。
+`cmd/` 是四个入口，`internal/app` 是共用代码。两个主程序只差子系统：`zinc.exe` 是控制台程序，手动跑能看输出；`zincw.exe` 是 GUI 子系统，计划任务执行时不闪窗口、不抢焦点。项目没有第三方依赖，`go.mod` 只声明了 Go 版本。
 
 ## 参与贡献
 
-欢迎提 issue 和 PR。请保持改动聚焦，提交前跑一下 `gofmt`、`go vet`，并把两个 exe 都编译一遍。细节见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+欢迎提 issue 和 PR。请保持改动聚焦，提交前跑一下 `gofmt`、`go vet`，并把四个 exe 都编译一遍。细节见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 许可证
 

@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"bufio"
@@ -268,4 +268,19 @@ func shortHash(h string) string {
 		return h[:12]
 	}
 	return h
+}
+
+// isConsole 判断标准输入是不是控制台（双击 exe 时是，管道或重定向时不是）。
+func isConsole() bool {
+	fi, err := os.Stdin.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
+// pauseUnless 在交互式控制台里等一次回车，双击运行时窗口才不会一闪而过。
+func pauseUnless(noPause bool) {
+	if noPause || !isConsole() {
+		return
+	}
+	fmt.Print(M.PressEnter)
+	readLine()
 }

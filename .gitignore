@@ -3,6 +3,7 @@
 *.dll
 *.pdb
 .gocache/
+/dist/
 
 # Runtime state (created next to the executable at run time — never commit it)
 /repos.json
