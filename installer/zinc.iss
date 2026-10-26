@@ -25,6 +25,7 @@ VersionInfoDescription={#AppName} setup
 DefaultDirName={localappdata}\Programs\zinc
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
+DisableDirPage=no
 DisableWelcomePage=no
 LicenseFile=..\LICENSE
 OutputDir=..\dist
