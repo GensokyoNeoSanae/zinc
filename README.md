@@ -113,7 +113,7 @@ Packs are atomic; dates are not. One pack can span several days, so a date bound
 
 ## Install
 
-1. Download `zinc-<version>-setup.exe` from the [releases page](https://github.com/GensokyoNeoSanae/zinc/releases) and run it. The wizard needs no admin rights: it installs into `%LOCALAPPDATA%\Programs\zinc`, registers the notification identity and adds the folder to your user `PATH`.
+1. Download `zinc-<version>-setup.exe` from the [releases page](https://github.com/GensokyoNeoSanae/zinc/releases) and run it. The first page picks the language: English by default, 简体中文 as the second option. The wizard needs no admin rights: it installs into `%LOCALAPPDATA%\Programs\zinc`, registers the notification identity and adds the folder to your user `PATH`.
 2. Make sure 7-Zip is installed (<https://www.7-zip.org/>). The wizard looks for `7z.exe` / `7za.exe` on `PATH`, in `Program Files`, then in the old `E:\Tools\7zip` location, and asks for the path if it cannot find one — it will not finish without a usable 7-Zip.
 3. Open a **new** terminal, then pick where backups live:
 
@@ -408,16 +408,15 @@ Every pack is self-contained, so a damaged pack only loses that pack and the res
 
 ## Uninstall
 
-Open **Settings → Apps → Installed apps**, find `zinc` and choose Uninstall — or run `uninstall.exe` from the install folder. The uninstall wizard:
+Open **Settings → Apps → Installed apps**, find `zinc` and choose Uninstall. That runs Inno Setup's uninstaller (`unins000.exe` in the install folder), which asks for confirmation and then removes the files.
+
+Before removing them it calls `zinc-uninstall.exe` to undo the registration:
 
 - stops and removes the scheduled tasks that point at this folder, so no backup keeps running after the program is gone
 - removes the notification registration: Start Menu shortcut, `HKCU\Software\Classes\AppUserModelId\zinc.backup`, `.aumid_ok`
 - removes the folder from your user `PATH`
-- deletes the program files
 
-`settings.json`, `repos.json` and `logs` are kept unless you clear the checkbox. Backups — the `.7z` packs and manifests in your output directories — are never touched.
-
-The wizard drives `zinc-uninstall.exe`, the console build of the same cleanup, which also ships in the portable zip.
+`settings.json`, `repos.json` and `logs` are left behind, so a later reinstall keeps your repos and default password; delete the folder if you do not want them. Backups — the `.7z` packs and manifests in your output directories — are never touched.
 
 If you moved the program folder after installing, the tasks still point at the old one and will not be matched: either keep the folder where it was, or clear them first with `zinc unschedule --all`.
 
@@ -460,17 +459,17 @@ go build -o zinc-install.exe ./cmd/install
 go build -o zinc-uninstall.exe ./cmd/uninstall
 ```
 
-`build.ps1` wraps those four commands. The installer is a pair of C# WinForms programs in `installer/`, built with the .NET Framework compiler that ships with Windows:
+`build.ps1` wraps those four commands. The installer is an [Inno Setup 6](https://jrsoftware.org/isinfo.php) script, `installer/zinc.iss`. Install Inno Setup once; the build script looks for `ISCC.exe` in `_tools\InnoSetup6`, in `Program Files`, or wherever `-Iscc` points:
 
 ```powershell
 .\build.ps1                          # the four zinc binaries
-.\installer\build.ps1 -Version 0.1.0 # setup.exe + uninstall.exe
-.\package.ps1 -Version 0.1.0         # dist\zinc-0.1.0-setup.exe + portable zip
+.\installer\build.ps1 -Version 0.1.0 # dist\zinc-0.1.0-setup.exe
+.\package.ps1 -Version 0.1.0         # setup + portable zip
 ```
 
-`package.ps1` calls both and writes `dist\zinc-<version>-setup.exe` (the wizard) and `dist\zinc-<version>-windows-amd64.zip` (portable). The setup embeds the four binaries, the icon, the docs and `uninstall.exe`, so the release is a single file.
+`package.ps1` calls both and writes `dist\zinc-<version>-setup.exe` (the wizard) and `dist\zinc-<version>-windows-amd64.zip` (portable). The setup is a single file: Inno compresses the four binaries, the icon, the docs and its own uninstaller into it. The first page picks the language — English by default, 简体中文 as the second option.
 
-`cmd/` holds the four entry points and `internal/app` the shared code; `installer/` holds the two wizards, which reuse `zinc-install.exe` / `zinc-uninstall.exe` for the actual registration. The two main executables differ only in subsystem: `zinc.exe` is a console program so you can watch it work, `zincw.exe` uses the GUI subsystem so scheduled tasks do not flash a console window (or steal focus). There are no third-party dependencies; `go.mod` only declares the Go version.
+`cmd/` holds the four entry points and `internal/app` the shared code. The Inno script does not implement registration itself: it runs `zinc-install.exe` after copying the files and `zinc-uninstall.exe` before removing them, so the CLI stays the single source of truth. The two main executables differ only in subsystem: `zinc.exe` is a console program so you can watch it work, `zincw.exe` uses the GUI subsystem so scheduled tasks do not flash a console window (or steal focus). There are no third-party dependencies; `go.mod` only declares the Go version.
 
 ## Contributing
 

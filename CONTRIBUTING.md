@@ -29,12 +29,15 @@ Layout: `cmd/` holds the four entry points and `internal/app` holds all shared c
 
 ## Installer
 
-`installer/` contains the two GUI wizards (C# WinForms, compiled by the .NET Framework `csc.exe` that ships with Windows, so no SDK download is needed):
+`installer/zinc.iss` is an Inno Setup 6 script: license, install folder, a 7-Zip page, progress and finish, with the language picker on the first page (English default, Simplified Chinese from `ChineseSimplified.isl`). Inno compresses the binaries into the single setup and generates its own uninstaller.
 
-- `Setup.cs` — welcome/license, install folder, 7-Zip, progress, finish. It embeds the binaries in `payload.zip` and writes the Add/Remove Programs entry.
-- `Uninstall.cs` — the uninstall wizard, copied into the install folder by the setup.
+Build it with Inno Setup installed; the script looks for `ISCC.exe` in `_tools\InnoSetup6`, `Program Files`, or wherever `-Iscc` points:
 
-`.\installer\build.ps1` compiles both; `.\package.ps1` produces the single-file setup and the portable zip. The wizards deliberately do not implement registration themselves — they call `zinc-install.exe` / `zinc-uninstall.exe`, so the CLI stays the single source of truth for the `PATH` entry, the notification registration and scheduled tasks. If you change one of those mechanics, change it in `internal/app`, not in the wizard.
+```powershell
+.\installer\build.ps1 -Version 0.1.0
+```
+
+The installer deliberately does not implement registration itself: it runs `zinc-install.exe` after copying the files and `zinc-uninstall.exe` before removing them, so the CLI stays the single source of truth for the `PATH` entry, the notification registration and scheduled tasks. If you change one of those mechanics, change it in `internal/app`, not in the `.iss`.
 
 Before opening a pull request:
 

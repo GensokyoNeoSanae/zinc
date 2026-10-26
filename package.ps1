@@ -1,10 +1,10 @@
 # 打发布包：
-#   dist\zinc-<版本>-setup.exe              安装向导（推荐给普通用户）
-#   dist\zinc-<版本>-windows-amd64.zip      绿色版（解压即用，zinc init 轻量注册）
+#   dist\zinc-<版本>-setup.exe          Inno Setup 安装包（推荐给普通用户）
+#   dist\zinc-<版本>-windows-amd64.zip  绿色版（解压即用，zinc init 轻量注册）
 param(
     [string]$Version = '',
     [string]$Go = 'go',
-    [string]$Csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+    [string]$Iscc = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,10 +20,10 @@ if ($Version.StartsWith('v') -or $Version.StartsWith('V')) { $Version = $Version
 $dist = Join-Path $root 'dist'
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 
-# 1. 安装向导（内部会先编译四个 exe）
-& (Join-Path $root 'installer\build.ps1') -Version $Version -Go $Go -Csc $Csc
+# 1. Inno Setup 安装包（内部会先编译四个 exe）
+& (Join-Path $root 'installer\build.ps1') -Version $Version -Go $Go -Iscc $Iscc
 $setup = Join-Path $dist "zinc-$Version-setup.exe"
-Copy-Item (Join-Path $root 'installer\build\setup.exe') $setup -Force
+if (-not (Test-Path $setup)) { throw "Inno Setup 没有产出 $setup" }
 
 # 2. 绿色版 zip
 $name = "zinc-$Version-windows-amd64"

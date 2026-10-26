@@ -113,7 +113,7 @@ zinc reindex 图片 --yes    # 覆盖已有索引（旧文件会留一份 .bak�
 
 ## 安装
 
-1. 从 [releases 页面](https://github.com/GensokyoNeoSanae/zinc/releases) 下载 `zinc-<版本>-setup.exe` 并运行。向导不需要管理员权限：默认装到 `%LOCALAPPDATA%\Programs\zinc`，注册通知身份，并把目录加进当前用户的 `PATH`。
+1. 从 [releases 页面](https://github.com/GensokyoNeoSanae/zinc/releases) 下载 `zinc-<版本>-setup.exe` 并运行。第一页选语言，英文默认，第二项是简体中文。向导不需要管理员权限：默认装到 `%LOCALAPPDATA%\Programs\zinc`，注册通知身份，并把目录加进当前用户的 `PATH`。
 2. 确认装了 7-Zip（<https://www.7-zip.org/>）。向导会依次在 `PATH`、`Program Files`、旧的 `E:\Tools\7zip` 里找 `7z.exe` / `7za.exe`；找不到就停在这一页让你指定路径，没有可用的 7-Zip 不会继续。
 3. 开一个**新**终端，选备份根目录：
 
@@ -408,16 +408,15 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 
 ## 卸载
 
-打开 **设置 → 应用 → 安装的应用**，找到 `zinc` 点卸载；或者直接运行安装目录里的 `uninstall.exe`。卸载向导会：
+打开 **设置 → 应用 → 安装的应用**，找到 `zinc` 点卸载。实际跑的是 Inno Setup 生成的卸载程序（安装目录里的 `unins000.exe`），确认之后删除文件。
+
+删文件之前它会调用 `zinc-uninstall.exe` 撤销注册：
 
 - 停掉并删除命令行指向本目录的计划任务——程序没了，备份不会还在后台跑
 - 清掉通知注册：开始菜单快捷方式、`HKCU\Software\Classes\AppUserModelId\zinc.backup`、`.aumid_ok`
 - 从用户 `PATH` 里移除这个目录
-- 删除程序文件
 
-`settings.json`、`repos.json` 和 `logs` 默认保留（取消勾选才会删）。备份数据——输出目录里的 `.7z` 包和 manifest——一律不碰。
-
-向导背后调的是 `zinc-uninstall.exe`（同一套清理逻辑的控制台版），绿色版 zip 里也带着它。
+`settings.json`、`repos.json` 和 `logs` 会留在安装目录里，重装时继续用；不想要就手动删掉文件夹。备份数据——输出目录里的 `.7z` 包和 manifest——一律不碰。
 
 如果装完之后移动过程序目录，计划任务还指着旧路径，卸载时匹配不到：要么把目录放回原处，要么先 `zinc unschedule --all` 清掉。
 
@@ -460,17 +459,17 @@ go build -o zinc-install.exe ./cmd/install
 go build -o zinc-uninstall.exe ./cmd/uninstall
 ```
 
-`build.ps1` 把上面四条包成一条命令。安装器是 `installer/` 下两个 C# WinForms 程序，用 Windows 自带的 .NET Framework 编译器构建：
+`build.ps1` 把上面四条包成一条命令。安装包是 [Inno Setup 6](https://jrsoftware.org/isinfo.php) 脚本 `installer/zinc.iss`；装一次 Inno Setup，构建脚本会在 `_tools\InnoSetup6`、`Program Files` 或 `-Iscc` 指定的位置找 `ISCC.exe`：
 
 ```powershell
 .\build.ps1                          # 四个 zinc 可执行文件
-.\installer\build.ps1 -Version 0.1.0 # setup.exe + uninstall.exe
-.\package.ps1 -Version 0.1.0         # dist\zinc-0.1.0-setup.exe + 绿色版 zip
+.\installer\build.ps1 -Version 0.1.0 # dist\zinc-0.1.0-setup.exe
+.\package.ps1 -Version 0.1.0         # 安装包 + 绿色版 zip
 ```
 
-`package.ps1` 会调上面两个，产出 `dist\zinc-<版本>-setup.exe`（向导）和 `dist\zinc-<版本>-windows-amd64.zip`（绿色版）。安装包内嵌四个可执行文件、图标、文档和 `uninstall.exe`，所以发布物就是一个单文件。
+`package.ps1` 会调上面两个，产出 `dist\zinc-<版本>-setup.exe`（向导）和 `dist\zinc-<版本>-windows-amd64.zip`（绿色版）。安装包是单文件：Inno 把四个可执行文件、图标、文档和它自己的卸载程序一起压进去。第一页是语言选择，英文默认，简体中文是第二项。
 
-`cmd/` 是四个入口，`internal/app` 是共用代码；`installer/` 是两个向导，它们把注册动作交给 `zinc-install.exe` / `zinc-uninstall.exe` 完成。两个主程序只差子系统：`zinc.exe` 是控制台程序，手动跑能看输出；`zincw.exe` 是 GUI 子系统，计划任务执行时不闪窗口、不抢焦点。项目没有第三方依赖，`go.mod` 只声明了 Go 版本。
+`cmd/` 是四个入口，`internal/app` 是共用代码。Inno 脚本不自己实现注册：装完文件后调 `zinc-install.exe`，卸载前调 `zinc-uninstall.exe`，所以注册逻辑只有一份。两个主程序只差子系统：`zinc.exe` 是控制台程序，手动跑能看输出；`zincw.exe` 是 GUI 子系统，计划任务执行时不闪窗口、不抢焦点。项目没有第三方依赖，`go.mod` 只声明了 Go 版本。
 
 ## 参与贡献
 
