@@ -173,10 +173,28 @@ foreach ($x in $parts) {
 }
 if (-not $found) { Write-Output 'NOTFOUND'; exit 0 }
 $new = ($keep -join ';')
-# 同 init：Get-Item 的句柄只读，必须重新以可写方式打开
-$wkey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
-$wkey.SetValue('Path', $new, [Microsoft.Win32.RegistryValueKind]::$kind)
-$wkey.Close()
+# 同 init：Get-Item 的句柄只读，必须重新以可写方式打开；被拒时退回 reg.exe
+$written = $false
+try {
+    $wkey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+    $wkey.SetValue('Path', $new, [Microsoft.Win32.RegistryValueKind]::$kind)
+    $wkey.Close()
+    $written = $true
+} catch {
+    Start-Sleep -Milliseconds 200
+    try {
+        $wkey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+        $wkey.SetValue('Path', $new, [Microsoft.Win32.RegistryValueKind]::$kind)
+        $wkey.Close()
+        $written = $true
+    } catch { }
+}
+if (-not $written) {
+    $regType = 'REG_SZ'
+    if ($kind -eq 'ExpandString') { $regType = 'REG_EXPAND_SZ' }
+    & reg.exe add 'HKCU\Environment' /v Path /t $regType /d $new /f | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Output 'ERROR:write-path'; exit 1 }
+}
 Add-Type -Namespace ZincInit -Name Native -MemberDefinition '[DllImport("user32.dll", CharSet=CharSet.Auto, SetLastError=true)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);'
 $r = [UIntPtr]::Zero
 [ZincInit.Native]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$r) | Out-Null
