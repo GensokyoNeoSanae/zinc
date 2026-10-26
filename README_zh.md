@@ -108,7 +108,7 @@ zinc reindex 图片 --yes    # 覆盖已有索引（旧文件会留一份 .bak�
 ## 环境要求
 
 - **Windows 10 / 11，64 位。** zinc 用到计划任务、Windows 通知和 Win32 控制台接口，不在其他平台上构建或运行。
-- **7-Zip。** zinc 调用 `7z.exe` 或 `7za.exe`，装官方 7-Zip 就够。`zinc-install.exe` 会先读 7-Zip 自己的注册表项，再看 `PATH` 和常见安装目录，并把找到的路径写进 `settings.json`。
+- **7-Zip。** zinc 调用 `7z.exe` 或 `7za.exe`，装官方 7-Zip 就够。`zinc-register.exe` 会先读 7-Zip 自己的注册表项，再看 `PATH` 和常见安装目录，并把找到的路径写进 `settings.json`。
 - **Go 1.27 或更新**，仅从源码构建时需要。
 
 ## 安装
@@ -125,7 +125,7 @@ zinc reindex 图片 --yes    # 覆盖已有索引（旧文件会留一份 .bak�
 
 向导会把 `zinc.exe`、`zincw.exe`、`uninstall.exe` 和文档装进安装目录；`settings.json`、`repos.json` 也在那里，不进备份。
 
-想要绿色版的话，release 里另有一份 `zinc-<版本>-windows-amd64.zip`：解压到任意目录，跑里面的 `zinc-install.exe` 即可。`zinc init` 是同一套注册的轻量版，留给已经手动配好 `7zip_path` 的人。
+想要绿色版的话，release 里另有一份 `zinc-<版本>-windows-amd64.zip`：解压到任意目录，跑里面的 `tools\zinc-register.exe` 即可。`zinc init` 是同一套注册的轻量版，留给已经手动配好 `7zip_path` 的人。
 
 ## 快速开始
 
@@ -374,8 +374,8 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 |---|---|
 | `zinc.exe` | 控制台版，手动跑 |
 | `zincw.exe` | GUI 版，计划任务用 |
-| `zinc-install.exe` | 安装：检查 7-Zip、注册通知、写用户 `PATH` |
-| `zinc-uninstall.exe` | 卸载：清计划任务、通知注册、`PATH` 项 |
+| `tools\zinc-register.exe` | 安装：检查 7-Zip、注册通知、写用户 `PATH` |
+| `tools\zinc-unregister.exe` | 卸载：清计划任务、通知注册、`PATH` 项 |
 | `uninstall.exe` | 卸载向导，安装时生成，“应用和功能”里点卸载就是它 |
 | `zinc.ico` | 可选，通知快捷方式图标 |
 | `repos.json` | 仓库注册表，首次 `add` 时生成 |
@@ -401,7 +401,7 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 ### 换机
 
 1. 装 7-Zip（或把 `7z.exe` / `7za.exe` 放到某个位置）
-2. 整个程序目录复制过去（或重新解压一份），跑 `zinc-install.exe`
+2. 整个程序目录复制过去（或重新解压一份），跑 `tools\zinc-register.exe`
 3. `zinc root <新根目录>`
 4. 复制 `repos.json`、`settings.json`，或者重新 `add` 和 `config`
 5. 重新 `schedule` 建任务（计划任务属于本机，不跟着走）
@@ -410,7 +410,7 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 
 打开 **设置 → 应用 → 安装的应用**，找到 `zinc` 点卸载。实际跑的是 Inno Setup 生成的卸载程序（安装目录里的 `unins000.exe`），确认之后删除文件。
 
-删文件之前它会调用 `zinc-uninstall.exe` 撤销注册：
+删文件之前它会调用 `tools\zinc-unregister.exe` 撤销注册：
 
 - 停掉并删除命令行指向本目录的计划任务——程序没了，备份不会还在后台跑
 - 清掉通知注册：开始菜单快捷方式、`HKCU\Software\Classes\AppUserModelId\zinc.backup`、`.aumid_ok`
@@ -456,8 +456,8 @@ git clone https://github.com/GensokyoNeoSanae/zinc.git
 cd zinc
 go build -o zinc.exe ./cmd/zinc
 go build -ldflags "-s -w -H=windowsgui" -o zincw.exe ./cmd/zinc
-go build -o zinc-install.exe ./cmd/install
-go build -o zinc-uninstall.exe ./cmd/uninstall
+go build -o zinc-register.exe ./cmd/install
+go build -o zinc-unregister.exe ./cmd/uninstall
 ```
 
 `build.ps1` 把上面四条包成一条命令。安装包是 [Inno Setup 6](https://jrsoftware.org/isinfo.php) 脚本 `installer/zinc.iss`；装一次 Inno Setup，构建脚本会在 `_tools\InnoSetup6`、`Program Files` 或 `-Iscc` 指定的位置找 `ISCC.exe`：
@@ -470,7 +470,7 @@ go build -o zinc-uninstall.exe ./cmd/uninstall
 
 `package.ps1` 会调上面两个，产出 `dist\zinc-<版本>-setup.exe`（向导）和 `dist\zinc-<版本>-windows-amd64.zip`（绿色版）。安装包是单文件：Inno 把四个可执行文件、图标、文档和它自己的卸载程序一起压进去。第一页是语言选择，英文默认，简体中文是第二项。
 
-`cmd/` 是四个入口，`internal/app` 是共用代码。Inno 脚本不自己实现注册：装完文件后调 `zinc-install.exe`，卸载前调 `zinc-uninstall.exe`，所以注册逻辑只有一份。两个主程序只差子系统：`zinc.exe` 是控制台程序，手动跑能看输出；`zincw.exe` 是 GUI 子系统，计划任务执行时不闪窗口、不抢焦点。项目没有第三方依赖，`go.mod` 只声明了 Go 版本。
+`cmd/` 是四个入口，`internal/app` 是共用代码。Inno 脚本不自己实现注册：装完文件后调 `zinc-register.exe`，卸载前调 `zinc-unregister.exe`，所以注册逻辑只有一份。两个主程序只差子系统：`zinc.exe` 是控制台程序，手动跑能看输出；`zincw.exe` 是 GUI 子系统，计划任务执行时不闪窗口、不抢焦点。项目没有第三方依赖，`go.mod` 只声明了 Go 版本。
 
 ## 参与贡献
 

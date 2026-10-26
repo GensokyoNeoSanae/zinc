@@ -93,8 +93,8 @@ chinesesimplified.Download7zipDone=已安装 7-Zip：%1
 [Files]
 Source: "..\zinc.exe";           DestDir: "{app}"; Flags: ignoreversion
 Source: "..\zincw.exe";          DestDir: "{app}"; Flags: ignoreversion
-Source: "..\zinc-install.exe";   DestDir: "{app}"; Flags: ignoreversion
-Source: "..\zinc-uninstall.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\zinc-register.exe";   DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "..\zinc-unregister.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "..\zinc.ico";           DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md";          DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README_zh.md";       DestDir: "{app}"; Flags: ignoreversion
@@ -102,7 +102,7 @@ Source: "..\LICENSE";            DestDir: "{app}"; Flags: ignoreversion
 
 [UninstallRun]
 ; 先让 zinc 自己把计划任务、通知注册、PATH 项清掉，再由 Inno 删文件。
-Filename: "{app}\zinc-uninstall.exe"; Parameters: "--yes --no-pause"; Flags: runhidden waituntilterminated; RunOnceId: "ZincUnregister"
+Filename: "{app}\tools\zinc-unregister.exe"; Parameters: "--yes --no-pause"; Flags: runhidden waituntilterminated; RunOnceId: "ZincUnregister"
 
 [Code]
 var
@@ -384,7 +384,7 @@ begin
   CmdFile := ExpandConstant('{tmp}\register.cmd');
   LogFile := ExpandConstant('{tmp}\register.log');
   Script := '@echo off' + #13#10
-    + '"' + ExpandConstant('{app}\zinc-install.exe') + '" --7zip "' + SevenZip + '" --no-pause --lang en > "' + LogFile + '" 2>&1' + #13#10
+    + '"' + ExpandConstant('{app}\tools\zinc-register.exe') + '" --7zip "' + SevenZip + '" --no-pause --lang en > "' + LogFile + '" 2>&1' + #13#10
     + 'exit /b %ERRORLEVEL%' + #13#10;
   if not SaveStringToFile(CmdFile, Script, False) then
   begin
@@ -431,7 +431,7 @@ begin
   begin
     FailCode := Rc;
     // 注册失败就当作安装失败：先撤掉可能写了一半的注册，再让 Inno 回滚文件。
-    Exec(ExpandConstant('{app}\zinc-uninstall.exe'), '--yes --no-pause', '', SW_HIDE, ewWaitUntilTerminated, Rc);
+    Exec(ExpandConstant('{app}\tools\zinc-unregister.exe'), '--yes --no-pause', '', SW_HIDE, ewWaitUntilTerminated, Rc);
     RaiseException(CustomMessage('RegFailPrefix') + ' (exit code ' + IntToStr(FailCode) + ').'
       + #13#10 + LogText + #13#10 + CustomMessage('RegFailSuffix'));
   end;

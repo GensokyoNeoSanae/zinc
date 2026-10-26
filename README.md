@@ -108,7 +108,7 @@ Packs are atomic; dates are not. One pack can span several days, so a date bound
 ## Requirements
 
 - **Windows 10 or 11, 64-bit.** zinc uses the Task Scheduler, Windows toast notifications and Win32 console APIs; it does not build or run on other platforms.
-- **7-Zip.** zinc calls `7z.exe` or `7za.exe`; the normal 7-Zip installer is enough. `zinc-install.exe` looks at 7-Zip's own registry entry, on `PATH`, and in the usual install folders, and records the path it finds in `settings.json`.
+- **7-Zip.** zinc calls `7z.exe` or `7za.exe`; the normal 7-Zip installer is enough. `zinc-register.exe` looks at 7-Zip's own registry entry, on `PATH`, and in the usual install folders, and records the path it finds in `settings.json`.
 - **Go 1.27 or newer** — only if you build from source.
 
 ## Install
@@ -125,7 +125,7 @@ Packs are atomic; dates are not. One pack can span several days, so a date bound
 
 The wizard installs `zinc.exe`, `zincw.exe`, `uninstall.exe` and the docs into the install folder; `settings.json` and `repos.json` live there too and are not part of the backup.
 
-If you prefer a portable copy, the release also ships `zinc-<version>-windows-amd64.zip`: unzip it anywhere and run `zinc-install.exe` from that folder. `zinc init` is the light version of the same registration, for people who manage `7zip_path` themselves.
+If you prefer a portable copy, the release also ships `zinc-<version>-windows-amd64.zip`: unzip it anywhere and run `tools\zinc-register.exe` from that folder. `zinc init` is the light version of the same registration, for people who manage `7zip_path` themselves.
 
 ## Quick start
 
@@ -374,8 +374,8 @@ Runtime files (program directory, never synced):
 |---|---|
 | `zinc.exe` | console build, for manual use |
 | `zincw.exe` | GUI build, used by scheduled tasks |
-| `zinc-install.exe` | first-run setup: 7-Zip check, notification registration, user `PATH` |
-| `zinc-uninstall.exe` | the reverse: scheduled tasks, notification registration, `PATH` entry |
+| `tools\zinc-register.exe` | first-run setup: 7-Zip check, notification registration, user `PATH` |
+| `tools\zinc-unregister.exe` | the reverse: scheduled tasks, notification registration, `PATH` entry |
 | `uninstall.exe` | uninstall wizard, created by the setup and shown in Settings → Apps |
 | `zinc.ico` | optional icon for the notification shortcut |
 | `repos.json` | repo registry, created on first `add` |
@@ -401,7 +401,7 @@ Every pack is self-contained, so a damaged pack only loses that pack and the res
 ### Moving to a new machine
 
 1. Install 7-Zip (or copy `7z.exe` / `7za.exe` somewhere)
-2. Copy the whole program folder (or unzip the release again) and run `zinc-install.exe`
+2. Copy the whole program folder (or unzip the release again) and run `tools\zinc-register.exe`
 3. `zinc root <new root>`
 4. Copy `repos.json` and `settings.json`, or re-run `add` and `config`
 5. Re-run `schedule` (scheduled tasks live on the machine)
@@ -410,7 +410,7 @@ Every pack is self-contained, so a damaged pack only loses that pack and the res
 
 Open **Settings → Apps → Installed apps**, find `zinc` and choose Uninstall. That runs Inno Setup's uninstaller (`unins000.exe` in the install folder), which asks for confirmation and then removes the files.
 
-Before removing them it calls `zinc-uninstall.exe` to undo the registration:
+Before removing them it calls `tools\zinc-unregister.exe` to undo the registration:
 
 - stops and removes the scheduled tasks that point at this folder, so no backup keeps running after the program is gone
 - removes the notification registration: Start Menu shortcut, `HKCU\Software\Classes\AppUserModelId\zinc.backup`, `.aumid_ok`
@@ -456,8 +456,8 @@ git clone https://github.com/GensokyoNeoSanae/zinc.git
 cd zinc
 go build -o zinc.exe ./cmd/zinc
 go build -ldflags "-s -w -H=windowsgui" -o zincw.exe ./cmd/zinc
-go build -o zinc-install.exe ./cmd/install
-go build -o zinc-uninstall.exe ./cmd/uninstall
+go build -o zinc-register.exe ./cmd/install
+go build -o zinc-unregister.exe ./cmd/uninstall
 ```
 
 `build.ps1` wraps those four commands. The installer is an [Inno Setup 6](https://jrsoftware.org/isinfo.php) script, `installer/zinc.iss`. Install Inno Setup once; the build script looks for `ISCC.exe` in `_tools\InnoSetup6`, in `Program Files`, or wherever `-Iscc` points:
@@ -470,7 +470,7 @@ go build -o zinc-uninstall.exe ./cmd/uninstall
 
 `package.ps1` calls both and writes `dist\zinc-<version>-setup.exe` (the wizard) and `dist\zinc-<version>-windows-amd64.zip` (portable). The setup is a single file: Inno compresses the four binaries, the icon, the docs and its own uninstaller into it. The first page picks the language — English by default, 简体中文 as the second option.
 
-`cmd/` holds the four entry points and `internal/app` the shared code. The Inno script does not implement registration itself: it runs `zinc-install.exe` after copying the files and `zinc-uninstall.exe` before removing them, so the CLI stays the single source of truth. The two main executables differ only in subsystem: `zinc.exe` is a console program so you can watch it work, `zincw.exe` uses the GUI subsystem so scheduled tasks do not flash a console window (or steal focus). There are no third-party dependencies; `go.mod` only declares the Go version.
+`cmd/` holds the four entry points and `internal/app` the shared code. The Inno script does not implement registration itself: it runs `zinc-register.exe` after copying the files and `zinc-unregister.exe` before removing them, so the CLI stays the single source of truth. The two main executables differ only in subsystem: `zinc.exe` is a console program so you can watch it work, `zincw.exe` uses the GUI subsystem so scheduled tasks do not flash a console window (or steal focus). There are no third-party dependencies; `go.mod` only declares the Go version.
 
 ## Contributing
 

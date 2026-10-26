@@ -1,4 +1,4 @@
-﻿# 打发布包：
+# 打发布包：
 #   dist\zinc-<版本>-setup.exe          Inno Setup 安装包（推荐给普通用户）
 #   dist\zinc-<版本>-windows-amd64.zip  绿色版（解压即用，zinc init 轻量注册）
 param(
@@ -30,8 +30,13 @@ $name = "zinc-$Version-windows-amd64"
 $stage = Join-Path $dist $name
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
-foreach ($f in 'zinc.exe','zincw.exe','zinc-install.exe','zinc-uninstall.exe','zinc.ico','README.md','README_zh.md','LICENSE') {
+foreach ($f in 'zinc.exe','zincw.exe','zinc.ico','README.md','README_zh.md','LICENSE') {
     Copy-Item (Join-Path $root $f) $stage
+}
+$tools = Join-Path $stage 'tools'
+New-Item -ItemType Directory -Force -Path $tools | Out-Null
+foreach ($f in 'zinc-register.exe','zinc-unregister.exe') {
+    Copy-Item (Join-Path $root $f) $tools
 }
 $zip = Join-Path $dist "$name.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }

@@ -1,8 +1,8 @@
 ﻿# 编译四个可执行文件：
 #   zinc.exe          控制台版主程序
 #   zincw.exe         GUI 子系统版主程序（计划任务用，不弹窗口）
-#   zinc-install.exe  安装：检查 7-Zip、注册通知、写用户 PATH
-#   zinc-uninstall.exe 卸载：删计划任务、通知注册、PATH 项（不碰备份数据）
+#   zinc-register.exe  安装：检查 7-Zip、注册通知、写用户 PATH
+#   zinc-unregister.exe 卸载：删计划任务、通知注册、PATH 项（不碰备份数据）
 # 用法：.\build.ps1                用 PATH 里的 go
 #       .\build.ps1 -Go C:\Go\bin\go.exe
 param(
@@ -21,13 +21,13 @@ if ($LASTEXITCODE -ne 0) { throw 'zinc build failed' }
 & $Go build -C $PSScriptRoot -ldflags "-s -w -H=windowsgui" -o zincw.exe ./cmd/zinc
 if ($LASTEXITCODE -ne 0) { throw 'GUI build failed' }
 
-& $Go build -C $PSScriptRoot -ldflags "-s -w" -o zinc-install.exe ./cmd/install
+& $Go build -C $PSScriptRoot -ldflags "-s -w" -o zinc-register.exe ./cmd/install
 if ($LASTEXITCODE -ne 0) { throw 'installer build failed' }
 
-& $Go build -C $PSScriptRoot -ldflags "-s -w" -o zinc-uninstall.exe ./cmd/uninstall
+& $Go build -C $PSScriptRoot -ldflags "-s -w" -o zinc-unregister.exe ./cmd/uninstall
 if ($LASTEXITCODE -ne 0) { throw 'uninstaller build failed' }
 
 # 产物如果带 Internet 标记（Zone.Identifier），双击会被 SmartScreen 当成下载文件拦一下
 Get-ChildItem -Path $PSScriptRoot -Filter *.exe | Unblock-File
 
-Write-Host 'built zinc.exe, zincw.exe, zinc-install.exe, zinc-uninstall.exe'
+Write-Host 'built zinc.exe, zincw.exe, zinc-register.exe, zinc-unregister.exe'

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// UninstallMain 是 zinc-uninstall.exe 的入口。
+// UninstallMain 是 zinc-unregister.exe 的入口。
 //
 // 只撤销“注册”：计划任务、通知注册（快捷方式 + AppUserModelId + 标记）、用户 PATH。
 // 备份数据（各个输出目录里的 .7z）、settings.json、repos.json、logs 一律不动——

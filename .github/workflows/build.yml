@@ -39,8 +39,8 @@ jobs:
           path: |
             zinc.exe
             zincw.exe
-            zinc-install.exe
-            zinc-uninstall.exe
+            zinc-register.exe
+            zinc-unregister.exe
             zinc.ico
             installer/build/setup.exe
           if-no-files-found: error

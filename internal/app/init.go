@@ -79,7 +79,7 @@ func addUserPath(dir string) (bool, error) {
 }
 
 // registerSetup 注册通知并把程序目录写进用户 PATH；返回是否全部成功。
-// zinc init 与 zinc-install.exe 共用这一份逻辑，安装程序只是多了 7-Zip 的强制检查。
+// zinc init 与 zinc-register.exe 共用这一份逻辑，安装程序只是多了 7-Zip 的强制检查。
 func registerSetup(force bool) bool {
 	dir := appDir()
 	failed := false
@@ -105,7 +105,7 @@ func registerSetup(force bool) bool {
 
 // cmdInit 一次性初始化：注册通知所需的 AUMID（快捷方式 + 注册表 + 标记），
 // 并把程序目录加进用户 PATH，之后直接敲 zinc 即可。
-// 7-Zip 只提示不阻断；需要强制的安装流程用 zinc-install.exe。
+// 7-Zip 只提示不阻断；需要强制的安装流程用 zinc-register.exe。
 func cmdInit(args []string) {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	force := fs.Bool("force", false, M.FlagForce)

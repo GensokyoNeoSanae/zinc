@@ -23,11 +23,18 @@ func init() {
 	procSetConsoleCP.Call(65001)
 }
 
-// appDir 返回 zinc.exe 所在目录（repos.json、manifests、日志都放这里）
+// appDir 返回 zinc.exe 所在目录（repos.json、manifests、日志都放这里）。
+// tools\ 下的 register / unregister 辅助程序要认回上一级，否则 PATH 和计划任务会指到 tools。
 func appDir() string {
 	exe, err := os.Executable()
 	if err == nil {
 		dir := filepath.Dir(exe)
+		if strings.EqualFold(filepath.Base(dir), "tools") {
+			parent := filepath.Dir(dir)
+			if fileExists(filepath.Join(parent, "zinc.exe")) {
+				dir = parent
+			}
+		}
 		if _, statErr := os.Stat(dir); statErr == nil {
 			return dir
 		}

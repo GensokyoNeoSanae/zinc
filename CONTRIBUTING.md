@@ -23,7 +23,7 @@ cd zinc
 .\build.ps1
 ```
 
-`build.ps1` produces the four binaries (`zinc.exe`, `zincw.exe`, `zinc-install.exe`, `zinc-uninstall.exe`); `package.ps1` also assembles the release zip under `dist/`.
+`build.ps1` produces the four binaries (`zinc.exe`, `zincw.exe`, `zinc-register.exe`, `zinc-unregister.exe`); `package.ps1` also assembles the release zip under `dist/`.
 
 If PowerShell refuses to load the scripts ("not digitally signed"), the file came from the internet or the execution policy is stricter than RemoteSigned. Either clear the mark once with `Get-ChildItem -Recurse | Unblock-File`, or run `powershell -NoProfile -ExecutionPolicy Bypass -File .\package.ps1 -Version 0.1.0`.
 
@@ -39,7 +39,7 @@ Build it with Inno Setup installed; the script looks for `ISCC.exe` in `_tools\I
 .\installer\build.ps1 -Version 0.1.0
 ```
 
-The installer deliberately does not implement registration itself: it runs `zinc-install.exe` after copying the files and `zinc-uninstall.exe` before removing them, so the CLI stays the single source of truth for the `PATH` entry, the notification registration and scheduled tasks. If you change one of those mechanics, change it in `internal/app`, not in the `.iss`.
+The installer deliberately does not implement registration itself: it runs `zinc-register.exe` after copying the files and `zinc-unregister.exe` before removing them, so the CLI stays the single source of truth for the `PATH` entry, the notification registration and scheduled tasks. If you change one of those mechanics, change it in `internal/app`, not in the `.iss`.
 
 Before opening a pull request:
 

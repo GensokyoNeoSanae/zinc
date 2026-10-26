@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// InstallMain 是 zinc-install.exe 的入口。
+// InstallMain 是 zinc-register.exe 的入口。
 //
 // 与 zinc init 的区别只有一处：7-Zip 是硬性依赖。找不到 7z.exe / 7za.exe 时要求用户
 // 指定路径，指定不成功就直接退出，且不写任何系统状态（PATH、通知注册都不动），
