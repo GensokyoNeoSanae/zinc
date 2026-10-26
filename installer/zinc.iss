@@ -55,7 +55,10 @@ english.SevenZipInvalid=Select a valid 7z.exe or 7za.exe. zinc needs it to pack 
 english.RegFailPrefix=Files are installed, but registering notifications and PATH failed
 english.RegFailSuffix=Run zinc-install.exe from the install folder to retry.
 english.Download7zip=Install 7-Zip automatically (needs internet)
-english.Download7zipHint=Downloads the official installer from www.7-zip.org and installs it to C:\Program Files\7-Zip. Windows asks for administrator approval once.
+english.Download7zipDir=Install to:
+english.Download7zipBrowse=Browse…
+english.Download7zipBrowseTitle=Select the 7-Zip folder
+english.Download7zipHint=Downloads the official installer from www.7-zip.org. Windows asks for administrator approval once.
 english.Download7zipBusy=Downloading and installing 7-Zip...
 english.Download7zipFail=Could not download or install 7-Zip. Install it from https://www.7-zip.org/ and run zinc-install.exe from the install folder.
 english.Download7zipDone=Installed 7-Zip at %1
@@ -67,7 +70,10 @@ chinesesimplified.SevenZipInvalid=请选择一个有效的 7z.exe 或 7za.exe。
 chinesesimplified.RegFailPrefix=文件已安装，但注册通知和 PATH 失败
 chinesesimplified.RegFailSuffix=请到安装目录手动运行 zinc-install.exe 重试。
 chinesesimplified.Download7zip=自动安装 7-Zip（需要联网）
-chinesesimplified.Download7zipHint=从官网 www.7-zip.org 下载官方安装包并安装到 C:\Program Files\7-Zip，过程中会弹一次管理员提权。
+chinesesimplified.Download7zipDir=安装到：
+chinesesimplified.Download7zipBrowse=浏览…
+chinesesimplified.Download7zipBrowseTitle=选择 7-Zip 安装目录
+chinesesimplified.Download7zipHint=从官网 www.7-zip.org 下载官方安装包，安装时会弹一次管理员提权。
 chinesesimplified.Download7zipBusy=正在下载并安装 7-Zip...
 chinesesimplified.Download7zipFail=下载或安装 7-Zip 失败。请到 https://www.7-zip.org/ 手动安装，再运行安装目录里的 zinc-install.exe。
 chinesesimplified.Download7zipDone=已安装 7-Zip：%1
@@ -93,6 +99,9 @@ var
   DownloadSevenZip: Boolean;
   DownloadCheck: TNewCheckBox;
   DownloadHint: TNewStaticText;
+  DownloadDirLabel: TNewStaticText;
+  DownloadDirEdit: TNewEdit;
+  DownloadBrowse: TNewButton;
 
 function DetectSevenZip(): string;
 var
@@ -161,11 +170,23 @@ begin
     DownloadHint.Font.Color := $00808080;
   SevenZipPage.Edits[0].Enabled := not DownloadSevenZip;
   SevenZipPage.Buttons[0].Enabled := not DownloadSevenZip;
+  DownloadDirLabel.Enabled := DownloadSevenZip;
+  DownloadDirEdit.Enabled := DownloadSevenZip;
+  DownloadBrowse.Enabled := DownloadSevenZip;
 end;
 
 procedure DownloadCheckClick(Sender: TObject);
 begin
   UpdateDownloadUi();
+end;
+
+procedure DownloadBrowseClick(Sender: TObject);
+var
+  Dir: string;
+begin
+  Dir := DownloadDirEdit.Text;
+  if BrowseForFolder(CustomMessage('Download7zipBrowseTitle'), Dir, True) then
+    DownloadDirEdit.Text := Dir;
 end;
 
 procedure InitializeWizard();
@@ -180,15 +201,36 @@ begin
   DownloadCheck := TNewCheckBox.Create(WizardForm);
   DownloadCheck.Parent := SevenZipPage.Surface;
   DownloadCheck.Left := 0;
-  DownloadCheck.Top := SevenZipPage.Surface.Height - 64;
+  DownloadCheck.Top := SevenZipPage.Surface.Height - 118;
   DownloadCheck.Width := SevenZipPage.Surface.Width;
   DownloadCheck.Caption := CustomMessage('Download7zip');
   DownloadCheck.OnClick := @DownloadCheckClick;
 
+  DownloadDirLabel := TNewStaticText.Create(WizardForm);
+  DownloadDirLabel.Parent := SevenZipPage.Surface;
+  DownloadDirLabel.Left := 18;
+  DownloadDirLabel.Top := SevenZipPage.Surface.Height - 82;
+  DownloadDirLabel.Caption := CustomMessage('Download7zipDir');
+
+  DownloadDirEdit := TNewEdit.Create(WizardForm);
+  DownloadDirEdit.Parent := SevenZipPage.Surface;
+  DownloadDirEdit.Left := 18 + DownloadDirLabel.Width + 6;
+  DownloadDirEdit.Top := SevenZipPage.Surface.Height - 84;
+  DownloadDirEdit.Width := SevenZipPage.Surface.Width - DownloadDirEdit.Left - 92;
+  DownloadDirEdit.Text := ExpandConstant('{sd}\Program Files\7-Zip');
+
+  DownloadBrowse := TNewButton.Create(WizardForm);
+  DownloadBrowse.Parent := SevenZipPage.Surface;
+  DownloadBrowse.Width := 80;
+  DownloadBrowse.Left := SevenZipPage.Surface.Width - DownloadBrowse.Width;
+  DownloadBrowse.Top := DownloadDirEdit.Top - 1;
+  DownloadBrowse.Caption := CustomMessage('Download7zipBrowse');
+  DownloadBrowse.OnClick := @DownloadBrowseClick;
+
   DownloadHint := TNewStaticText.Create(WizardForm);
   DownloadHint.Parent := SevenZipPage.Surface;
   DownloadHint.Left := 18;
-  DownloadHint.Top := SevenZipPage.Surface.Height - 38;
+  DownloadHint.Top := SevenZipPage.Surface.Height - 50;
   DownloadHint.Width := SevenZipPage.Surface.Width - 18;
   DownloadHint.AutoSize := False;
   DownloadHint.WordWrap := True;
@@ -218,11 +260,15 @@ begin
   end;
 end;
 
-function FindInstalledSevenZip(): string;
+function FindInstalledSevenZip(const TargetDir: string): string;
 var
   Cand: string;
 begin
   Result := '';
+  Cand := AddBackslash(TargetDir) + '7z.exe';
+  if FileExists(Cand) then begin Result := Cand; Exit; end;
+  Cand := AddBackslash(TargetDir) + '7za.exe';
+  if FileExists(Cand) then begin Result := Cand; Exit; end;
   Cand := ExpandConstant('{sd}\Program Files\7-Zip\7z.exe');
   if FileExists(Cand) then begin Result := Cand; Exit; end;
   Cand := ExpandConstant('{sd}\Program Files (x86)\7-Zip\7z.exe');
@@ -233,7 +279,7 @@ begin
   if FileExists(Cand) then begin Result := Cand; Exit; end;
 end;
 
-function DownloadAndInstallSevenZip(): string;
+function DownloadAndInstallSevenZip(const TargetDir: string): string;
 var
   Ps1, Script, SetupExe: string;
   Rc: Integer;
@@ -257,10 +303,10 @@ begin
     Exit;
   if (Rc <> 0) or (not FileExists(SetupExe)) then
     Exit;
-  if not ShellExec('runas', SetupExe, '/S', '', SW_SHOW, ewWaitUntilTerminated, Rc) then
+  if not ShellExec('runas', SetupExe, '/S /D=' + TargetDir, '', SW_SHOW, ewWaitUntilTerminated, Rc) then
     Exit;
   Sleep(1500);
-  Result := FindInstalledSevenZip();
+  Result := FindInstalledSevenZip(TargetDir);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -275,7 +321,7 @@ begin
     if DownloadSevenZip then
     begin
       WizardForm.StatusLabel.Caption := CustomMessage('Download7zipBusy');
-      SevenZipPath := DownloadAndInstallSevenZip();
+      SevenZipPath := DownloadAndInstallSevenZip(Trim(DownloadDirEdit.Text));
       if SevenZipPath = '' then
       begin
         MsgBox(CustomMessage('Download7zipFail'), mbError, MB_OK);
