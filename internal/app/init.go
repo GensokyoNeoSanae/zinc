@@ -28,7 +28,10 @@ foreach ($x in $parts) {
     if ($t -ieq $dir) { Write-Output 'EXISTS'; exit 0 }
 }
 $new = (($parts + $dir) -join ';')
-$key.SetValue('Path', $new, [Microsoft.Win32.RegistryValueKind]::$kind)
+# Get-Item 拿到的键是只读句柄，SetValue 会抛 UnauthorizedAccessException（即使 ACL 允许）
+$wkey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+$wkey.SetValue('Path', $new, [Microsoft.Win32.RegistryValueKind]::$kind)
+$wkey.Close()
 Add-Type -Namespace ZincInit -Name Native -MemberDefinition '[DllImport("user32.dll", CharSet=CharSet.Auto, SetLastError=true)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);'
 $r = [UIntPtr]::Zero
 [ZincInit.Native]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$r) | Out-Null
