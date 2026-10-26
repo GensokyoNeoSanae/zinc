@@ -1,4 +1,4 @@
-﻿; zinc 安装包（Inno Setup 6）
+; zinc 安装包（Inno Setup 6）
 ; 编译：ISCC.exe /DAppVersion=0.1.0 installer\zinc.iss
 ; 第一页是语言选择：英文默认，第二项简体中文。
 
@@ -65,6 +65,7 @@ english.AutoFind7zip=Auto-detect
 english.AutoFind7zipNotFound=No 7z.exe or 7za.exe found. Pick it manually.
 english.ReadySevenZip=7-Zip:
 english.ReadySevenZipAuto=7-Zip will be installed to
+english.UninstallKeepSettings=Keep settings and logs (repo list, default password)? Yes keeps them, No deletes them.
 english.Download7zipHint=Downloads the official installer from www.7-zip.org. Windows asks for administrator approval once.
 english.Download7zipBusy=Downloading and installing 7-Zip...
 english.Download7zipFail=Could not download or install 7-Zip. Setup will roll back; install 7-Zip from https://www.7-zip.org/ and run the setup again.
@@ -85,6 +86,7 @@ chinesesimplified.AutoFind7zip=自动查找
 chinesesimplified.AutoFind7zipNotFound=没找到 7z.exe 或 7za.exe，请手动选择。
 chinesesimplified.ReadySevenZip=7-Zip：
 chinesesimplified.ReadySevenZipAuto=7-Zip 将安装到
+chinesesimplified.UninstallKeepSettings=是否保留设置与日志（仓库列表、默认密码）？选“是”保留，选“否”一并删除。
 chinesesimplified.Download7zipHint=从官网 www.7-zip.org 下载官方安装包，安装时会弹一次管理员提权。
 chinesesimplified.Download7zipBusy=正在下载并安装 7-Zip...
 chinesesimplified.Download7zipFail=下载或安装 7-Zip 失败，安装将回滚。请到 https://www.7-zip.org/ 手动装好 7-Zip 后重跑安装包。
@@ -101,12 +103,7 @@ Source: "..\README_zh.md";       DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE";            DestDir: "{app}"; Flags: ignoreversion
 
 [UninstallDelete]
-; 卸载时把运行期生成的本地状态一并清掉；备份数据在输出目录，不在这里
-Type: files; Name: "{app}\settings.json"
-Type: files; Name: "{app}\repos.json"
-Type: files; Name: "{app}\zinc.log"
-Type: files; Name: "{app}\logs\*.log"
-Type: files; Name: "{app}\logs\*.txt"
+; 设置与日志是否删除由卸载确认框决定（见 InitializeUninstall），这里只负责收拾空目录
 Type: dirifempty; Name: "{app}\logs"
 Type: dirifempty; Name: "{app}\manifests"
 Type: dirifempty; Name: "{app}\tools"
@@ -125,6 +122,7 @@ var
   DownloadDirEdit: TNewEdit;
   DownloadBrowse: TNewButton;
   AutoFindBtn: TNewButton;
+  KeepSettings: Boolean;
 
 function SevenZipAt(const Dir: string): string;
 var
@@ -412,6 +410,27 @@ begin
   LoadStringFromFile(LogFile, AnsiLog);
   LogText := AnsiLog;
   Result := Rc;
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  Result := True;
+  if UninstallSilent then
+    KeepSettings := False
+  else
+    KeepSettings := MsgBox(CustomMessage('UninstallKeepSettings'), mbConfirmation, MB_YESNO) = IDYES;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep <> usUninstall then
+    Exit;
+  if KeepSettings then
+    Exit;
+  DeleteFile(ExpandConstant('{app}\settings.json'));
+  DeleteFile(ExpandConstant('{app}\repos.json'));
+  DeleteFile(ExpandConstant('{app}\zinc.log'));
+  DelTree(ExpandConstant('{app}\logs'), True, True, True);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
