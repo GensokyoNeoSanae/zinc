@@ -43,4 +43,7 @@ if (-not $Iscc -or -not (Test-Path $Iscc)) {
 & $Iscc "/DAppVersion=$Version" (Join-Path $PSScriptRoot 'zinc.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compile failed' }
 
+# 清掉可能带上的 Internet 标记，避免双击时多一次 SmartScreen
+Unblock-File (Join-Path $root "dist\zinc-$Version-setup.exe") -ErrorAction SilentlyContinue
+
 Write-Host "built dist\zinc-$Version-setup.exe"

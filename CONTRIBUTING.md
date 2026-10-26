@@ -25,6 +25,8 @@ cd zinc
 
 `build.ps1` produces the four binaries (`zinc.exe`, `zincw.exe`, `zinc-install.exe`, `zinc-uninstall.exe`); `package.ps1` also assembles the release zip under `dist/`.
 
+If PowerShell refuses to load the scripts ("not digitally signed"), the file came from the internet or the execution policy is stricter than RemoteSigned. Either clear the mark once with `Get-ChildItem -Recurse | Unblock-File`, or run `powershell -NoProfile -ExecutionPolicy Bypass -File .\package.ps1 -Version 0.1.0`.
+
 Layout: `cmd/` holds the four entry points and `internal/app` holds all shared code. The installer and uninstaller are thin wrappers around `registerSetup` and `UninstallMain`; anything that writes to the registry, the Start Menu or the user `PATH` belongs there, not in the CLI.
 
 ## Installer

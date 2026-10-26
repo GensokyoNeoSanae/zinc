@@ -40,3 +40,6 @@ Remove-Item $stage -Recurse -Force
 
 Write-Host "wrote dist\zinc-$Version-setup.exe ($((Get-Item $setup).Length) bytes)"
 Write-Host "wrote dist\$name.zip ($((Get-Item $zip).Length) bytes)"
+
+# 清掉可能带上的 Internet 标记，避免双击时多一次 SmartScreen
+Get-ChildItem -Path $dist -File | Unblock-File -ErrorAction SilentlyContinue

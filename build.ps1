@@ -27,4 +27,7 @@ if ($LASTEXITCODE -ne 0) { throw 'installer build failed' }
 & $Go build -C $PSScriptRoot -ldflags "-s -w" -o zinc-uninstall.exe ./cmd/uninstall
 if ($LASTEXITCODE -ne 0) { throw 'uninstaller build failed' }
 
+# 产物如果带 Internet 标记（Zone.Identifier），双击会被 SmartScreen 当成下载文件拦一下
+Get-ChildItem -Path $PSScriptRoot -Filter *.exe | Unblock-File
+
 Write-Host 'built zinc.exe, zincw.exe, zinc-install.exe, zinc-uninstall.exe'
