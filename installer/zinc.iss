@@ -26,6 +26,7 @@ DefaultDirName={localappdata}\Programs\zinc
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 DisableDirPage=no
+UsePreviousAppDir=no
 DisableWelcomePage=no
 LicenseFile=..\LICENSE
 OutputDir=..\dist
@@ -60,10 +61,10 @@ english.Download7zip=Install 7-Zip automatically (needs internet)
 english.Download7zipDir=Install to:
 english.Download7zipBrowse=Browse…
 english.Download7zipBrowseTitle=Select the 7-Zip folder
-english.ZincDirLabel=Install zinc to:
-english.ZincDirBrowse=Browse…
-english.ZincDirBrowseTitle=Select the zinc folder
-english.ZincDirEmpty=Choose a folder for zinc.
+english.AutoFind7zip=Auto-detect
+english.AutoFind7zipNotFound=No 7z.exe or 7za.exe found. Pick it manually.
+english.ReadySevenZip=7-Zip:
+english.ReadySevenZipAuto=7-Zip will be installed to
 english.Download7zipHint=Downloads the official installer from www.7-zip.org. Windows asks for administrator approval once.
 english.Download7zipBusy=Downloading and installing 7-Zip...
 english.Download7zipFail=Could not download or install 7-Zip. Setup will roll back; install 7-Zip from https://www.7-zip.org/ and run the setup again.
@@ -80,10 +81,10 @@ chinesesimplified.Download7zip=自动安装 7-Zip（需要联网）
 chinesesimplified.Download7zipDir=安装到：
 chinesesimplified.Download7zipBrowse=浏览…
 chinesesimplified.Download7zipBrowseTitle=选择 7-Zip 安装目录
-chinesesimplified.ZincDirLabel=zinc 安装到：
-chinesesimplified.ZincDirBrowse=浏览…
-chinesesimplified.ZincDirBrowseTitle=选择 zinc 安装目录
-chinesesimplified.ZincDirEmpty=请选择 zinc 的安装目录。
+chinesesimplified.AutoFind7zip=自动查找
+chinesesimplified.AutoFind7zipNotFound=没找到 7z.exe 或 7za.exe，请手动选择。
+chinesesimplified.ReadySevenZip=7-Zip：
+chinesesimplified.ReadySevenZipAuto=7-Zip 将安装到
 chinesesimplified.Download7zipHint=从官网 www.7-zip.org 下载官方安装包，安装时会弹一次管理员提权。
 chinesesimplified.Download7zipBusy=正在下载并安装 7-Zip...
 chinesesimplified.Download7zipFail=下载或安装 7-Zip 失败，安装将回滚。请到 https://www.7-zip.org/ 手动装好 7-Zip 后重跑安装包。
@@ -113,19 +114,55 @@ var
   DownloadDirLabel: TNewStaticText;
   DownloadDirEdit: TNewEdit;
   DownloadBrowse: TNewButton;
-  ZincDirLabel: TNewStaticText;
-  ZincDirEdit: TNewEdit;
-  ZincBrowse: TNewButton;
+  AutoFindBtn: TNewButton;
 
-function DetectSevenZip(): string;
+function SevenZipAt(const Dir: string): string;
 var
-  Names: array[0..1] of string;
-  Rest, Dir, Candidate: string;
-  P, I: Integer;
+  P: string;
 begin
   Result := '';
-  Names[0] := '7za.exe';
-  Names[1] := '7z.exe';
+  if Dir = '' then
+    Exit;
+  P := AddBackslash(Dir) + '7z.exe';
+  if FileExists(P) then
+  begin
+    Result := P;
+    Exit;
+  end;
+  P := AddBackslash(Dir) + '7za.exe';
+  if FileExists(P) then
+    Result := P;
+end;
+
+// 真正的查找：官方安装器写的注册表、App Paths、PATH、再退到常见安装目录。
+function DetectSevenZip(): string;
+var
+  Rest, Dir, Value: string;
+  P: Integer;
+begin
+  Result := '';
+
+  if RegQueryStringValue(HKLM, 'SOFTWARE\7-Zip', 'Path', Value) then
+  begin
+    Result := SevenZipAt(Value);
+    if Result <> '' then Exit;
+  end;
+  if RegQueryStringValue(HKLM, 'SOFTWARE\WOW6432Node\7-Zip', 'Path', Value) then
+  begin
+    Result := SevenZipAt(Value);
+    if Result <> '' then Exit;
+  end;
+  if RegQueryStringValue(HKCU, 'Software\7-Zip', 'Path', Value) then
+  begin
+    Result := SevenZipAt(Value);
+    if Result <> '' then Exit;
+  end;
+
+  if RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\7zFM.exe', '', Value) then
+  begin
+    Result := SevenZipAt(ExtractFileDir(Value));
+    if Result <> '' then Exit;
+  end;
 
   Rest := GetEnv('PATH');
   while Rest <> '' do
@@ -141,38 +178,15 @@ begin
       Dir := Copy(Rest, 1, P - 1);
       Delete(Rest, 1, P);
     end;
-    Dir := Trim(RemoveQuotes(Dir));
-    if Dir <> '' then
-      for I := 0 to 1 do
-      begin
-        Candidate := AddBackslash(Dir) + Names[I];
-        if FileExists(Candidate) then
-        begin
-          Result := Candidate;
-          Exit;
-        end;
-      end;
+    Result := SevenZipAt(Trim(RemoveQuotes(Dir)));
+    if Result <> '' then Exit;
   end;
 
-  for I := 0 to 1 do
-  begin
-    Candidate := ExpandConstant('{pf}\7-Zip\') + Names[I];
-    if FileExists(Candidate) then
-    begin
-      Result := Candidate;
-      Exit;
-    end;
-    Candidate := ExpandConstant('{pf32}\7-Zip\') + Names[I];
-    if FileExists(Candidate) then
-    begin
-      Result := Candidate;
-      Exit;
-    end;
-  end;
-
-  Candidate := 'E:\Tools\7zip\7za.exe';
-  if FileExists(Candidate) then
-    Result := Candidate;
+  Result := SevenZipAt(ExpandConstant('{pf}\7-Zip'));
+  if Result <> '' then Exit;
+  Result := SevenZipAt(ExpandConstant('{pf32}\7-Zip'));
+  if Result <> '' then Exit;
+  Result := SevenZipAt(ExpandConstant('{localappdata}\Programs\7-Zip'));
 end;
 
 procedure UpdateDownloadUi();
@@ -194,55 +208,15 @@ begin
   UpdateDownloadUi();
 end;
 
-procedure ZincDirBrowseClick(Sender: TObject);
+procedure AutoFindClick(Sender: TObject);
 var
-  Dir: string;
+  Found: string;
 begin
-  Dir := ZincDirEdit.Text;
-  if BrowseForFolder(CustomMessage('ZincDirBrowseTitle'), Dir, True) then
-    ZincDirEdit.Text := Dir;
-end;
-
-procedure AddZincDirRow();
-var
-  I: Integer;
-  C: TControl;
-begin
-  ZincDirLabel := TNewStaticText.Create(WizardForm);
-  ZincDirLabel.Parent := SevenZipPage.Surface;
-  ZincDirLabel.Left := 0;
-  ZincDirLabel.Top := 0;
-  ZincDirLabel.Caption := CustomMessage('ZincDirLabel');
-
-  ZincDirEdit := TNewEdit.Create(WizardForm);
-  ZincDirEdit.Parent := SevenZipPage.Surface;
-  ZincDirEdit.Left := ZincDirLabel.Width + 8;
-  ZincDirEdit.Top := -2;
-  ZincDirEdit.Width := SevenZipPage.Surface.Width - ZincDirEdit.Left - 92;
-  ZincDirEdit.Text := WizardForm.DirEdit.Text;
-
-  ZincBrowse := TNewButton.Create(WizardForm);
-  ZincBrowse.Parent := SevenZipPage.Surface;
-  ZincBrowse.Width := 80;
-  ZincBrowse.Left := SevenZipPage.Surface.Width - ZincBrowse.Width;
-  ZincBrowse.Top := -3;
-  ZincBrowse.Caption := CustomMessage('ZincDirBrowse');
-  ZincBrowse.OnClick := @ZincDirBrowseClick;
-
-  // 给最上面这行腾位置：把这一页原有的控件整体下移
-  for I := 0 to SevenZipPage.Surface.ControlCount - 1 do
-  begin
-    C := SevenZipPage.Surface.Controls[I];
-    if (C <> ZincDirLabel) and (C <> ZincDirEdit) and (C <> ZincBrowse) then
-      if C.Top < 80 then
-        C.Top := C.Top + 36;
-  end;
-end;
-
-procedure CurPageChanged(CurPageID: Integer);
-begin
-  if CurPageID = SevenZipPage.ID then
-    ZincDirEdit.Text := WizardForm.DirEdit.Text;
+  Found := DetectSevenZip();
+  if Found = '' then
+    MsgBox(CustomMessage('AutoFind7zipNotFound'), mbInformation, MB_OK)
+  else
+    SevenZipPage.Values[0] := Found;
 end;
 
 procedure DownloadBrowseClick(Sender: TObject);
@@ -258,7 +232,7 @@ procedure InitializeWizard();
 begin
   SevenZipPage := CreateInputFilePage(wpSelectDir,
     CustomMessage('SevenZipCaption'),
-    CustomMessage('SevenZipDescription'),
+    '',
     CustomMessage('SevenZipSubCaption'));
   SevenZipPage.Add(CustomMessage('SevenZipPrompt'),
     'Executable files (*.exe)|*.exe|All files (*.*)|*.*', '.exe');
@@ -305,8 +279,16 @@ begin
   if SevenZipPath <> '' then
     SevenZipPage.Values[0] := SevenZipPath;
 
+  AutoFindBtn := TNewButton.Create(WizardForm);
+  AutoFindBtn.Parent := SevenZipPage.Surface;
+  AutoFindBtn.Width := 96;
+  AutoFindBtn.Left := SevenZipPage.Buttons[0].Left - AutoFindBtn.Width - 6;
+  AutoFindBtn.Top := SevenZipPage.Buttons[0].Top;
+  AutoFindBtn.Caption := CustomMessage('AutoFind7zip');
+  AutoFindBtn.OnClick := @AutoFindClick;
+  SevenZipPage.Edits[0].Width := AutoFindBtn.Left - SevenZipPage.Edits[0].Left - 6;
+
   DownloadCheck.Checked := False;
-  AddZincDirRow();
   UpdateDownloadUi();
 end;
 
@@ -315,13 +297,6 @@ begin
   Result := True;
   if CurPageID = SevenZipPage.ID then
   begin
-    if Trim(ZincDirEdit.Text) = '' then
-    begin
-      MsgBox(CustomMessage('ZincDirEmpty'), mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-    WizardForm.DirEdit.Text := Trim(ZincDirEdit.Text);
     if DownloadSevenZip then
       Exit;
     SevenZipPath := Trim(SevenZipPage.Values[0]);
@@ -386,6 +361,18 @@ begin
     Exit;
   Sleep(1500);
   Result := FindInstalledSevenZip(TargetDir);
+end;
+
+function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo,
+  MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
+var
+  ZipLine: string;
+begin
+  if DownloadSevenZip then
+    ZipLine := CustomMessage('ReadySevenZipAuto') + ' ' + Trim(DownloadDirEdit.Text)
+  else
+    ZipLine := CustomMessage('ReadySevenZip') + ' ' + SevenZipPath;
+  Result := MemoDirInfo + NewLine + ZipLine + NewLine + MemoGroupInfo + MemoTasksInfo;
 end;
 
 function RunZincInstall(const SevenZip: string; var LogText: string): Integer;

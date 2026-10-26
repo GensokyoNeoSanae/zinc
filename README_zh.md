@@ -108,13 +108,13 @@ zinc reindex 图片 --yes    # 覆盖已有索引（旧文件会留一份 .bak�
 ## 环境要求
 
 - **Windows 10 / 11，64 位。** zinc 用到计划任务、Windows 通知和 Win32 控制台接口，不在其他平台上构建或运行。
-- **7-Zip。** zinc 调用 `7z.exe` 或 `7za.exe`，装官方 7-Zip 就够。`zinc-install.exe` 会依次在 `PATH`、`Program Files`、旧的 `E:\Tools\7zip` 里找，并把找到的路径写进 `settings.json`。
+- **7-Zip。** zinc 调用 `7z.exe` 或 `7za.exe`，装官方 7-Zip 就够。`zinc-install.exe` 会先读 7-Zip 自己的注册表项，再看 `PATH` 和常见安装目录，并把找到的路径写进 `settings.json`。
 - **Go 1.27 或更新**，仅从源码构建时需要。
 
 ## 安装
 
 1. 从 [releases 页面](https://github.com/GensokyoNeoSanae/zinc/releases) 下载 `zinc-<版本>-setup.exe` 并运行。第一页选语言，英文默认，第二项是简体中文。安装包没有代码签名，SmartScreen 可能弹出“Windows 已保护你的电脑”，点 **更多信息 → 仍要运行** 即可。向导不需要管理员权限：默认装到 `%LOCALAPPDATA%\Programs\zinc`，注册通知身份，并把目录加进当前用户的 `PATH`。
-2. 确认装了 7-Zip（<https://www.7-zip.org/>）。向导会依次在 `PATH`、`Program Files`、旧的 `E:\Tools\7zip` 里找 `7z.exe` / `7za.exe`；找不到就停在这一页让你指定路径，没有可用的 7-Zip 不会继续。如果还没装，可以勾选这一页的 **自动安装 7-Zip（需要联网）**，并选择装到哪里（默认 `C:\Program Files\7-Zip`）：向导从官网下载官方安装包并静默安装，过程中会弹一次管理员提权。
+2. 确认装了 7-Zip（<https://www.7-zip.org/>）。向导会读 7-Zip 自己的注册表项，再看 `PATH` 和常见安装目录；也可以手动指定别的路径，路径右边的 **自动查找** 会重新搜一遍。没有可用的 7-Zip 不会继续。如果还没装，可以勾选这一页的 **自动安装 7-Zip（需要联网）**，并选择装到哪里（默认 `C:\Program Files\7-Zip`）：向导从官网下载官方安装包并静默安装，过程中会弹一次管理员提权。
 3. 开一个**新**终端，选备份根目录：
 
    ```powershell

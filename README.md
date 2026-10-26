@@ -108,13 +108,13 @@ Packs are atomic; dates are not. One pack can span several days, so a date bound
 ## Requirements
 
 - **Windows 10 or 11, 64-bit.** zinc uses the Task Scheduler, Windows toast notifications and Win32 console APIs; it does not build or run on other platforms.
-- **7-Zip.** zinc calls `7z.exe` or `7za.exe`; the normal 7-Zip installer is enough. `zinc-install.exe` looks on `PATH`, then in `Program Files`, then in the classic `E:\Tools\7zip` location, and records the path it finds in `settings.json`.
+- **7-Zip.** zinc calls `7z.exe` or `7za.exe`; the normal 7-Zip installer is enough. `zinc-install.exe` looks at 7-Zip's own registry entry, on `PATH`, and in the usual install folders, and records the path it finds in `settings.json`.
 - **Go 1.27 or newer** — only if you build from source.
 
 ## Install
 
 1. Download `zinc-<version>-setup.exe` from the [releases page](https://github.com/GensokyoNeoSanae/zinc/releases) and run it. The first page picks the language: English by default, 简体中文 as the second option. The setup is not code-signed, so SmartScreen may show *Windows protected your PC* — choose **More info → Run anyway**. The wizard needs no admin rights: it installs into `%LOCALAPPDATA%\Programs\zinc`, registers the notification identity and adds the folder to your user `PATH`.
-2. Make sure 7-Zip is installed (<https://www.7-zip.org/>). The wizard looks for `7z.exe` / `7za.exe` on `PATH`, in `Program Files`, then in the old `E:\Tools\7zip` location, and asks for the path if it cannot find one — it will not finish without a usable 7-Zip. If you do not have 7-Zip yet, tick **Install 7-Zip automatically** on that page and pick where it should go (default `C:\Program Files\7-Zip`): the wizard downloads the official installer from 7-zip.org and runs it, so Windows asks for administrator approval once.
+2. Make sure 7-Zip is installed (<https://www.7-zip.org/>). The wizard looks for `7z.exe` / `7za.exe` through 7-Zip's registry entry, on `PATH`, and in the usual install folders, and lets you pick another path; **Auto-detect** next to the path runs that search again. It will not finish without a usable 7-Zip. If you do not have 7-Zip yet, tick **Install 7-Zip automatically** on that page and pick where it should go (default `C:\Program Files\7-Zip`): the wizard downloads the official installer from 7-zip.org and runs it, so Windows asks for administrator approval once.
 3. Open a **new** terminal, then pick where backups live:
 
    ```powershell
