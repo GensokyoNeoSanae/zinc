@@ -100,6 +100,16 @@ Source: "..\README.md";          DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README_zh.md";       DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE";            DestDir: "{app}"; Flags: ignoreversion
 
+[UninstallDelete]
+; 卸载时把运行期生成的本地状态一并清掉；备份数据在输出目录，不在这里
+Type: files; Name: "{app}\settings.json"
+Type: files; Name: "{app}\repos.json"
+Type: files; Name: "{app}\zinc.log"
+Type: files; Name: "{app}\logs\*.log"
+Type: files; Name: "{app}\logs\*.txt"
+Type: dirifempty; Name: "{app}\logs"
+Type: dirifempty; Name: "{app}\manifests"
+Type: dirifempty; Name: "{app}\tools"
 [UninstallRun]
 ; 先让 zinc 自己把计划任务、通知注册、PATH 项清掉，再由 Inno 删文件。
 Filename: "{app}\tools\zinc-unregister.exe"; Parameters: "--yes --no-pause"; Flags: runhidden waituntilterminated; RunOnceId: "ZincUnregister"

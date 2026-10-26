@@ -416,7 +416,7 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 - 清掉通知注册：开始菜单快捷方式、`HKCU\Software\Classes\AppUserModelId\zinc.backup`、`.aumid_ok`
 - 从用户 `PATH` 里移除这个目录
 
-`settings.json`、`repos.json` 和 `logs` 会留在安装目录里，重装时继续用；不想要就手动删掉文件夹。备份数据——输出目录里的 `.7z` 包和 manifest——一律不碰。
+安装目录里由运行生成的本地状态也会一并删掉：`settings.json`、`repos.json`、`logs`。备份数据——输出目录里的 `.7z` 包和 manifest——一律不碰。
 
 如果装完之后移动过程序目录，计划任务还指着旧路径，卸载时匹配不到：要么把目录放回原处，要么先 `zinc unschedule --all` 清掉。
 

@@ -416,7 +416,7 @@ Before removing them it calls `tools\zinc-unregister.exe` to undo the registrati
 - removes the notification registration: Start Menu shortcut, `HKCU\Software\Classes\AppUserModelId\zinc.backup`, `.aumid_ok`
 - removes the folder from your user `PATH`
 
-`settings.json`, `repos.json` and `logs` are left behind, so a later reinstall keeps your repos and default password; delete the folder if you do not want them. Backups — the `.7z` packs and manifests in your output directories — are never touched.
+It also removes the generated local state in the install folder: `settings.json`, `repos.json` and `logs`. Backups — the `.7z` packs and manifests in your output directories — are never touched.
 
 If you moved the program folder after installing, the tasks still point at the old one and will not be matched: either keep the folder where it was, or clear them first with `zinc unschedule --all`.
 
