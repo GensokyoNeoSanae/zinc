@@ -52,30 +52,32 @@ english.SevenZipDescription=zinc needs a usable 7-Zip
 english.SevenZipSubCaption=zinc calls 7z.exe or 7za.exe to compress and restore. Select the executable.
 english.SevenZipPrompt=Path to 7z.exe or 7za.exe:
 english.SevenZipInvalid=Select a valid 7z.exe or 7za.exe. zinc needs it to pack and restore.
-english.RegFailPrefix=Files are installed, but registering notifications and PATH failed
-english.RegFailSuffix=Run zinc-install.exe from the install folder to retry.
+english.RegFailPrefix=Registering notifications and PATH failed
+english.RegBusy=Registering notifications and PATH...
+english.RegFailSuffix=Setup will roll back. Please report the text above.
 english.Download7zip=Install 7-Zip automatically (needs internet)
 english.Download7zipDir=Install to:
 english.Download7zipBrowse=Browse…
 english.Download7zipBrowseTitle=Select the 7-Zip folder
 english.Download7zipHint=Downloads the official installer from www.7-zip.org. Windows asks for administrator approval once.
 english.Download7zipBusy=Downloading and installing 7-Zip...
-english.Download7zipFail=Could not download or install 7-Zip. Install it from https://www.7-zip.org/ and run zinc-install.exe from the install folder.
+english.Download7zipFail=Could not download or install 7-Zip. Setup will roll back; install 7-Zip from https://www.7-zip.org/ and run the setup again.
 english.Download7zipDone=Installed 7-Zip at %1
 chinesesimplified.SevenZipCaption=选择 7-Zip
 chinesesimplified.SevenZipDescription=zinc 需要一个可用的 7-Zip
 chinesesimplified.SevenZipSubCaption=zinc 调用 7z.exe 或 7za.exe 完成打包与恢复。请选择 7-Zip 的命令行程序。
 chinesesimplified.SevenZipPrompt=7z.exe 或 7za.exe 的路径：
 chinesesimplified.SevenZipInvalid=请选择一个有效的 7z.exe 或 7za.exe。zinc 需要它来打包和恢复。
-chinesesimplified.RegFailPrefix=文件已安装，但注册通知和 PATH 失败
-chinesesimplified.RegFailSuffix=请到安装目录手动运行 zinc-install.exe 重试。
+chinesesimplified.RegFailPrefix=注册通知和 PATH 失败
+chinesesimplified.RegBusy=正在注册通知与 PATH...
+chinesesimplified.RegFailSuffix=安装将回滚，请把上面的内容反馈到项目 issue。
 chinesesimplified.Download7zip=自动安装 7-Zip（需要联网）
 chinesesimplified.Download7zipDir=安装到：
 chinesesimplified.Download7zipBrowse=浏览…
 chinesesimplified.Download7zipBrowseTitle=选择 7-Zip 安装目录
 chinesesimplified.Download7zipHint=从官网 www.7-zip.org 下载官方安装包，安装时会弹一次管理员提权。
 chinesesimplified.Download7zipBusy=正在下载并安装 7-Zip...
-chinesesimplified.Download7zipFail=下载或安装 7-Zip 失败。请到 https://www.7-zip.org/ 手动安装，再运行安装目录里的 zinc-install.exe。
+chinesesimplified.Download7zipFail=下载或安装 7-Zip 失败，安装将回滚。请到 https://www.7-zip.org/ 手动装好 7-Zip 后重跑安装包。
 chinesesimplified.Download7zipDone=已安装 7-Zip：%1
 
 [Files]
@@ -285,6 +287,12 @@ var
   Rc: Integer;
 begin
   Result := '';
+  // 目标目录里已经有 7z.exe 就不要再下载/安装一遍
+  if FileExists(AddBackslash(TargetDir) + '7z.exe') then
+  begin
+    Result := AddBackslash(TargetDir) + '7z.exe';
+    Exit;
+  end;
   SetupExe := ExpandConstant('{tmp}\7z-setup.exe');
   Ps1 := ExpandConstant('{tmp}\get-7zip.ps1');
   Script :=
@@ -309,31 +317,64 @@ begin
   Result := FindInstalledSevenZip(TargetDir);
 end;
 
+function RunZincInstall(const SevenZip: string; var LogText: string): Integer;
+var
+  CmdFile, LogFile, Script: string;
+  AnsiLog: AnsiString;
+  Rc: Integer;
+begin
+  CmdFile := ExpandConstant('{tmp}\register.cmd');
+  LogFile := ExpandConstant('{tmp}\register.log');
+  Script := '@echo off' + #13#10
+    + '"' + ExpandConstant('{app}\zinc-install.exe') + '" --7zip "' + SevenZip + '" --no-pause --lang en > "' + LogFile + '" 2>&1' + #13#10
+    + 'exit /b %ERRORLEVEL%' + #13#10;
+  if not SaveStringToFile(CmdFile, Script, False) then
+  begin
+    Result := -1;
+    LogText := 'cannot write ' + CmdFile;
+    Exit;
+  end;
+  if not Exec('cmd.exe', '/c "' + CmdFile + '"', '', SW_HIDE, ewWaitUntilTerminated, Rc) then
+  begin
+    Result := -1;
+    LogText := 'cannot start cmd.exe';
+    Exit;
+  end;
+  LogText := '';
+  LoadStringFromFile(LogFile, AnsiLog);
+  LogText := AnsiLog;
+  Result := Rc;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  ResultCode: Integer;
+  Rc, FailCode: Integer;
+  LogText, ZipDir: string;
 begin
-  if CurStep = ssPostInstall then
+  if CurStep <> ssPostInstall then
+    Exit;
+  if ExpandConstant('{param:NOREG|0}') = '1' then
+    Exit;
+
+  if DownloadSevenZip then
   begin
-    if ExpandConstant('{param:NOREG|0}') = '1' then
-      Exit;
+    WizardForm.StatusLabel.Caption := CustomMessage('Download7zipBusy');
+    ZipDir := Trim(DownloadDirEdit.Text);
+    if ZipDir = '' then
+      ZipDir := ExpandConstant('{sd}\Program Files\7-Zip');
+    SevenZipPath := DownloadAndInstallSevenZip(ZipDir);
+    if SevenZipPath = '' then
+      RaiseException(CustomMessage('Download7zipFail'));
+  end;
 
-    if DownloadSevenZip then
-    begin
-      WizardForm.StatusLabel.Caption := CustomMessage('Download7zipBusy');
-      SevenZipPath := DownloadAndInstallSevenZip(Trim(DownloadDirEdit.Text));
-      if SevenZipPath = '' then
-      begin
-        MsgBox(CustomMessage('Download7zipFail'), mbError, MB_OK);
-        Exit;
-      end;
-      MsgBox(FmtMessage(CustomMessage('Download7zipDone'), [SevenZipPath]), mbInformation, MB_OK);
-    end;
-
-    if (not Exec(ExpandConstant('{app}\zinc-install.exe'),
-        '--7zip "' + SevenZipPath + '" --no-pause', '',
-        SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
-      MsgBox(CustomMessage('RegFailPrefix') + ' (exit code ' + IntToStr(ResultCode) + ').'
-        + #13#10 + CustomMessage('RegFailSuffix'), mbError, MB_OK);
+  WizardForm.StatusLabel.Caption := CustomMessage('RegBusy');
+  Rc := RunZincInstall(SevenZipPath, LogText);
+  if Rc <> 0 then
+  begin
+    FailCode := Rc;
+    // 注册失败就当作安装失败：先撤掉可能写了一半的注册，再让 Inno 回滚文件。
+    Exec(ExpandConstant('{app}\zinc-uninstall.exe'), '--yes --no-pause', '', SW_HIDE, ewWaitUntilTerminated, Rc);
+    RaiseException(CustomMessage('RegFailPrefix') + ' (exit code ' + IntToStr(FailCode) + ').'
+      + #13#10 + LogText + #13#10 + CustomMessage('RegFailSuffix'));
   end;
 end;
