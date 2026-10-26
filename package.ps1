@@ -1,4 +1,4 @@
-# 打发布包：
+﻿# 打发布包：
 #   dist\zinc-<版本>-setup.exe          Inno Setup 安装包（推荐给普通用户）
 #   dist\zinc-<版本>-windows-amd64.zip  绿色版（解压即用，zinc init 轻量注册）
 param(

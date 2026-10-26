@@ -1,4 +1,4 @@
-# 用 Inno Setup 6 编译安装包。
+﻿# 用 Inno Setup 6 编译安装包。
 # 需要 ISCC.exe：可以装在工作区（_tools\InnoSetup6）或默认安装位置，也可以用 -Iscc 指定。
 param(
     [string]$Version = '0.1.0',

@@ -1,4 +1,4 @@
-# 编译四个可执行文件：
+﻿# 编译四个可执行文件：
 #   zinc.exe          控制台版主程序
 #   zincw.exe         GUI 子系统版主程序（计划任务用，不弹窗口）
 #   zinc-install.exe  安装：检查 7-Zip、注册通知、写用户 PATH
