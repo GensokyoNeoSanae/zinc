@@ -408,7 +408,7 @@ Every pack is self-contained, so a damaged pack only loses that pack and the res
 
 ## Uninstall
 
-Open **Settings → Apps → Installed apps**, find `zinc` and choose Uninstall. That runs Inno Setup's uninstaller (`unins000.exe` in the install folder), which asks for confirmation and then removes the files.
+Open **Settings → Apps → Installed apps**, find `zinc` and choose Uninstall. That runs Inno Setup's uninstaller (`unins000.exe` in the install folder): it first asks you to confirm the removal, then asks whether to keep your settings, and only then deletes files.
 
 Before removing them it calls `tools\zinc-unregister.exe` to undo the registration:
 
@@ -416,7 +416,7 @@ Before removing them it calls `tools\zinc-unregister.exe` to undo the registrati
 - removes the notification registration: Start Menu shortcut, `HKCU\Software\Classes\AppUserModelId\zinc.backup`, `.aumid_ok`
 - removes the folder from your user `PATH`
 
-Before it starts, it asks whether to keep settings and logs (`settings.json`, `repos.json`, `logs`). Answer **No** to delete them as well, **Yes** to keep the repo list and default password for a later reinstall. Backups — the `.7z` packs and manifests in your output directories — are never touched.
+The keep-or-delete question comes after you confirm the uninstall: answer **No** to delete `settings.json`, `repos.json` and `logs` along with the program, **Yes** to keep the repo list and default password for a later reinstall. A silent uninstall (`/VERYSILENT`) behaves like **No**. Marker files such as `.aumid_ok` are not user data and are always removed. Backups — the `.7z` packs and manifests in your output directories — are never touched.
 
 If you moved the program folder after installing, the tasks still point at the old one and will not be matched: either keep the folder where it was, or clear them first with `zinc unschedule --all`.
 

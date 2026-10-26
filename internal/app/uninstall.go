@@ -77,7 +77,9 @@ func UninstallMain() {
 		failed = true
 	case owner == "":
 		fmt.Print(M.UninstallNoNotify)
-	case samePathFold(owner, dir):
+		// 快捷方式不在了，但本目录可能还留着 .aumid_ok；顺手清掉，别留孤儿文件。
+		os.Remove(markerPath())
+	case ownsShortcut(owner, dir):
 		os.Remove(shortcutPath())
 		os.Remove(markerPath())
 		if err := removeAumidKey(); err != nil {
@@ -253,6 +255,13 @@ func shortcutOwnerDir() (string, error) {
 		return "", nil
 	}
 	return out, nil
+}
+
+// ownsShortcut 判断开始菜单里的 zinc.lnk 是不是这次卸载的这份安装建的。
+// 早期版本把快捷方式指到了 {app}\tools\zinc-register.exe（辅助程序），
+// 目标目录因此是 {app}\tools，只比 {app} 会被当成「别人的安装」而跳过清理。
+func ownsShortcut(owner, dir string) bool {
+	return samePathFold(owner, dir) || samePathFold(owner, filepath.Join(dir, "tools"))
 }
 
 // removeAumidKey 删掉 AppUserModelId 注册表项。用 reg.exe 避免再拼一段 PowerShell。

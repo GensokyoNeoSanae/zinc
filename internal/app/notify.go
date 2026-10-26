@@ -111,8 +111,12 @@ func ensureShortcutForce(force bool) error {
 	// 先写到同目录的临时 .lnk，成功后再替换正式文件；失败不会碰已有的 zinc.lnk。
 	tmp := filepath.Join(filepath.Dir(lnk), fmt.Sprintf("zinc-%d.tmp.lnk", os.Getpid()))
 	os.Remove(tmp)
-	// 优先指向同目录的 zinc.exe，双击快捷方式能看到用法
-	if zi := filepath.Join(filepath.Dir(exe), "zinc.exe"); fileExists(zi) {
+	// 优先指向程序目录里的 zinc.exe，双击快捷方式能看到用法。
+	// base 取 appDir() 而不是 exe 所在目录：从 tools\zinc-register.exe 注册时
+	// exe 在 tools\ 下，按 exe 目录找会把快捷方式指到辅助程序上（历史 bug：
+	// 快捷方式目标成了 tools\zinc-register.exe），连带卸载时也认不出自己。
+	base := appDir()
+	if zi := filepath.Join(base, "zinc.exe"); fileExists(zi) {
 		exe = zi
 	}
 	// 同目录有 zinc.ico 就用它做通知图标

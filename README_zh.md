@@ -408,7 +408,7 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 
 ## 卸载
 
-打开 **设置 → 应用 → 安装的应用**，找到 `zinc` 点卸载。实际跑的是 Inno Setup 生成的卸载程序（安装目录里的 `unins000.exe`），确认之后删除文件。
+打开 **设置 → 应用 → 安装的应用**，找到 `zinc` 点卸载。实际跑的是 Inno Setup 生成的卸载程序（安装目录里的 `unins000.exe`）：先问“确定要完全卸载吗”，确认之后再问是否保留设置，然后才开始删文件。
 
 删文件之前它会调用 `tools\zinc-unregister.exe` 撤销注册：
 
@@ -416,7 +416,7 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 - 清掉通知注册：开始菜单快捷方式、`HKCU\Software\Classes\AppUserModelId\zinc.backup`、`.aumid_ok`
 - 从用户 `PATH` 里移除这个目录
 
-开始前它会问一次是否保留设置与日志（`settings.json`、`repos.json`、`logs`）：选“否”一并删除；选“是”保留仓库列表和默认密码，方便以后重装。备份数据——输出目录里的 `.7z` 包和 manifest——一律不碰。
+保留设置的问题在确认卸载之后才弹：选“否”连 `settings.json`、`repos.json`、`logs` 一起删，目录整个清空；选“是”只删程序，留下仓库列表和默认密码，方便以后重装。静默卸载（`/VERYSILENT`）按“否”处理。`.aumid_ok` 这类注册标记不算用户数据，总是删掉；备份数据——输出目录里的 `.7z` 包和 manifest——一律不碰。
 
 如果装完之后移动过程序目录，计划任务还指着旧路径，卸载时匹配不到：要么把目录放回原处，要么先 `zinc unschedule --all` 清掉。
 

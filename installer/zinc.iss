@@ -103,7 +103,9 @@ Source: "..\README_zh.md";       DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE";            DestDir: "{app}"; Flags: ignoreversion
 
 [UninstallDelete]
-; 设置与日志是否删除由卸载确认框决定（见 InitializeUninstall），这里只负责收拾空目录
+; 设置与日志是否删除由卸载时的确认框决定（见 CurUninstallStepChanged），这里只负责
+; 收拾程序自己生成的杂项和空目录。.aumid_ok 是通知注册标记，不算用户数据，直接删。
+Type: files; Name: "{app}\.aumid_ok"
 Type: dirifempty; Name: "{app}\logs"
 Type: dirifempty; Name: "{app}\manifests"
 Type: dirifempty; Name: "{app}\tools"
@@ -391,8 +393,10 @@ var
 begin
   CmdFile := ExpandConstant('{tmp}\register.cmd');
   LogFile := ExpandConstant('{tmp}\register.log');
+  // --force：每次安装都重建通知注册（开始菜单快捷方式 + AppUserModelId），
+  // 免得重装到旧目录时沿用上一次装的快捷方式（旧版本目标还指错到 tools\ 下）。
   Script := '@echo off' + #13#10
-    + '"' + ExpandConstant('{app}\tools\zinc-register.exe') + '" --7zip "' + SevenZip + '" --no-pause --lang en > "' + LogFile + '" 2>&1' + #13#10
+    + '"' + ExpandConstant('{app}\tools\zinc-register.exe') + '" --7zip "' + SevenZip + '" --no-pause --lang en --force > "' + LogFile + '" 2>&1' + #13#10
     + 'exit /b %ERRORLEVEL%' + #13#10;
   if not SaveStringToFile(CmdFile, Script, False) then
   begin
@@ -412,19 +416,15 @@ begin
   Result := Rc;
 end;
 
-function InitializeUninstall(): Boolean;
-begin
-  Result := True;
-  if UninstallSilent then
-    KeepSettings := False
-  else
-    KeepSettings := MsgBox(CustomMessage('UninstallKeepSettings'), mbConfirmation, MB_YESNO) = IDYES;
-end;
-
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep <> usUninstall then
     Exit;
+  // 问在 Inno 自己的「确定要完全卸载吗」之后：先确认要卸，再问要不要留设置。
+  // 放在 InitializeUninstall 会把顺序反过来，看着很别扭。
+  KeepSettings := False;
+  if not UninstallSilent then
+    KeepSettings := MsgBox(CustomMessage('UninstallKeepSettings'), mbConfirmation, MB_YESNO) = IDYES;
   if KeepSettings then
     Exit;
   DeleteFile(ExpandConstant('{app}\settings.json'));
