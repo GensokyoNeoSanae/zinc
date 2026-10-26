@@ -441,6 +441,7 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 | 现象 | 原因与处理 |
 |---|---|
 | 装完提示 `zinc: command not found` | `PATH` 只对新开的终端生效；或重新跑一次 `zinc init` |
+| 安装包报 `unable to create the directory ... is-XXXX.tmp` | `%TEMP%` 指向的目录不可写（安装包要先去那里建临时目录）。把用户环境变量 `TEMP`、`TMP` 指到 `%LOCALAPPDATA%\Temp`，重启资源管理器后再装 |
 | 提示 `[warn] 7za not found` | 7-Zip 不在默认路径；`zinc config set 7zip_path <7za.exe 路径>` |
 | 备份卡很久然后失败 | 残留的 `<output>\.lock`；手动删掉再跑一次 |
 | 通知突然不弹了 | 删掉快捷方式、`.aumid_ok` 和 AppUserModelId 注册表项，再触发一次备份 |

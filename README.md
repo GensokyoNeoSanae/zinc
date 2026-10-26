@@ -441,6 +441,7 @@ If you moved the program folder after installing, the tasks still point at the o
 | Symptom | Cause and fix |
 |---|---|
 | `zinc: command not found` after install | `PATH` changes apply to newly opened terminals; or run `zinc init` again |
+| Setup stops with `unable to create the directory ... is-XXXX.tmp` | `%TEMP%` points at a folder Windows will not let the installer write to. Point the user `TEMP` and `TMP` variables at `%LOCALAPPDATA%\Temp`, restart Explorer, and run the setup again |
 | `[warn] 7za not found` | 7-Zip is not at the default path; `zinc config set 7zip_path <path to 7za.exe>` |
 | Backup waits a long time and fails | A stale `<output>\.lock`; delete it, then run the backup again |
 | Notifications stopped appearing | Delete the shortcut, `.aumid_ok` and the `AppUserModelId` registry key, then trigger a backup again |
