@@ -24,3 +24,6 @@
 *.swp
 Thumbs.db
 Desktop.ini
+
+# Sogou IME writes this into the working directory
+/debug.log

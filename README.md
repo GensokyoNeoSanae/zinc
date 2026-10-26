@@ -114,7 +114,7 @@ Packs are atomic; dates are not. One pack can span several days, so a date bound
 ## Install
 
 1. Download `zinc-<version>-setup.exe` from the [releases page](https://github.com/GensokyoNeoSanae/zinc/releases) and run it. The first page picks the language: English by default, 简体中文 as the second option. The setup is not code-signed, so SmartScreen may show *Windows protected your PC* — choose **More info → Run anyway**. The wizard needs no admin rights: it installs into `%LOCALAPPDATA%\Programs\zinc`, registers the notification identity and adds the folder to your user `PATH`.
-2. Make sure 7-Zip is installed (<https://www.7-zip.org/>). The wizard looks for `7z.exe` / `7za.exe` on `PATH`, in `Program Files`, then in the old `E:\Tools\7zip` location, and asks for the path if it cannot find one — it will not finish without a usable 7-Zip.
+2. Make sure 7-Zip is installed (<https://www.7-zip.org/>). The wizard looks for `7z.exe` / `7za.exe` on `PATH`, in `Program Files`, then in the old `E:\Tools\7zip` location, and asks for the path if it cannot find one — it will not finish without a usable 7-Zip. If you do not have 7-Zip yet, tick **Install 7-Zip automatically** on that page: the wizard downloads the official installer from 7-zip.org and runs it (Windows asks for administrator approval once).
 3. Open a **new** terminal, then pick where backups live:
 
    ```powershell

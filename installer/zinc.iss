@@ -1,4 +1,4 @@
-; zinc 安装包（Inno Setup 6）
+﻿; zinc 安装包（Inno Setup 6）
 ; 编译：ISCC.exe /DAppVersion=0.1.0 installer\zinc.iss
 ; 第一页是语言选择：英文默认，第二项简体中文。
 
@@ -54,6 +54,11 @@ english.SevenZipPrompt=Path to 7z.exe or 7za.exe:
 english.SevenZipInvalid=Select a valid 7z.exe or 7za.exe. zinc needs it to pack and restore.
 english.RegFailPrefix=Files are installed, but registering notifications and PATH failed
 english.RegFailSuffix=Run zinc-install.exe from the install folder to retry.
+english.Download7zip=Install 7-Zip automatically (needs internet)
+english.Download7zipHint=Downloads the official installer from www.7-zip.org and installs it to C:\Program Files\7-Zip. Windows asks for administrator approval once.
+english.Download7zipBusy=Downloading and installing 7-Zip...
+english.Download7zipFail=Could not download or install 7-Zip. Install it from https://www.7-zip.org/ and run zinc-install.exe from the install folder.
+english.Download7zipDone=Installed 7-Zip at %1
 chinesesimplified.SevenZipCaption=选择 7-Zip
 chinesesimplified.SevenZipDescription=zinc 需要一个可用的 7-Zip
 chinesesimplified.SevenZipSubCaption=zinc 调用 7z.exe 或 7za.exe 完成打包与恢复。请选择 7-Zip 的命令行程序。
@@ -61,6 +66,11 @@ chinesesimplified.SevenZipPrompt=7z.exe 或 7za.exe 的路径：
 chinesesimplified.SevenZipInvalid=请选择一个有效的 7z.exe 或 7za.exe。zinc 需要它来打包和恢复。
 chinesesimplified.RegFailPrefix=文件已安装，但注册通知和 PATH 失败
 chinesesimplified.RegFailSuffix=请到安装目录手动运行 zinc-install.exe 重试。
+chinesesimplified.Download7zip=自动安装 7-Zip（需要联网）
+chinesesimplified.Download7zipHint=从官网 www.7-zip.org 下载官方安装包并安装到 C:\Program Files\7-Zip，过程中会弹一次管理员提权。
+chinesesimplified.Download7zipBusy=正在下载并安装 7-Zip...
+chinesesimplified.Download7zipFail=下载或安装 7-Zip 失败。请到 https://www.7-zip.org/ 手动安装，再运行安装目录里的 zinc-install.exe。
+chinesesimplified.Download7zipDone=已安装 7-Zip：%1
 
 [Files]
 Source: "..\zinc.exe";           DestDir: "{app}"; Flags: ignoreversion
@@ -80,6 +90,9 @@ Filename: "{app}\zinc-uninstall.exe"; Parameters: "--yes --no-pause"; Flags: run
 var
   SevenZipPage: TInputFileWizardPage;
   SevenZipPath: string;
+  DownloadSevenZip: Boolean;
+  DownloadCheck: TNewCheckBox;
+  DownloadHint: TNewStaticText;
 
 function DetectSevenZip(): string;
 var
@@ -139,6 +152,22 @@ begin
     Result := Candidate;
 end;
 
+procedure UpdateDownloadUi();
+begin
+  DownloadSevenZip := DownloadCheck.Checked;
+  if DownloadSevenZip then
+    DownloadHint.Font.Color := $00000000
+  else
+    DownloadHint.Font.Color := $00808080;
+  SevenZipPage.Edits[0].Enabled := not DownloadSevenZip;
+  SevenZipPage.Buttons[0].Enabled := not DownloadSevenZip;
+end;
+
+procedure DownloadCheckClick(Sender: TObject);
+begin
+  UpdateDownloadUi();
+end;
+
 procedure InitializeWizard();
 begin
   SevenZipPage := CreateInputFilePage(wpSelectDir,
@@ -147,9 +176,30 @@ begin
     CustomMessage('SevenZipSubCaption'));
   SevenZipPage.Add(CustomMessage('SevenZipPrompt'),
     'Executable files (*.exe)|*.exe|All files (*.*)|*.*', '.exe');
+
+  DownloadCheck := TNewCheckBox.Create(WizardForm);
+  DownloadCheck.Parent := SevenZipPage.Surface;
+  DownloadCheck.Left := 0;
+  DownloadCheck.Top := SevenZipPage.Surface.Height - 64;
+  DownloadCheck.Width := SevenZipPage.Surface.Width;
+  DownloadCheck.Caption := CustomMessage('Download7zip');
+  DownloadCheck.OnClick := @DownloadCheckClick;
+
+  DownloadHint := TNewStaticText.Create(WizardForm);
+  DownloadHint.Parent := SevenZipPage.Surface;
+  DownloadHint.Left := 18;
+  DownloadHint.Top := SevenZipPage.Surface.Height - 38;
+  DownloadHint.Width := SevenZipPage.Surface.Width - 18;
+  DownloadHint.AutoSize := False;
+  DownloadHint.WordWrap := True;
+  DownloadHint.Caption := CustomMessage('Download7zipHint');
+
   SevenZipPath := DetectSevenZip();
   if SevenZipPath <> '' then
     SevenZipPage.Values[0] := SevenZipPath;
+
+  DownloadCheck.Checked := False;
+  UpdateDownloadUi();
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -157,6 +207,8 @@ begin
   Result := True;
   if CurPageID = SevenZipPage.ID then
   begin
+    if DownloadSevenZip then
+      Exit;
     SevenZipPath := Trim(SevenZipPage.Values[0]);
     if not FileExists(SevenZipPath) then
     begin
@@ -164,6 +216,51 @@ begin
       Result := False;
     end;
   end;
+end;
+
+function FindInstalledSevenZip(): string;
+var
+  Cand: string;
+begin
+  Result := '';
+  Cand := ExpandConstant('{sd}\Program Files\7-Zip\7z.exe');
+  if FileExists(Cand) then begin Result := Cand; Exit; end;
+  Cand := ExpandConstant('{sd}\Program Files (x86)\7-Zip\7z.exe');
+  if FileExists(Cand) then begin Result := Cand; Exit; end;
+  Cand := ExpandConstant('{pf}\7-Zip\7z.exe');
+  if FileExists(Cand) then begin Result := Cand; Exit; end;
+  Cand := ExpandConstant('{pf32}\7-Zip\7z.exe');
+  if FileExists(Cand) then begin Result := Cand; Exit; end;
+end;
+
+function DownloadAndInstallSevenZip(): string;
+var
+  Ps1, Script, SetupExe: string;
+  Rc: Integer;
+begin
+  Result := '';
+  SetupExe := ExpandConstant('{tmp}\7z-setup.exe');
+  Ps1 := ExpandConstant('{tmp}\get-7zip.ps1');
+  Script :=
+    '$ProgressPreference = ''SilentlyContinue''' + #13#10 +
+    '[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12' + #13#10 +
+    'try {' + #13#10 +
+    '  $h = (Invoke-WebRequest -UseBasicParsing ''https://www.7-zip.org/download.html'').Content' + #13#10 +
+    '  $m = [regex]::Match($h, ''a/(7z\d+-x64\.exe)'')' + #13#10 +
+    '  if (-not $m.Success) { exit 2 }' + #13#10 +
+    '  Invoke-WebRequest -UseBasicParsing (''https://www.7-zip.org/a/'' + $m.Groups[1].Value) -OutFile ''' + SetupExe + '''' + #13#10 +
+    '} catch { exit 3 }' + #13#10;
+  if not SaveStringToFile(Ps1, Script, False) then
+    Exit;
+  if not Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -File "' + Ps1 + '"',
+      '', SW_HIDE, ewWaitUntilTerminated, Rc) then
+    Exit;
+  if (Rc <> 0) or (not FileExists(SetupExe)) then
+    Exit;
+  if not ShellExec('runas', SetupExe, '/S', '', SW_SHOW, ewWaitUntilTerminated, Rc) then
+    Exit;
+  Sleep(1500);
+  Result := FindInstalledSevenZip();
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -174,6 +271,19 @@ begin
   begin
     if ExpandConstant('{param:NOREG|0}') = '1' then
       Exit;
+
+    if DownloadSevenZip then
+    begin
+      WizardForm.StatusLabel.Caption := CustomMessage('Download7zipBusy');
+      SevenZipPath := DownloadAndInstallSevenZip();
+      if SevenZipPath = '' then
+      begin
+        MsgBox(CustomMessage('Download7zipFail'), mbError, MB_OK);
+        Exit;
+      end;
+      MsgBox(FmtMessage(CustomMessage('Download7zipDone'), [SevenZipPath]), mbInformation, MB_OK);
+    end;
+
     if (not Exec(ExpandConstant('{app}\zinc-install.exe'),
         '--7zip "' + SevenZipPath + '" --no-pause', '',
         SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
