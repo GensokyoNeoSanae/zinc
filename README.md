@@ -113,7 +113,7 @@ Packs are atomic; dates are not. One pack can span several days, so a date bound
 
 ## Install
 
-1. Download `zinc-<version>-setup.exe` from the [releases page](https://github.com/GensokyoNeoSanae/zinc/releases) and run it. The first page picks the language: English by default, 简体中文 as the second option. The wizard needs no admin rights: it installs into `%LOCALAPPDATA%\Programs\zinc`, registers the notification identity and adds the folder to your user `PATH`.
+1. Download `zinc-<version>-setup.exe` from the [releases page](https://github.com/GensokyoNeoSanae/zinc/releases) and run it. The first page picks the language: English by default, 简体中文 as the second option. The setup is not code-signed, so SmartScreen may show *Windows protected your PC* — choose **More info → Run anyway**. The wizard needs no admin rights: it installs into `%LOCALAPPDATA%\Programs\zinc`, registers the notification identity and adds the folder to your user `PATH`.
 2. Make sure 7-Zip is installed (<https://www.7-zip.org/>). The wizard looks for `7z.exe` / `7za.exe` on `PATH`, in `Program Files`, then in the old `E:\Tools\7zip` location, and asks for the path if it cannot find one — it will not finish without a usable 7-Zip.
 3. Open a **new** terminal, then pick where backups live:
 
@@ -441,7 +441,7 @@ If you moved the program folder after installing, the tasks still point at the o
 | Symptom | Cause and fix |
 |---|---|
 | `zinc: command not found` after install | `PATH` changes apply to newly opened terminals; or run `zinc init` again |
-| Setup stops with `unable to create the directory ... is-XXXX.tmp` | `%TEMP%` points at a folder Windows will not let the installer write to. Point the user `TEMP` and `TMP` variables at `%LOCALAPPDATA%\Temp`, restart Explorer, and run the setup again |
+| Setup stops with `unable to create the directory ... is-XXXX.tmp` / `Error 5` | The installer cannot write under `%TEMP%` (redirected to another drive, or guarded by security software). Start it from `cmd` with `set TEMP=%LOCALAPPDATA%\Temp` and `set TMP=%LOCALAPPDATA%\Temp`, or point those variables at a writable folder |
 | `[warn] 7za not found` | 7-Zip is not at the default path; `zinc config set 7zip_path <path to 7za.exe>` |
 | Backup waits a long time and fails | A stale `<output>\.lock`; delete it, then run the backup again |
 | Notifications stopped appearing | Delete the shortcut, `.aumid_ok` and the `AppUserModelId` registry key, then trigger a backup again |

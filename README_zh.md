@@ -113,7 +113,7 @@ zinc reindex 图片 --yes    # 覆盖已有索引（旧文件会留一份 .bak�
 
 ## 安装
 
-1. 从 [releases 页面](https://github.com/GensokyoNeoSanae/zinc/releases) 下载 `zinc-<版本>-setup.exe` 并运行。第一页选语言，英文默认，第二项是简体中文。向导不需要管理员权限：默认装到 `%LOCALAPPDATA%\Programs\zinc`，注册通知身份，并把目录加进当前用户的 `PATH`。
+1. 从 [releases 页面](https://github.com/GensokyoNeoSanae/zinc/releases) 下载 `zinc-<版本>-setup.exe` 并运行。第一页选语言，英文默认，第二项是简体中文。安装包没有代码签名，SmartScreen 可能弹出“Windows 已保护你的电脑”，点 **更多信息 → 仍要运行** 即可。向导不需要管理员权限：默认装到 `%LOCALAPPDATA%\Programs\zinc`，注册通知身份，并把目录加进当前用户的 `PATH`。
 2. 确认装了 7-Zip（<https://www.7-zip.org/>）。向导会依次在 `PATH`、`Program Files`、旧的 `E:\Tools\7zip` 里找 `7z.exe` / `7za.exe`；找不到就停在这一页让你指定路径，没有可用的 7-Zip 不会继续。
 3. 开一个**新**终端，选备份根目录：
 
@@ -441,7 +441,7 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 | 现象 | 原因与处理 |
 |---|---|
 | 装完提示 `zinc: command not found` | `PATH` 只对新开的终端生效；或重新跑一次 `zinc init` |
-| 安装包报 `unable to create the directory ... is-XXXX.tmp` | `%TEMP%` 指向的目录不可写（安装包要先去那里建临时目录）。把用户环境变量 `TEMP`、`TMP` 指到 `%LOCALAPPDATA%\Temp`，重启资源管理器后再装 |
+| 安装包报 `unable to create the directory ... is-XXXX.tmp` / `Error 5` | 安装器写不了 `%TEMP%`（被重定向到别的盘，或被安全软件挡住）。在 `cmd` 里先 `set TEMP=%LOCALAPPDATA%\Temp`、`set TMP=%LOCALAPPDATA%\Temp` 再启动安装包，或把这些变量指到可写目录 |
 | 提示 `[warn] 7za not found` | 7-Zip 不在默认路径；`zinc config set 7zip_path <7za.exe 路径>` |
 | 备份卡很久然后失败 | 残留的 `<output>\.lock`；手动删掉再跑一次 |
 | 通知突然不弹了 | 删掉快捷方式、`.aumid_ok` 和 AppUserModelId 注册表项，再触发一次备份 |
