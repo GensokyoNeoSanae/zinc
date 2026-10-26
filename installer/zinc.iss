@@ -59,6 +59,10 @@ english.Download7zip=Install 7-Zip automatically (needs internet)
 english.Download7zipDir=Install to:
 english.Download7zipBrowse=Browse…
 english.Download7zipBrowseTitle=Select the 7-Zip folder
+english.ZincDirLabel=Install zinc to:
+english.ZincDirBrowse=Browse…
+english.ZincDirBrowseTitle=Select the zinc folder
+english.ZincDirEmpty=Choose a folder for zinc.
 english.Download7zipHint=Downloads the official installer from www.7-zip.org. Windows asks for administrator approval once.
 english.Download7zipBusy=Downloading and installing 7-Zip...
 english.Download7zipFail=Could not download or install 7-Zip. Setup will roll back; install 7-Zip from https://www.7-zip.org/ and run the setup again.
@@ -75,6 +79,10 @@ chinesesimplified.Download7zip=自动安装 7-Zip（需要联网）
 chinesesimplified.Download7zipDir=安装到：
 chinesesimplified.Download7zipBrowse=浏览…
 chinesesimplified.Download7zipBrowseTitle=选择 7-Zip 安装目录
+chinesesimplified.ZincDirLabel=zinc 安装到：
+chinesesimplified.ZincDirBrowse=浏览…
+chinesesimplified.ZincDirBrowseTitle=选择 zinc 安装目录
+chinesesimplified.ZincDirEmpty=请选择 zinc 的安装目录。
 chinesesimplified.Download7zipHint=从官网 www.7-zip.org 下载官方安装包，安装时会弹一次管理员提权。
 chinesesimplified.Download7zipBusy=正在下载并安装 7-Zip...
 chinesesimplified.Download7zipFail=下载或安装 7-Zip 失败，安装将回滚。请到 https://www.7-zip.org/ 手动装好 7-Zip 后重跑安装包。
@@ -104,6 +112,9 @@ var
   DownloadDirLabel: TNewStaticText;
   DownloadDirEdit: TNewEdit;
   DownloadBrowse: TNewButton;
+  ZincDirLabel: TNewStaticText;
+  ZincDirEdit: TNewEdit;
+  ZincBrowse: TNewButton;
 
 function DetectSevenZip(): string;
 var
@@ -182,6 +193,57 @@ begin
   UpdateDownloadUi();
 end;
 
+procedure ZincDirBrowseClick(Sender: TObject);
+var
+  Dir: string;
+begin
+  Dir := ZincDirEdit.Text;
+  if BrowseForFolder(CustomMessage('ZincDirBrowseTitle'), Dir, True) then
+    ZincDirEdit.Text := Dir;
+end;
+
+procedure AddZincDirRow();
+var
+  I: Integer;
+  C: TControl;
+begin
+  ZincDirLabel := TNewStaticText.Create(WizardForm);
+  ZincDirLabel.Parent := SevenZipPage.Surface;
+  ZincDirLabel.Left := 0;
+  ZincDirLabel.Top := 0;
+  ZincDirLabel.Caption := CustomMessage('ZincDirLabel');
+
+  ZincDirEdit := TNewEdit.Create(WizardForm);
+  ZincDirEdit.Parent := SevenZipPage.Surface;
+  ZincDirEdit.Left := ZincDirLabel.Width + 8;
+  ZincDirEdit.Top := -2;
+  ZincDirEdit.Width := SevenZipPage.Surface.Width - ZincDirEdit.Left - 92;
+  ZincDirEdit.Text := WizardForm.DirEdit.Text;
+
+  ZincBrowse := TNewButton.Create(WizardForm);
+  ZincBrowse.Parent := SevenZipPage.Surface;
+  ZincBrowse.Width := 80;
+  ZincBrowse.Left := SevenZipPage.Surface.Width - ZincBrowse.Width;
+  ZincBrowse.Top := -3;
+  ZincBrowse.Caption := CustomMessage('ZincDirBrowse');
+  ZincBrowse.OnClick := @ZincDirBrowseClick;
+
+  // 给最上面这行腾位置：把这一页原有的控件整体下移
+  for I := 0 to SevenZipPage.Surface.ControlCount - 1 do
+  begin
+    C := SevenZipPage.Surface.Controls[I];
+    if (C <> ZincDirLabel) and (C <> ZincDirEdit) and (C <> ZincBrowse) then
+      if C.Top < 80 then
+        C.Top := C.Top + 36;
+  end;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = SevenZipPage.ID then
+    ZincDirEdit.Text := WizardForm.DirEdit.Text;
+end;
+
 procedure DownloadBrowseClick(Sender: TObject);
 var
   Dir: string;
@@ -243,6 +305,7 @@ begin
     SevenZipPage.Values[0] := SevenZipPath;
 
   DownloadCheck.Checked := False;
+  AddZincDirRow();
   UpdateDownloadUi();
 end;
 
@@ -251,6 +314,13 @@ begin
   Result := True;
   if CurPageID = SevenZipPage.ID then
   begin
+    if Trim(ZincDirEdit.Text) = '' then
+    begin
+      MsgBox(CustomMessage('ZincDirEmpty'), mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+    WizardForm.DirEdit.Text := Trim(ZincDirEdit.Text);
     if DownloadSevenZip then
       Exit;
     SevenZipPath := Trim(SevenZipPage.Values[0]);
