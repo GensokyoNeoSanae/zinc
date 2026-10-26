@@ -1,0 +1,53 @@
+name: Bug report
+description: Something went wrong while backing up or restoring
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do **not** paste your real password — replace it with `xxxx`.
+        If the problem is about restore, say whether it reproduces with a small scratch folder.
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Output of `winver`, for example "Windows 11 23H2 (22631.4169)".
+    validations:
+      required: true
+
+  - type: input
+    id: zinc-version
+    attributes:
+      label: zinc version
+      description: Release tag, commit hash, or the date you built it.
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and output
+      description: The exact command you ran, plus what it printed.
+      render: powershell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt (optional)
+      description: Relevant lines from `<program dir>\logs\zinc-YYYYMMDD.log`.
+      render: text
+
+  - type: textarea
+    id: layout
+    attributes:
+      label: Repo layout (optional)
+      description: Number of files, roughly how large, whether the source is on a network drive, and whether the output is on a cloud-synced folder.

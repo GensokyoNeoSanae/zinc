@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Troubleshooting
+    url: https://github.com/GensokyoNeoSanae/zinc#troubleshooting
+    about: Command not found, 7za not found, stale .lock, notifications not showing, wrong version restored.

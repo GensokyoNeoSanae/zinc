@@ -1,0 +1,50 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: |
+          go build -ldflags "-s -w" -o zinc.exe .
+          go build -ldflags "-s -w -H=windowsgui" -o zincw.exe .
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: zinc-windows-amd64
+          path: |
+            zinc.exe
+            zincw.exe
+            zinc.ico
+          if-no-files-found: error
+
+      - name: Package release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: Compress-Archive -Path zinc.exe,zincw.exe,zinc.ico -DestinationPath zinc-windows-amd64.zip
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: zinc-windows-amd64.zip
+          generate_release_notes: true
