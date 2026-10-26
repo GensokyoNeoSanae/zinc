@@ -1,9 +1,10 @@
-# 打发布包：编译四个 exe，连同图标和文档装进 dist\zinc-<版本>-windows-amd64.zip
-# 用法：.\package.ps1                      版本号取自 git describe
-#       .\package.ps1 -Version 0.1.0
+# 打发布包：
+#   dist\zinc-<版本>-setup.exe              安装向导（推荐给普通用户）
+#   dist\zinc-<版本>-windows-amd64.zip      绿色版（解压即用，zinc init 轻量注册）
 param(
     [string]$Version = '',
-    [string]$Go = 'go'
+    [string]$Go = 'go',
+    [string]$Csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,31 +14,29 @@ if (-not $Version) {
     $Version = (& git -C $root describe --tags --always --dirty 2>$null)
     if (-not $Version) { $Version = 'dev' }
 }
+# 打 tag 时传进来的是 v0.1.0，文件名和程序集版本都用不带 v 的 0.1.0
+if ($Version.StartsWith('v') -or $Version.StartsWith('V')) { $Version = $Version.Substring(1) }
 
-& (Join-Path $root 'build.ps1') -Go $Go
-
-$name = "zinc-$Version-windows-amd64"
 $dist = Join-Path $root 'dist'
+New-Item -ItemType Directory -Force -Path $dist | Out-Null
+
+# 1. 安装向导（内部会先编译四个 exe）
+& (Join-Path $root 'installer\build.ps1') -Version $Version -Go $Go -Csc $Csc
+$setup = Join-Path $dist "zinc-$Version-setup.exe"
+Copy-Item (Join-Path $root 'installer\build\setup.exe') $setup -Force
+
+# 2. 绿色版 zip
+$name = "zinc-$Version-windows-amd64"
 $stage = Join-Path $dist $name
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
-
-$files = @(
-    'zinc.exe'
-    'zincw.exe'
-    'zinc-install.exe'
-    'zinc-uninstall.exe'
-    'zinc.ico'
-    'README.md'
-    'README_zh.md'
-    'LICENSE'
-)
-foreach ($f in $files) {
-    Copy-Item -Path (Join-Path $root $f) -Destination $stage
+foreach ($f in 'zinc.exe','zincw.exe','zinc-install.exe','zinc-uninstall.exe','zinc.ico','README.md','README_zh.md','LICENSE') {
+    Copy-Item (Join-Path $root $f) $stage
 }
-
 $zip = Join-Path $dist "$name.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
+Remove-Item $stage -Recurse -Force
 
+Write-Host "wrote dist\zinc-$Version-setup.exe ($((Get-Item $setup).Length) bytes)"
 Write-Host "wrote dist\$name.zip ($((Get-Item $zip).Length) bytes)"

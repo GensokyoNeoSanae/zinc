@@ -113,16 +113,9 @@ Packs are atomic; dates are not. One pack can span several days, so a date bound
 
 ## Install
 
-zinc is portable: unzip it anywhere, run the installer once, and it is ready. Nothing is written outside the program folder, `HKCU` and your Start Menu, and no admin rights are needed.
-
-1. Unzip `zinc-<version>-windows-amd64.zip` into a folder you intend to keep, for example `C:\Tools\zinc`. Do not install straight out of `Downloads`: this folder is what goes into your `PATH`.
-2. Make sure 7-Zip is installed (<https://www.7-zip.org/>). `7z.exe` from the normal installer is enough; `7za.exe` from 7-Zip Extra works too.
-3. Run `zinc-install.exe` from that folder — double-click it, or call it from a terminal. It
-   - finds 7-Zip (`PATH`, `Program Files`, then the fallback path), and asks for the path when it cannot find one
-   - registers the notification identity: a Start Menu shortcut plus the `AppUserModelId` key
-   - adds the folder to your **user** `PATH`
-   and writes the 7-Zip path it found into `settings.json`. If no usable 7-Zip can be found or given, it stops before changing anything.
-4. Open a **new** terminal, then pick where backups live:
+1. Download `zinc-<version>-setup.exe` from the [releases page](https://github.com/GensokyoNeoSanae/zinc/releases) and run it. The wizard needs no admin rights: it installs into `%LOCALAPPDATA%\Programs\zinc`, registers the notification identity and adds the folder to your user `PATH`.
+2. Make sure 7-Zip is installed (<https://www.7-zip.org/>). The wizard looks for `7z.exe` / `7za.exe` on `PATH`, in `Program Files`, then in the old `E:\Tools\7zip` location, and asks for the path if it cannot find one — it will not finish without a usable 7-Zip.
+3. Open a **new** terminal, then pick where backups live:
 
    ```powershell
    zinc root D:\Backup\zinc
@@ -130,7 +123,9 @@ zinc is portable: unzip it anywhere, run the installer once, and it is ready. No
 
    Repos then default to `<root>\<name>`.
 
-`zinc init` performs the same registration but only warns when 7-Zip is missing; it is the light version for people who manage `7zip_path` themselves. For a first run, `zinc-install.exe` is the one to use.
+The wizard installs `zinc.exe`, `zincw.exe`, `uninstall.exe` and the docs into the install folder; `settings.json` and `repos.json` live there too and are not part of the backup.
+
+If you prefer a portable copy, the release also ships `zinc-<version>-windows-amd64.zip`: unzip it anywhere and run `zinc-install.exe` from that folder. `zinc init` is the light version of the same registration, for people who manage `7zip_path` themselves.
 
 ## Quick start
 
@@ -381,6 +376,7 @@ Runtime files (program directory, never synced):
 | `zincw.exe` | GUI build, used by scheduled tasks |
 | `zinc-install.exe` | first-run setup: 7-Zip check, notification registration, user `PATH` |
 | `zinc-uninstall.exe` | the reverse: scheduled tasks, notification registration, `PATH` entry |
+| `uninstall.exe` | uninstall wizard, created by the setup and shown in Settings → Apps |
 | `zinc.ico` | optional icon for the notification shortcut |
 | `repos.json` | repo registry, created on first `add` |
 | `settings.json` | global defaults, created on first `config set` |
@@ -412,19 +408,16 @@ Every pack is self-contained, so a damaged pack only loses that pack and the res
 
 ## Uninstall
 
-Run `zinc-uninstall.exe` from the program folder (double-click it, or `zinc-uninstall.exe --yes` from a script). It removes:
+Open **Settings → Apps → Installed apps**, find `zinc` and choose Uninstall — or run `uninstall.exe` from the install folder. The uninstall wizard:
 
-- scheduled tasks whose command points at this folder, so no backup keeps running after the program is gone
-- the notification registration: Start Menu shortcut, `HKCU\Software\Classes\AppUserModelId\zinc.backup`, `.aumid_ok`
-- this folder from the user `PATH`
+- stops and removes the scheduled tasks that point at this folder, so no backup keeps running after the program is gone
+- removes the notification registration: Start Menu shortcut, `HKCU\Software\Classes\AppUserModelId\zinc.backup`, `.aumid_ok`
+- removes the folder from your user `PATH`
+- deletes the program files
 
-It does **not** touch your backups, `index.tsv` / `manifest.json`, `settings.json`, `repos.json` or `logs`. Delete the program folder afterwards if you want those gone too.
+`settings.json`, `repos.json` and `logs` are kept unless you clear the checkbox. Backups — the `.7z` packs and manifests in your output directories — are never touched.
 
-| Flag | Meaning |
-|---|---|
-| `--yes` | do not ask for confirmation |
-| `--keep-schedule` | leave the Task Scheduler entries alone |
-| `--no-pause` | do not wait for a key press |
+The wizard drives `zinc-uninstall.exe`, the console build of the same cleanup, which also ships in the portable zip.
 
 If you moved the program folder after installing, the tasks still point at the old one and will not be matched: either keep the folder where it was, or clear them first with `zinc unschedule --all`.
 
@@ -467,14 +460,17 @@ go build -o zinc-install.exe ./cmd/install
 go build -o zinc-uninstall.exe ./cmd/uninstall
 ```
 
-`build.ps1` wraps those four commands, and `package.ps1` builds everything and assembles the release zip:
+`build.ps1` wraps those four commands. The installer is a pair of C# WinForms programs in `installer/`, built with the .NET Framework compiler that ships with Windows:
 
 ```powershell
-.\build.ps1
-.\package.ps1 -Version 0.1.0        # writes dist\zinc-0.1.0-windows-amd64.zip
+.\build.ps1                          # the four zinc binaries
+.\installer\build.ps1 -Version 0.1.0 # setup.exe + uninstall.exe
+.\package.ps1 -Version 0.1.0         # dist\zinc-0.1.0-setup.exe + portable zip
 ```
 
-`cmd/` holds the four entry points and `internal/app` the shared code. The two main executables differ only in subsystem: `zinc.exe` is a console program so you can watch it work, `zincw.exe` uses the GUI subsystem so scheduled tasks do not flash a console window (or steal focus). There are no third-party dependencies; `go.mod` only declares the Go version.
+`package.ps1` calls both and writes `dist\zinc-<version>-setup.exe` (the wizard) and `dist\zinc-<version>-windows-amd64.zip` (portable). The setup embeds the four binaries, the icon, the docs and `uninstall.exe`, so the release is a single file.
+
+`cmd/` holds the four entry points and `internal/app` the shared code; `installer/` holds the two wizards, which reuse `zinc-install.exe` / `zinc-uninstall.exe` for the actual registration. The two main executables differ only in subsystem: `zinc.exe` is a console program so you can watch it work, `zincw.exe` uses the GUI subsystem so scheduled tasks do not flash a console window (or steal focus). There are no third-party dependencies; `go.mod` only declares the Go version.
 
 ## Contributing
 

@@ -113,16 +113,9 @@ zinc reindex 图片 --yes    # 覆盖已有索引（旧文件会留一份 .bak�
 
 ## 安装
 
-zinc 是绿色程序：解压到任意目录，跑一次安装程序就能用。除了程序目录、`HKCU` 和开始菜单，不往别处写东西，也不需要管理员权限。
-
-1. 把 `zinc-<版本>-windows-amd64.zip` 解压到一个你打算长期保留的目录，例如 `C:\Tools\zinc`。别直接在“下载”目录里装：这个目录会被写进 `PATH`。
-2. 确认装了 7-Zip（<https://www.7-zip.org/>）。官方安装包里的 `7z.exe` 就够用，7-Zip Extra 里的 `7za.exe` 也行。
-3. 在该目录下运行 `zinc-install.exe`——双击，或者在终端里调用。它会：
-   - 依次在 `PATH`、`Program Files`、内置回落路径里找 7-Zip，找不到就问你要路径
-   - 注册通知身份：开始菜单快捷方式 + `AppUserModelId` 注册表项
-   - 把本目录加进**当前用户**的 `PATH`
-   并把找到的 7-Zip 路径写进 `settings.json`。如果找不到、你也给不出可用路径，它会在改动任何系统状态之前停下。
-4. 开一个**新**终端，选备份根目录：
+1. 从 [releases 页面](https://github.com/GensokyoNeoSanae/zinc/releases) 下载 `zinc-<版本>-setup.exe` 并运行。向导不需要管理员权限：默认装到 `%LOCALAPPDATA%\Programs\zinc`，注册通知身份，并把目录加进当前用户的 `PATH`。
+2. 确认装了 7-Zip（<https://www.7-zip.org/>）。向导会依次在 `PATH`、`Program Files`、旧的 `E:\Tools\7zip` 里找 `7z.exe` / `7za.exe`；找不到就停在这一页让你指定路径，没有可用的 7-Zip 不会继续。
+3. 开一个**新**终端，选备份根目录：
 
    ```powershell
    zinc root D:\Backup\zinc
@@ -130,7 +123,9 @@ zinc 是绿色程序：解压到任意目录，跑一次安装程序就能用。
 
    之后新建的仓库默认输出到 `<root>\<仓库名>`。
 
-`zinc init` 做同样的注册，只是 7-Zip 缺失时仅提示、不阻断；它是留给已经手动配好 `7zip_path` 的人的轻量版。第一次用，直接跑 `zinc-install.exe`。
+向导会把 `zinc.exe`、`zincw.exe`、`uninstall.exe` 和文档装进安装目录；`settings.json`、`repos.json` 也在那里，不进备份。
+
+想要绿色版的话，release 里另有一份 `zinc-<版本>-windows-amd64.zip`：解压到任意目录，跑里面的 `zinc-install.exe` 即可。`zinc init` 是同一套注册的轻量版，留给已经手动配好 `7zip_path` 的人。
 
 ## 快速开始
 
@@ -381,6 +376,7 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 | `zincw.exe` | GUI 版，计划任务用 |
 | `zinc-install.exe` | 安装：检查 7-Zip、注册通知、写用户 `PATH` |
 | `zinc-uninstall.exe` | 卸载：清计划任务、通知注册、`PATH` 项 |
+| `uninstall.exe` | 卸载向导，安装时生成，“应用和功能”里点卸载就是它 |
 | `zinc.ico` | 可选，通知快捷方式图标 |
 | `repos.json` | 仓库注册表，首次 `add` 时生成 |
 | `settings.json` | 全局默认值，首次 `config set` 时生成 |
@@ -412,19 +408,16 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 
 ## 卸载
 
-在程序目录里运行 `zinc-uninstall.exe`（双击，或脚本里加 `--yes`）。它会清掉：
+打开 **设置 → 应用 → 安装的应用**，找到 `zinc` 点卸载；或者直接运行安装目录里的 `uninstall.exe`。卸载向导会：
 
-- 命令行指向本目录的计划任务——程序没了，备份不会还在后台跑
-- 通知注册：开始菜单快捷方式、`HKCU\Software\Classes\AppUserModelId\zinc.backup`、`.aumid_ok`
-- 用户 `PATH` 里的这个目录
+- 停掉并删除命令行指向本目录的计划任务——程序没了，备份不会还在后台跑
+- 清掉通知注册：开始菜单快捷方式、`HKCU\Software\Classes\AppUserModelId\zinc.backup`、`.aumid_ok`
+- 从用户 `PATH` 里移除这个目录
+- 删除程序文件
 
-它**不动**备份数据、`index.tsv` / `manifest.json`、`settings.json`、`repos.json` 和 `logs`。这些想删的话，卸载完直接删文件夹。
+`settings.json`、`repos.json` 和 `logs` 默认保留（取消勾选才会删）。备份数据——输出目录里的 `.7z` 包和 manifest——一律不碰。
 
-| 参数 | 说明 |
-|---|---|
-| `--yes` | 不再询问确认 |
-| `--keep-schedule` | 保留计划任务 |
-| `--no-pause` | 结束后不等待按键 |
+向导背后调的是 `zinc-uninstall.exe`（同一套清理逻辑的控制台版），绿色版 zip 里也带着它。
 
 如果装完之后移动过程序目录，计划任务还指着旧路径，卸载时匹配不到：要么把目录放回原处，要么先 `zinc unschedule --all` 清掉。
 
@@ -467,14 +460,17 @@ go build -o zinc-install.exe ./cmd/install
 go build -o zinc-uninstall.exe ./cmd/uninstall
 ```
 
-`build.ps1` 把上面四条包成一条命令，`package.ps1` 负责出发布包：
+`build.ps1` 把上面四条包成一条命令。安装器是 `installer/` 下两个 C# WinForms 程序，用 Windows 自带的 .NET Framework 编译器构建：
 
 ```powershell
-.\build.ps1
-.\package.ps1 -Version 0.1.0        # 生成 dist\zinc-0.1.0-windows-amd64.zip
+.\build.ps1                          # 四个 zinc 可执行文件
+.\installer\build.ps1 -Version 0.1.0 # setup.exe + uninstall.exe
+.\package.ps1 -Version 0.1.0         # dist\zinc-0.1.0-setup.exe + 绿色版 zip
 ```
 
-`cmd/` 是四个入口，`internal/app` 是共用代码。两个主程序只差子系统：`zinc.exe` 是控制台程序，手动跑能看输出；`zincw.exe` 是 GUI 子系统，计划任务执行时不闪窗口、不抢焦点。项目没有第三方依赖，`go.mod` 只声明了 Go 版本。
+`package.ps1` 会调上面两个，产出 `dist\zinc-<版本>-setup.exe`（向导）和 `dist\zinc-<版本>-windows-amd64.zip`（绿色版）。安装包内嵌四个可执行文件、图标、文档和 `uninstall.exe`，所以发布物就是一个单文件。
+
+`cmd/` 是四个入口，`internal/app` 是共用代码；`installer/` 是两个向导，它们把注册动作交给 `zinc-install.exe` / `zinc-uninstall.exe` 完成。两个主程序只差子系统：`zinc.exe` 是控制台程序，手动跑能看输出；`zincw.exe` 是 GUI 子系统，计划任务执行时不闪窗口、不抢焦点。项目没有第三方依赖，`go.mod` 只声明了 Go 版本。
 
 ## 参与贡献
 

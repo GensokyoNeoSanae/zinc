@@ -26,8 +26,11 @@ jobs:
           $unformatted = gofmt -l cmd internal
           if ($unformatted) { $unformatted; exit 1 }
 
-      - name: Build
+      - name: Build binaries
         run: .\build.ps1
+
+      - name: Build installer
+        run: .\installer\build.ps1 -Version 0.0.0-dev
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -39,6 +42,7 @@ jobs:
             zinc-install.exe
             zinc-uninstall.exe
             zinc.ico
+            installer/build/setup.exe
           if-no-files-found: error
 
       - name: Package release
@@ -49,5 +53,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
+          files: |
+            dist/*-setup.exe
+            dist/*.zip
           generate_release_notes: true

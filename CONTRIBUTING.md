@@ -27,6 +27,15 @@ cd zinc
 
 Layout: `cmd/` holds the four entry points and `internal/app` holds all shared code. The installer and uninstaller are thin wrappers around `registerSetup` and `UninstallMain`; anything that writes to the registry, the Start Menu or the user `PATH` belongs there, not in the CLI.
 
+## Installer
+
+`installer/` contains the two GUI wizards (C# WinForms, compiled by the .NET Framework `csc.exe` that ships with Windows, so no SDK download is needed):
+
+- `Setup.cs` — welcome/license, install folder, 7-Zip, progress, finish. It embeds the binaries in `payload.zip` and writes the Add/Remove Programs entry.
+- `Uninstall.cs` — the uninstall wizard, copied into the install folder by the setup.
+
+`.\installer\build.ps1` compiles both; `.\package.ps1` produces the single-file setup and the portable zip. The wizards deliberately do not implement registration themselves — they call `zinc-install.exe` / `zinc-uninstall.exe`, so the CLI stays the single source of truth for the `PATH` entry, the notification registration and scheduled tasks. If you change one of those mechanics, change it in `internal/app`, not in the wizard.
+
 Before opening a pull request:
 
 ```powershell

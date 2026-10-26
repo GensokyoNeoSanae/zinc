@@ -4,6 +4,7 @@
 *.pdb
 .gocache/
 /dist/
+/installer/build/
 
 # Runtime state (created next to the executable at run time — never commit it)
 /repos.json
