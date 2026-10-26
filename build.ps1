@@ -10,7 +10,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$env:GOCACHE = Join-Path $PSScriptRoot '.gocache'
+# Go 构建缓存放到临时目录，别在仓库里堆一个几十 MB 的 .gocache
+if ($env:TEMP) { $env:GOCACHE = Join-Path $env:TEMP 'zinc-gocache' }
+else { $env:GOCACHE = Join-Path $PSScriptRoot '.gocache' }
 New-Item -ItemType Directory -Force -Path $env:GOCACHE | Out-Null
 
 & $Go build -C $PSScriptRoot -ldflags "-s -w" -o zinc.exe ./cmd/zinc

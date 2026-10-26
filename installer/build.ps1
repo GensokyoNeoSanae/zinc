@@ -15,8 +15,19 @@ if (-not $Iscc) {
         (Join-Path $root '..\_tools\InnoSetup6\ISCC.exe'),
         (Join-Path $root '_tools\InnoSetup6\ISCC.exe'),
         (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
-        (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
+        (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
     )
+    # 装在非默认位置（例如 E:\Tools\Inno Setup 6）时，靠卸载登记里的 InstallLocation 找。
+    foreach ($k in @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1')) {
+        try {
+            $loc = (Get-ItemProperty -Path $k -ErrorAction Stop).InstallLocation
+            if ($loc) { $candidates += (Join-Path $loc 'ISCC.exe') }
+        } catch { }
+    }
     foreach ($c in $candidates) {
         if ($c -and (Test-Path $c)) { $Iscc = $c; break }
     }
