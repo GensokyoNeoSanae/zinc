@@ -38,7 +38,7 @@ zinc backs up one or more source folders ("repos") into a single output root. Ev
 - **A split volume is still a single archive.** With `-v4g`, one missing or damaged piece can make the whole volume set useless. zinc writes complete packs instead: losing one pack costs one batch.
 - **Restoring should not require the backup tool.** Each pack is a plain 7-Zip archive with an encrypted header. `7z x` in filename order is the entire restore procedure.
 - **Upload volume should follow change volume.** A file-level index means a photo added today does not re-upload last year's library.
-- **It is an archive, not a mirror.** A finished pack is never rewritten or trimmed. That is what keeps restores tool-independent, and it is also why deletions and renames are not propagated, see [Limitations](#limitations) for what that rules out.
+- **It is an archive, not a mirror.** A finished pack is never rewritten or trimmed. That is what keeps restores tool-independent; deletions ride along in a small text record next to the packs instead of editing them, see [Limitations](#limitations) for what that rules out.
 
 ## Features
 
@@ -46,6 +46,7 @@ zinc backs up one or more source folders ("repos") into a single output root. Ev
 - **Independent packs** — every batch is one or more complete archives. A corrupt or missing pack only loses that batch.
 - **Encrypted headers** — `-mhe=on`, so file names are invisible without the password.
 - **Restore without zinc** — 7-Zip plus the password is enough; disaster recovery is documented below.
+- **Deletions remembered** — a file removed from the source stops coming back on restore, without rewriting a single old pack: each batch leaves a small text record next to the packs.
 - **Single-path restore** — pull one file, one directory or a wildcard out of the pack chain without unpacking everything.
 - **Index is a cache, not the source of truth** — lose `index.tsv` and rebuild it from archive headers, no extraction required.
 - **Multiple repos** — pictures, videos and documents under one synced root, each with its own size limit, password and exclusions.
@@ -58,14 +59,15 @@ zinc backs up one or more source folders ("repos") into a single output root. Ev
 A backup run is a straight pipeline:
 
 ```
-scan source  →  diff against index  →  plan packs  →  7za a (.part)  →  7za t  →  rename  →  update index + manifest
+scan source  →  diff against index  →  plan packs  →  7za a (.part)  →  7za t  →  rename  →  update index + manifest + deletion record
 ```
 
 1. **Scan.** The source tree is enumerated once. File size and modification time come straight from the directory entry, so no per-file `stat` is needed.
-2. **Diff.** A file is "changed" when it is missing from the index, or its size or mtime differs. Unchanged files are never touched again.
+2. **Diff.** A file is "changed" when it is missing from the index, or its size or mtime differs. Unchanged files are never touched again. A path that the index knows but the scan no longer finds is not packed: it is a deletion.
 3. **Plan.** Changed files are sorted by mtime ascending (ties broken by relative path) and greedily appended to the current pack. As soon as the next file would exceed `max_pack_byte`, the pack is closed and a new one starts.
 4. **Pack.** Each pack is written as `7za a -t7z -p<password> -mhe=on -mx<N> -scsUTF-8 -sccUTF-8` into a `.part` file. After packing, `7za t` verifies the archive; only then is it renamed to its final name. A failed batch is deleted and the index is left untouched.
-5. **Record.** The index and the SHA-256 manifest are updated (write to temporary file, then rename).
+5. **Record deletions.** Paths that disappeared go into a plain-text sidecar next to the packs, named after the batch's last pack. Nothing is written into existing packs, and a batch that only deleted files produces the record without a pack.
+6. **Record.** The index and the SHA-256 manifest are updated (write to temporary file, then rename). Deleted paths are dropped from the index, so they are not reported as deleted again next time.
 
 ### Why is each pack named after a timestamp?
 
@@ -107,6 +109,29 @@ zinc reindex pictures --yes   # overwrite an existing index (the previous file i
 ```
 
 `reindex` runs `7za l -slt` and never extracts content.
+
+### How are deletions recorded?
+
+A pack only ever adds files, so "this one is gone" cannot live inside a pack. It goes into a deletion record: a plain-text sidecar next to the packs, one relative path per line, named after the batch that noticed the disappearance.
+
+```
+<output>\
+  20261024_110635_081.7z    ← pack
+  20261025_070012_334.7z    ← pack
+  20261025_070012_334.rm    ← deletion record of that batch
+```
+
+```
+# zinc-deleted 1
+notes/old-draft.md
+attachments/2026/screenshot.png
+```
+
+- **Order comes from the name.** The record is named after the last pack of its batch, so it sorts right behind it. `restore` runs the packs and the records off the same timeline, which is why a file that is deleted and later re-added comes back in the right version.
+- **Only files that really went away.** Files matching an `exclude` pattern are never recorded as deleted, and neither is anything under a directory the scan could not read — a permissions error must not turn into a restore that deletes real files.
+- **A missing source is not a mass deletion.** If `--source` does not exist, the backup stops with "source does not exist" instead of recording thousands of deletions. An empty but present folder, however, is read literally: everything in it is gone, and that is recorded.
+- **Checked before anything is touched.** Restore validates every path in every record first: absolute paths, drive letters, `..` segments and NTFS streams abort the run before a single file is extracted.
+- **The past is never rewritten.** Old packs keep every file they ever held, so a manual `7z x` still restores everything. If you want a manual restore to match the last backup exactly, delete the paths listed in the `.rm` files after extracting the last pack.
 
 ### Why can't I restore "as of a date"?
 
@@ -171,7 +196,7 @@ zinc restore pictures --check-list
 | `zinc set <name> [--source <path>] [--output <path>] [--password <pw>] [--max-pack-byte <n>] [--compress <0-9>] [--exclude <glob>]` | modify a repo |
 | `zinc config [get\|set\|unset\|path] [<key>] [<value>]` | global settings |
 | `zinc backup <name\|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]` | back up |
-| `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--check-list] [--only <path>] [--from <pack>]` | restore everything or one path |
+| `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <path>] [--from <pack>]` | restore everything or one path |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | rebuild the index from the packs |
 | `zinc verify <name\|--all> [--sample <pct>]` | SHA-256 check of the packs |
 | `zinc status [<name>]` | show status |
@@ -246,15 +271,16 @@ Passwords are stored in plain text in `settings.json` and in the scheduled task 
 
 ## Restore
 
-One rule: all packs are extracted in name (time) ascending order, so the last backup wins.
+One rule: all packs are extracted in name (time) ascending order, so the last backup wins. Deletion records run on that same timeline, right after the pack they are named after, so what you get back is the tree as it looked at the last backup — not a union of everything ever packed.
 
 | Flag | Behaviour |
 |---|---|
 | none | follows `restore_overwrite` (default `true` = overwrite) |
 | `--overwrite` | force overwriting |
 | `--no-overwrite` | keep both; same-name files are extracted as `_1`, `_2` |
-| `--check-list` | only print the pack order and sizes, change nothing; `--dest` may be omitted |
-| `--only <path>` | restore just that one file or directory, leave everything else alone |
+| `--no-delete` | restore files only; skip the deletions recorded by later backups |
+| `--check-list` | only print the order and sizes (packs and deletion records), change nothing; `--dest` may be omitted |
+| `--only <path>` | restore just that one file or directory, leave everything else alone; deletion records are not applied |
 | `--from <pack>` | with `--only`, take it from a specific pack: full name, unique prefix, or 1-based position in the repo's complete pack list — not the numbering printed by `--check-list` |
 
 Overwrite mode prints a warning when it starts. Restore works through the packs strictly in name order, so a renamed or hand-copied pack changes which version wins — keep the names zinc assigned.
@@ -364,6 +390,7 @@ Output root (sync this folder to your cloud drive):
   pictures\
     20261024_110635_081.7z    ← each pack is a complete archive; restore in name order
     20261025_070012_334.7z
+    20261025_070012_334.rm    ← files deleted in that batch (plain text)
     index.tsv                 ← incremental detection cache, rebuild with zinc reindex
     manifest.json             ← SHA-256 ledger for verify
   videos\
@@ -372,6 +399,7 @@ Output root (sync this folder to your cloud drive):
 | File | Location | Upload | Purpose |
 |---|---|---|---|
 | `*.7z` | `<output>/` | yes | the data; every pack is a complete archive |
+| `*.rm` | `<output>/` | yes | deletions of that batch; restore needs them to remove files, so upload them with the packs |
 | `index.tsv` | `<output>/` | yes | incremental detection cache; rebuild with `zinc reindex` if lost |
 | `manifest.json` | `<output>/` | yes | per-batch SHA-256 records for `verify`; must be uploaded, otherwise a new machine cannot verify old packs |
 
@@ -405,6 +433,8 @@ A disk failure does not require `zinc.exe`:
 
 Every pack is self-contained, so a damaged pack only loses that pack and the rest still extract.
 
+Extracting by hand gives you a superset: files deleted later are still there, because a pack cannot un-delete anything. To finish the job without `zinc.exe`, open the `.rm` records in the same order the packs were applied and delete the listed paths yourself — they are plain text, one relative path per line, and the batch names tell you where each one sits in the timeline.
+
 ### Moving to a new machine
 
 The backups themselves need nothing: packs are plain archives. Only the settings are machine-bound.
@@ -429,10 +459,10 @@ If you moved the program folder after installing, the tasks still point at the o
 
 ## Limitations
 
-zinc answers "what did this folder look like at each backup", not "make this folder look like that one". Folders you reorganize constantly, such as notes, Obsidian vaults or source trees, are a poor fit; a repository-based tool such as [kopia](https://kopia.io/) or [restic](https://restic.net/) handles those better, at the cost of needing the tool to restore.
+zinc answers "what did this folder look like at each backup", and a restore reproduces the most recent one — deleted files included. What it does not do is jump back to an arbitrary past moment, deduplicate renames, or reclaim space. Folders you reorganize constantly, such as notes, Obsidian vaults or source trees, are still a poor fit; a repository-based tool such as [kopia](https://kopia.io/) or [restic](https://restic.net/) handles those better, at the cost of needing the tool to restore.
 
-- **Deletions do not propagate.** A removed source file is simply not packed again: no deletion pack is produced, its index entry stays where it is, and a restore still brings the old file back. Append-only semantics. Planned for 0.2.0: each batch will also record the files that disappeared since the previous run, and `restore` will delete them between packs so the restored tree matches the last backup. The packs themselves will not be rewritten, so a manual `7z x` still yields every file ever backed up.
-- **Moves and renames re-pack.** The index tracks relative paths, so a new name or directory is one delete plus one add, and the content is compressed again in full. Renaming a tree of attachments can therefore cost a full re-upload of that tree.
+- **Deletions are recorded, not erased.** A removed file is not packed again, its index entry is dropped, and the batch writes it to a `.rm` record; the old packs are never rewritten, so their bytes stay. Restore applies the records and gives you the last backup's tree, but the space is only reclaimed by starting a fresh output directory and backing up again.
+- **Moves and renames re-pack.** The index tracks relative paths, so a new name or directory is one delete plus one add, and the content is compressed again in full. Renaming a tree of attachments can therefore cost a full re-upload of that tree. (The delete half is just a `.rm` entry; it does not shrink the old packs.)
 - **Backups only grow.** Nothing in zinc shrinks a repository: packs are never rewritten, so deleting a source folder frees no space in the packs that already contain it. To actually reclaim it, start a new output directory, back up again, then delete the old one.
 - **No import from older volume layouts.** `vol-*.7z.001` archives are not read. Start a fresh repo, or keep the old tree as an archive.
 - **Scheduling needs a real terminal.** `schtasks` cannot run in restricted environments such as sandboxes.

@@ -41,6 +41,10 @@ func runVerify(name string, cfg *Config, samplePct int) error {
 	}
 	var all []packCheck
 	for _, b := range m.Batches {
+		// 删除记录不参与哈希校验，但缺了就意味着恢复时不会删掉那些文件
+		if b.Rm != "" && !fileExists(filepath.Join(repo.Output, b.Rm)) {
+			fmt.Printf(M.VerifyRmMissing, b.Rm)
+		}
 		for i, f := range b.Files {
 			if i >= len(b.Hashes) {
 				continue

@@ -76,17 +76,34 @@ func restoreDest(name, dest string, wrap bool) (string, error) {
 	}
 }
 
-// runRestore 全量恢复：所有包按打包时刻升序解压，后压的覆盖先压的。
-func runRestore(name string, cfg *Config, set *Settings, dest, password string, overwrite, checkList, wrap bool) error {
+// runRestore 全量恢复：包和删除记录合成一条时间线，包按打包时刻升序解压，
+// 后压的覆盖先压的；记录里删掉的文件在该批次最后一个包解压之后移除，
+// 于是恢复出来的目录等于“最后一次备份时的源目录”。
+func runRestore(name string, cfg *Config, set *Settings, dest, password string, overwrite, checkList, wrap, noDelete bool) error {
 	repo, err := cfg.repo(name)
 	if err != nil {
 		return err
 	}
-	packs, err := sortedPacks(repo.Output)
+	// 先把所有删除记录读完并校验：坏记录要在动目标目录之前就暴露出来。
+	dels, err := loadDelRecords(repo.Output)
 	if err != nil {
 		return err
 	}
-	if len(packs) == 0 {
+	delNames := make([]string, 0, len(dels))
+	for n := range dels {
+		delNames = append(delNames, n)
+	}
+	entries, err := buildTimeline(repo.Output, delNames)
+	if err != nil {
+		return err
+	}
+	packCount := 0
+	for _, e := range entries {
+		if e.Pack != "" {
+			packCount++
+		}
+	}
+	if packCount == 0 {
 		return fmt.Errorf(M.NoPacksRestore, repo.Output)
 	}
 
@@ -95,30 +112,33 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 		mode = M.ModeOverwrite
 	}
 
+	destText := dest
+	if destText != "" && wrap {
+		if t, terr := restoreDest(name, dest, wrap); terr == nil {
+			destText = t
+		}
+	}
+	if destText == "" {
+		destText = M.DestUnset
+	}
+
 	if checkList {
 		var total int64
-		sizes := make([]int64, len(packs))
-		for i, p := range packs {
-			if st, e := os.Stat(filepath.Join(repo.Output, p)); e == nil {
-				sizes[i] = st.Size()
-				total += st.Size()
-			}
-		}
-		destText := dest
-		if destText != "" && wrap {
-			if t, terr := restoreDest(name, dest, wrap); terr == nil {
-				destText = t
-			}
-		}
-		if destText == "" {
-			destText = M.DestUnset
-		}
-		fmt.Printf(M.CheckListHeader, len(packs), mode, destText)
+		fmt.Printf(M.CheckListHeader, packCount, len(dels), mode, destText)
 		if dest != "" && wrap {
 			fmt.Printf(M.RestoreWrapLine, destText)
 		}
-		for i, p := range packs {
-			fmt.Printf(M.CheckListItem, i+1, p, humanSize(sizes[i]))
+		for i, e := range entries {
+			if e.Pack == "" {
+				fmt.Printf(M.CheckListDelItem, i+1, e.Del, len(dels[e.Del]))
+				continue
+			}
+			var sz int64
+			if st, serr := os.Stat(filepath.Join(repo.Output, e.Pack)); serr == nil {
+				sz = st.Size()
+				total += sz
+			}
+			fmt.Printf(M.CheckListItem, i+1, e.Pack, humanSize(sz))
 		}
 		fmt.Printf(M.CheckListTotal, humanSize(total))
 		return nil
@@ -137,6 +157,10 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 	if err := os.MkdirAll(target, 0755); err != nil {
 		return fmt.Errorf(M.CreateDestFailed, err)
 	}
+	sz := repo.sevenZip(set)
+	if sz == "" {
+		return errors.New(M.SevenZipMissing)
+	}
 	if overwrite {
 		fmt.Print(M.RestoreOverwriteWarn)
 	}
@@ -148,18 +172,45 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 	if overwrite {
 		ao = "-aoa"
 	}
-	for _, p := range packs {
-		full := filepath.Join(repo.Output, p)
-		fmt.Printf(M.Extracting, p)
-		cmd := exec.Command(repo.sevenZip(set), "x", "-y", ao, "-sccUTF-8", "-p"+password, full, "-o"+target)
-		out, xerr := cmd.CombinedOutput()
-		if xerr != nil {
+
+	deletedTotal := 0
+	var deletedPaths []string
+	for _, e := range entries {
+		if e.Pack != "" {
+			full := filepath.Join(repo.Output, e.Pack)
+			fmt.Printf(M.Extracting, e.Pack)
+			cmd := exec.Command(sz, "x", "-y", ao, "-sccUTF-8", "-p"+password, full, "-o"+target)
+			out, xerr := cmd.CombinedOutput()
+			if xerr != nil {
+				fmt.Print(M.RestorePartial)
+				return fmt.Errorf(M.ExtractFailed, e.Pack, xerr, string(out))
+			}
+			continue
+		}
+		if noDelete {
+			continue
+		}
+		rels := dels[e.Del]
+		removed, _, derr := applyDeletions(target, rels)
+		if derr != nil {
 			fmt.Print(M.RestorePartial)
-			return fmt.Errorf(M.ExtractFailed, p, xerr, string(out))
+			return derr
+		}
+		if removed > 0 {
+			fmt.Printf(M.DeletingBatch, e.Del, removed)
+			deletedTotal += removed
+			deletedPaths = append(deletedPaths, rels...)
 		}
 	}
+	if len(deletedPaths) > 0 {
+		pruneEmptyDirs(target, deletedPaths)
+	}
+	if deletedTotal > 0 {
+		fmt.Printf(M.RestoreDelSummary, deletedTotal)
+	}
 	fmt.Printf(M.RestoreDone, target)
-	logf("restore %s -> %s (%d packs, overwrite=%v, wrap=%v)", name, target, len(packs), overwrite, wrap)
+	logf("restore %s -> %s (%d packs, %d deleted, overwrite=%v, wrap=%v)",
+		name, target, packCount, deletedTotal, overwrite, wrap)
 	return nil
 }
 

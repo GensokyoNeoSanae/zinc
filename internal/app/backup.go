@@ -27,13 +27,17 @@ type fileInfo struct {
 type ScanResult struct {
 	New      []fileInfo
 	Mod      []fileInfo
+	Del      []string // 自上次备份以来从源目录消失的文件（相对路径）
 	Alive    int
 	SkippedN int
 	Skipped  []string // 跳过路径样本，最多 10 条
 	Dur      time.Duration
 }
 
-func (s ScanResult) Changed() int { return len(s.New) + len(s.Mod) }
+func (s ScanResult) Changed() int { return len(s.New) + len(s.Mod) + len(s.Del) }
+
+// Packable 是这次要真正打包的文件数（不含删除）
+func (s ScanResult) Packable() int { return len(s.New) + len(s.Mod) }
 
 // scanRepo 读取索引并扫描源目录，不修改任何东西
 func scanRepo(repo *Repo, set *Settings) (ScanResult, error) {
@@ -68,7 +72,7 @@ func scanSkipRoot(repo *Repo) (string, error) {
 	return "", nil
 }
 
-// scanSource 遍历源目录，返回新增/修改文件与统计。
+// scanSource 遍历源目录，返回新增/修改文件、消失的文件与统计。
 // 拒绝访问的目录/文件只跳过并计数，绝不中断整次备份。
 func scanSource(source string, idx *Index, excludes []string, skipRoot string) (ScanResult, error) {
 	res := ScanResult{}
@@ -77,6 +81,15 @@ func scanSource(source string, idx *Index, excludes []string, skipRoot string) (
 	if abs, err := filepath.Abs(source); err == nil {
 		source = abs
 	}
+
+	// 索引里的路径先全算“待定消失”，走到的当场划掉，剩下的才可能是删除。
+	pending := make(map[string]struct{}, len(idx.Files))
+	for rel := range idx.Files {
+		pending[rel] = struct{}{}
+	}
+	// 内容无法确认的目录：拒绝访问、被排除、整棵跳过的输出目录。
+	// 它们下面的索引条目一律不算删除——一次权限问题不该让恢复去删真文件。
+	var unknown []string
 
 	note := func(p string) {
 		res.SkippedN++
@@ -88,12 +101,9 @@ func scanSource(source string, idx *Index, excludes []string, skipRoot string) (
 	err := filepath.WalkDir(source, func(full string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			note(full)
-			if d != nil && d.IsDir() {
-				return filepath.SkipDir
+			if rel, relErr := filepath.Rel(source, full); relErr == nil && rel != "." {
+				unknown = append(unknown, filepath.ToSlash(rel))
 			}
-			return nil
-		}
-		if skipRoot != "" && withinFold(full, skipRoot) {
 			if d != nil && d.IsDir() {
 				return filepath.SkipDir
 			}
@@ -107,13 +117,24 @@ func scanSource(source string, idx *Index, excludes []string, skipRoot string) (
 		if rel == "." {
 			return nil
 		}
-		if matchAny(excludes, rel) {
-			note(rel)
+		if skipRoot != "" && withinFold(full, skipRoot) {
+			unknown = append(unknown, rel)
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
+			delete(pending, rel)
 			return nil
 		}
+		if matchAny(excludes, rel) {
+			note(rel)
+			if d.IsDir() {
+				unknown = append(unknown, rel)
+				return filepath.SkipDir
+			}
+			delete(pending, rel)
+			return nil
+		}
+		delete(pending, rel)
 		if d.IsDir() {
 			return nil
 		}
@@ -137,7 +158,30 @@ func scanSource(source string, idx *Index, excludes []string, skipRoot string) (
 		return nil
 	})
 	res.Dur = time.Since(start)
-	return res, err
+	if err != nil {
+		return res, err
+	}
+
+	var gone []string
+	for rel := range pending {
+		if underAny(rel, unknown) || matchAny(excludes, rel) {
+			continue
+		}
+		gone = append(gone, rel)
+	}
+	sort.Strings(gone)
+	res.Del = gone
+	return res, nil
+}
+
+// underAny 判断 rel 是否等于这些相对目录之一，或位于其下
+func underAny(rel string, dirs []string) bool {
+	for _, d := range dirs {
+		if rel == d || strings.HasPrefix(rel, d+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // matchAny 用 glob 匹配相对路径（斜杠分隔）。支持 ** 跨目录、* 段内、? 单字符。
@@ -185,18 +229,20 @@ type BackupResult struct {
 	Repo       string
 	NewCount   int
 	ModCount   int
+	DelCount   int
 	Alive      int
 	Locked     int
 	Skipped    int
 	Packs      []string
 	TotalSize  int64
 	BatchHash  string
+	DelRecord  string
 	ScanDur    time.Duration
 	SkippedAll bool
 	Err        error
 }
 
-func (r BackupResult) Changed() int { return r.NewCount + r.ModCount }
+func (r BackupResult) Changed() int { return r.NewCount + r.ModCount + r.DelCount }
 
 // packPlan 是一批待打进同一个包的文件
 type packPlan struct {
@@ -392,7 +438,7 @@ func packOne(repo *Repo, set *Settings, plan packPlan, name, password string, no
 	return packResult{Name: name, Files: plan.Files, Hash: h, Size: size, Start: plan.Start, End: plan.End}, nil
 }
 
-// cleanupStaleParts 清掉上次中断留下的 .part。
+// cleanupStaleParts 清掉上次中断留下的 .part 与 .rm.tmp。
 // 调用前必须已持有仓库锁，否则可能删掉正在写的临时文件。
 func cleanupStaleParts(output string) {
 	ents, err := os.ReadDir(output)
@@ -403,13 +449,16 @@ func cleanupStaleParts(output string) {
 		n := e.Name()
 		if strings.HasSuffix(n, ".7z.part") && isPackName(strings.TrimSuffix(n, ".part")) {
 			os.Remove(filepath.Join(output, n))
+			continue
+		}
+		if strings.HasSuffix(n, ".rm.tmp") && isDelName(strings.TrimSuffix(n, ".tmp")) {
+			os.Remove(filepath.Join(output, n))
 		}
 	}
 }
 
 // packAll 规划并打包全部文件。任一步失败则清掉本次已生成的所有包。
 func packAll(repo *Repo, set *Settings, files []fileInfo, password string, noVerify bool) ([]packResult, error) {
-	cleanupStaleParts(repo.Output)
 	sortByMTime(files)
 	limit := repo.maxPackByte(set)
 	plans := planPacks(files, limit)
@@ -475,12 +524,22 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 		return res
 	}
 	defer lock.release()
+	cleanupStaleParts(repo.Output)
 
 	idx, err := loadIndex(repo.Output)
 	if err != nil {
 		res.Err = err
 		return res
 	}
+
+	// 扫描同样早于拿锁：等锁期间文件可能又回来了，删除候选要在锁内复核一遍。
+	del := make([]string, 0, len(scan.Del))
+	for _, rel := range scan.Del {
+		if !fileExists(filepath.Join(repo.Source, filepath.FromSlash(rel))) {
+			del = append(del, rel)
+		}
+	}
+	res.DelCount = len(del)
 
 	// 占用预检：被 Excel 之类独占打开的文件先剔除，索引不更新，下次自动重试
 	changed := make([]fileInfo, 0, len(scan.New)+len(scan.Mod))
@@ -528,7 +587,7 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 		fmt.Printf(M.LockedMore, len(locked)-shown)
 	}
 
-	if len(ready) == 0 {
+	if len(ready) == 0 && len(del) == 0 {
 		res.SkippedAll = true
 		if len(locked) > 0 {
 			fmt.Printf(M.AllLocked, name, len(locked))
@@ -540,10 +599,13 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 		return res
 	}
 
-	packs, err := packAll(repo, set, ready, password, noVerify)
-	if err != nil {
-		res.Err = err
-		return res
+	var packs []packResult
+	if len(ready) > 0 {
+		packs, err = packAll(repo, set, ready, password, noVerify)
+		if err != nil {
+			res.Err = err
+			return res
+		}
 	}
 
 	hashes := make([]string, 0, len(packs))
@@ -566,29 +628,70 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 		}
 	}
 
-	sum := sha256.Sum256([]byte(strings.Join(hashes, "|")))
-	res.BatchHash = fmt.Sprintf("%x", sum)
-	res.TotalSize = total
-	res.Packs = names
-
-	tag := started.Format("2006-01-02_15-04-05")
-	// manifest 先写：失败就把本批次的包清掉，索引不动，整批当作没发生过。
-	if err := writeManifest(repo.Output, name, tag, names, hashes, res.BatchHash, from, to); err != nil {
+	// 删除记录挂在最后一个包的时间上，所以必须在 packAll 之后才能定名字。
+	rmName := ""
+	if len(del) > 0 {
+		rmName = delRecordName(repo.Output, packs)
+	}
+	// 后续任何一步失败，本批次的包和记录一起撤掉，整批当作没发生过。
+	undo := func() {
 		for _, n := range names {
 			os.Remove(filepath.Join(repo.Output, n))
+		}
+		if rmName != "" {
+			os.Remove(delPath(repo.Output, rmName))
+		}
+	}
+	if rmName != "" {
+		if err := writeDeletions(repo.Output, rmName, del); err != nil {
+			undo()
+			res.Err = err
+			return res
+		}
+	}
+
+	if len(hashes) > 0 {
+		sum := sha256.Sum256([]byte(strings.Join(hashes, "|")))
+		res.BatchHash = fmt.Sprintf("%x", sum)
+	} else if rmName != "" {
+		// 只有删除的批次没有包，用记录本身的哈希当批次标识
+		if h, herr := sha256File(delPath(repo.Output, rmName)); herr == nil {
+			res.BatchHash = h
+		}
+	}
+	res.TotalSize = total
+	res.Packs = names
+	res.DelRecord = rmName
+
+	tag := started.Format("2006-01-02_15-04-05")
+	// manifest 先写：失败就把本批次的包和删除记录清掉，索引不动，整批当作没发生过。
+	if err := writeManifest(repo.Output, name, tag, names, hashes, res.BatchHash, from, to, len(del), rmName); err != nil {
+		undo()
+		res.Err = err
+		return res
+	}
+
+	// 索引跟着源目录走：删掉的文件不再登记，否则下次还会被当成“刚消失”。
+	for _, rel := range del {
+		delete(idx.Files, rel)
+	}
+	if err := saveIndex(repo.Output, idx); err != nil {
+		if rmName != "" {
+			os.Remove(delPath(repo.Output, rmName))
 		}
 		res.Err = err
 		return res
 	}
 
-	if err := saveIndex(repo.Output, idx); err != nil {
-		res.Err = err
-		return res
+	if len(packs) > 0 {
+		fmt.Printf(M.DetailLine+"\n", name, len(ready), humanSize(total), len(packs),
+			fmt.Sprintf(M.EncFrom, encFrom), res.ScanDur.Milliseconds(), shortHash(res.BatchHash))
 	}
-
-	fmt.Printf(M.DetailLine+"\n", name, len(ready), humanSize(total), len(packs),
-		fmt.Sprintf(M.EncFrom, encFrom), res.ScanDur.Milliseconds(), shortHash(res.BatchHash))
-	logf("backup %s: %d files, %d packs, %s, hash=%s", name, len(ready), len(packs), humanSize(total), res.BatchHash)
+	if len(del) > 0 {
+		fmt.Printf(M.DeletedLine, name, len(del), rmName)
+	}
+	logf("backup %s: %d files, %d packs, %d deleted, %s, hash=%s",
+		name, len(ready), len(packs), len(del), humanSize(total), res.BatchHash)
 	return res
 }
 
@@ -630,12 +733,14 @@ type Manifest struct {
 }
 
 type ManifestBatch struct {
-	Time   string   `json:"time"`
-	Hash   string   `json:"batch_hash"`
-	Files  []string `json:"files"`
-	Hashes []string `json:"hashes"`
-	From   string   `json:"from,omitempty"`
-	To     string   `json:"to,omitempty"`
+	Time    string   `json:"time"`
+	Hash    string   `json:"batch_hash"`
+	Files   []string `json:"files"`
+	Hashes  []string `json:"hashes"`
+	From    string   `json:"from,omitempty"`
+	To      string   `json:"to,omitempty"`
+	Deleted int      `json:"deleted,omitempty"`
+	Rm      string   `json:"rm,omitempty"`
 }
 
 func manifestPath(output string) string {
@@ -645,7 +750,7 @@ func manifestPath(output string) string {
 // writeManifest 追加一个批次到 manifest.json。
 // 先写临时文件再改名；读到损坏的旧 manifest 时把它改名保留并报错，
 // 绝不把损坏内容当成空账本继续追加。
-func writeManifest(output, repo, tag string, packs, hashes []string, batchHash, from, to string) error {
+func writeManifest(output, repo, tag string, packs, hashes []string, batchHash, from, to string, deleted int, rm string) error {
 	if err := os.MkdirAll(output, 0755); err != nil {
 		return fmt.Errorf(M.ManifestWriteFailed, err)
 	}
@@ -664,12 +769,14 @@ func writeManifest(output, repo, tag string, packs, hashes []string, batchHash, 
 		return fmt.Errorf(M.ManifestReadFailed, err)
 	}
 	m.Batches = append(m.Batches, ManifestBatch{
-		Time:   tag,
-		Hash:   batchHash,
-		Files:  baseNames(packs),
-		Hashes: hashes,
-		From:   from,
-		To:     to,
+		Time:    tag,
+		Hash:    batchHash,
+		Files:   baseNames(packs),
+		Hashes:  hashes,
+		From:    from,
+		To:      to,
+		Deleted: deleted,
+		Rm:      rm,
 	})
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {

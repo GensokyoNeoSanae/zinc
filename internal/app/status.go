@@ -65,11 +65,11 @@ func runStatus(name string, cfg *Config, set *Settings) error {
 			continue
 		}
 
-		newCnt, modCnt, skipCnt := 0, 0, 0
+		newCnt, modCnt, delCnt, skipCnt := 0, 0, 0, 0
 		if _, statErr := os.Stat(repo.Source); statErr == nil {
 			if skip, serr := scanSkipRoot(repo); serr == nil {
 				sc, _ := scanSource(repo.Source, idx, repo.exclude(set), skip)
-				newCnt, modCnt, skipCnt = len(sc.New), len(sc.Mod), sc.SkippedN
+				newCnt, modCnt, delCnt, skipCnt = len(sc.New), len(sc.Mod), len(sc.Del), sc.SkippedN
 			}
 		}
 
@@ -77,7 +77,7 @@ func runStatus(name string, cfg *Config, set *Settings) error {
 		fmt.Printf(M.StatusSource, repo.Source)
 		fmt.Printf(M.StatusOutput, repo.Output)
 		fmt.Printf(M.StatusBacked, len(idx.Files))
-		fmt.Printf(M.StatusPending, newCnt, modCnt, skipCnt)
+		fmt.Printf(M.StatusPending, newCnt, modCnt, delCnt, skipCnt)
 		fmt.Printf(M.StatusPacks, batches, packs, humanSize(total))
 		if from == "" && to == "" {
 			from, to = "-", "-"

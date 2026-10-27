@@ -26,6 +26,9 @@ jobs:
           $unformatted = gofmt -l cmd internal
           if ($unformatted) { $unformatted; exit 1 }
 
+      - name: Test
+        run: go test ./...
+
       - name: Build binaries
         run: .\build.ps1
 

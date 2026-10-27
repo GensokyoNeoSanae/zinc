@@ -231,6 +231,19 @@ type Messages struct {
 	LockedMore       string
 	AllLocked        string
 
+	// 删除记录
+	DeletedLine          string
+	DeletingBatch        string
+	RestoreDelSummary    string
+	FlagNoDelete         string
+	CheckListDelItem     string
+	DelRecordBadPath     string
+	DelRecordBadHeader   string
+	DelRecordReadFailed  string
+	DelRecordWriteFailed string
+	DelRemoveFailed      string
+	VerifyRmMissing      string
+
 	// restore
 	FlagOverwrite        string
 	FlagNoOverwrite      string
@@ -270,6 +283,7 @@ type Messages struct {
 	ReindexListFailed string
 	ReindexNoPacks    string
 	ReindexBakFailed  string
+	ReindexDeleted    string
 
 	// set flags
 	FlagMaxPackByte string
@@ -299,7 +313,7 @@ var zhMessages = &Messages{
   zinc config [get|set|unset|path] [<key>] [<value>]      全局设置
   zinc backup <name|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]
   zinc restore <name> [--dest <path>] [--password <pw>]
-                       [--overwrite|--no-overwrite] [--check-list]
+                       [--overwrite|--no-overwrite] [--no-delete] [--check-list]
   zinc restore <name> --only <相对路径> [--dest <path>] [--from <包名|序号>]
                        只恢复这一个文件/目录；配 --check-list 可列出它有哪些版本
   zinc reindex <name> [--password <pw>] [--pack-start <名>] [--pack-end <名>] [--yes]
@@ -314,6 +328,7 @@ var zhMessages = &Messages{
   - 每个包都是独立完整的加密 7z，文件名就是打包时刻，恢复按名字升序
   - 不给 --password 时交互输入；settings.json 里设了 default_password 就不再询问
   - 恢复默认覆盖同名文件（--no-overwrite 则保留两份），--check-list 只列顺序不动手
+  - 恢复会执行之后备份记下的删除（--no-delete 保留这些文件）；删除记录是输出目录里的 .rm 旁注
   - 索引只是缓存，丢了用 zinc reindex 从包本身重建
   - 输出默认落在 <root>\<name>，用 zinc root 设置
   - 解压后先跑一次 zinc init，之后在任意终端直接敲 zinc
@@ -441,7 +456,7 @@ var zhMessages = &Messages{
 	StatusSource:          "  源:   %s\n",
 	StatusOutput:          "  输出: %s\n",
 	StatusBacked:          "  已备份: %d 文件\n",
-	StatusPending:         "  待备份: %d 个新增, %d 个修改, %d 个跳过\n",
+	StatusPending:         "  待备份: %d 个新增, %d 个修改, %d 个待删除, %d 个跳过\n",
 	StatusVolumes:         "  卷: %d 批次 / %d 个文件 / %s\n",
 	StatusLast:            "  最后备份: %s\n",
 	StatusManifestExists:  "  manifest: 存在\n",
@@ -530,6 +545,18 @@ var zhMessages = &Messages{
 	LockedMore:       "  …另有 %d 个文件被占用\n",
 	AllLocked:        "%s · 变更的 %d 个文件全被占用，本次跳过\n",
 
+	DeletedLine:          "[删除] %s · %d 个文件已从源目录消失（记录 %s）\n",
+	DeletingBatch:        "[删除] %s · 移除 %d 个文件\n",
+	RestoreDelSummary:    "[完成] 按删除记录移除了 %d 个文件\n",
+	FlagNoDelete:         "恢复时不执行备份之后记录的删除",
+	CheckListDelItem:     "  %2d. %-44s %8d 项删除\n",
+	DelRecordBadPath:     "删除记录里有非法路径 %q（记录 %s），已中止",
+	DelRecordBadHeader:   "删除记录 %s 的表头不对（应为 %q），已中止",
+	DelRecordReadFailed:  "读取删除记录 %s 失败: %v",
+	DelRecordWriteFailed: "写入删除记录失败: %w",
+	DelRemoveFailed:      "删除 %s 失败: %v",
+	VerifyRmMissing:      "[警告] 删除记录缺失: %s\n",
+
 	FlagOverwrite:        "恢复时覆盖同名文件",
 	FlagNoOverwrite:      "恢复时不覆盖，同名文件重命名为 _1",
 	FlagCheckList:        "只列出将解压的包顺序，不动文件",
@@ -539,7 +566,7 @@ var zhMessages = &Messages{
 	DestUnset:            "(未指定)",
 	RestoreOverwriteWarn: "[警告] 覆盖模式：目标目录中的同名文件将被替换\n",
 	RestoreWrapLine:      "[外层] 恢复写入 %s（restore_wrap_folder=on）\n",
-	CheckListHeader:      "恢复顺序（%d 个包）· 模式：%s · 目标：%s\n",
+	CheckListHeader:      "恢复顺序（%d 个包，%d 份删除记录）· 模式：%s · 目标：%s\n",
 	CheckListItem:        "  %2d. %-44s %10s\n",
 	CheckListTotal:       "合计 %s\n",
 	PackOrderBroken:      "包顺序不单调：%s 与 %s 的顺序无法确定。请检查输出目录里的文件名，恢复已中止",
@@ -567,6 +594,7 @@ var zhMessages = &Messages{
 	ReindexListFailed: "读取包 %s 的目录失败: %v",
 	ReindexNoPacks:    "没有找到任何包: %s",
 	ReindexBakFailed:  "备份旧索引失败，已中止: %w",
+	ReindexDeleted:    "  按删除记录划掉 %d 个文件\n",
 
 	FlagMaxPackByte: "单包上限，如 4G / 50M / 纯字节",
 	FlagCompress:    "压缩等级 0-9",
@@ -592,7 +620,7 @@ Usage:
   zinc config [get|set|unset|path] [<key>] [<value>]      global settings
   zinc backup <name|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]
   zinc restore <name> [--dest <path>] [--password <pw>]
-                       [--overwrite|--no-overwrite] [--check-list]
+                       [--overwrite|--no-overwrite] [--no-delete] [--check-list]
   zinc restore <name> --only <relative-path> [--dest <path>] [--from <pack|index>]
                        restore just that file/dir; add --check-list to list its versions
   zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]
@@ -607,6 +635,7 @@ Notes:
   - every pack is a complete encrypted 7z; its name is the packing time, restore goes by name
   - without --password it prompts; a default_password in settings.json skips the prompt
   - restore overwrites same-name files by default; --no-overwrite keeps both
+  - restore also applies deletions recorded by later backups; --no-delete keeps those files
   - --check-list only prints the order, --dest may be omitted
   - the index is a cache; zinc reindex rebuilds it from the packs themselves
   - output defaults to <root>\<name>; set it with zinc root
@@ -735,7 +764,7 @@ Notes:
 	StatusSource:          "  source: %s\n",
 	StatusOutput:          "  output: %s\n",
 	StatusBacked:          "  backed up: %d files\n",
-	StatusPending:         "  pending: %d new, %d modified, %d skipped\n",
+	StatusPending:         "  pending: %d new, %d modified, %d to be deleted, %d skipped\n",
 	StatusVolumes:         "  volumes: %d batches / %d files / %s\n",
 	StatusLast:            "  last backup: %s\n",
 	StatusManifestExists:  "  manifest: present\n",
@@ -824,6 +853,18 @@ Notes:
 	LockedMore:       "  …and %d more locked files\n",
 	AllLocked:        "%s · all %d changed files are locked, skipped this run\n",
 
+	DeletedLine:          "[deleted] %s · %d file(s) disappeared from the source (recorded in %s)\n",
+	DeletingBatch:        "[deleted] %s · %d file(s) removed\n",
+	RestoreDelSummary:    "[done] %d file(s) removed according to the deletion records\n",
+	FlagNoDelete:         "restore without applying deletions recorded after the backup",
+	CheckListDelItem:     "  %2d. %-44s %8d deletion(s)\n",
+	DelRecordBadPath:     "unsafe path %q in deletion record %s; aborted",
+	DelRecordBadHeader:   "deletion record %s has a bad header (expected %q); aborted",
+	DelRecordReadFailed:  "failed to read deletion record %s: %v",
+	DelRecordWriteFailed: "failed to write deletion record: %w",
+	DelRemoveFailed:      "failed to remove %s: %v",
+	VerifyRmMissing:      "[warn] deletion record is missing: %s\n",
+
 	FlagOverwrite:        "overwrite files with the same name on restore",
 	FlagNoOverwrite:      "keep both: same-name files are restored as _1",
 	FlagCheckList:        "only list the packs and their order, do not touch files",
@@ -833,7 +874,7 @@ Notes:
 	DestUnset:            "(not specified)",
 	RestoreOverwriteWarn: "[warn] overwrite mode: same-name files in the destination will be replaced\n",
 	RestoreWrapLine:      "[wrap] restoring into %s (restore_wrap_folder=on)\n",
-	CheckListHeader:      "restore order (%d packs) · mode: %s · dest: %s\n",
+	CheckListHeader:      "restore order (packs %d, deletion records %d) · mode: %s · dest: %s\n",
 	CheckListItem:        "  %2d. %-44s %10s\n",
 	CheckListTotal:       "total %s\n",
 	PackOrderBroken:      "pack order is not monotonic: %s and %s cannot be ordered. Check the file names in the output directory; restore aborted",
@@ -861,6 +902,7 @@ Notes:
 	ReindexListFailed: "failed to list pack %s: %v",
 	ReindexNoPacks:    "no packs found: %s",
 	ReindexBakFailed:  "failed to back up the old index; aborted: %w",
+	ReindexDeleted:    "  %d file(s) dropped by the deletion records\n",
 
 	FlagMaxPackByte: "pack size limit, e.g. 4G / 50M / bytes",
 	FlagCompress:    "compression level 0-9",

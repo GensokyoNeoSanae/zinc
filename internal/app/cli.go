@@ -371,13 +371,15 @@ func cmdBackup(args []string) {
 		return
 	}
 
-	// 只有某个仓库最终会落到交互输入时才问密码
-	needPrompt := *password == "" && set.DefaultPassword == ""
-	if needPrompt {
-		needPrompt = false
+	// 只有真的要压包时才需要密码：只记录删除的批次不碰 7-Zip。
+	needPrompt := false
+	if *password == "" && set.DefaultPassword == "" {
 		for _, n := range names {
 			r, e := cfg.repo(n)
-			if e == nil && r.Password == "" {
+			if e != nil || r.Password != "" {
+				continue
+			}
+			if s, ok := scans[n]; ok && s.Packable() > 0 {
 				needPrompt = true
 				break
 			}
@@ -452,6 +454,7 @@ func cmdRestore(args []string) {
 	overwrite := fs.Bool("overwrite", false, M.FlagOverwrite)
 	noOverwrite := fs.Bool("no-overwrite", false, M.FlagNoOverwrite)
 	checkList := fs.Bool("check-list", false, M.FlagCheckList)
+	noDelete := fs.Bool("no-delete", false, M.FlagNoDelete)
 	only := fs.String("only", "", M.FlagOnly)
 	from := fs.String("from", "", M.FlagFrom)
 	fs.Parse(reorderArgs(args))
@@ -497,7 +500,7 @@ func cmdRestore(args []string) {
 	}
 
 	if *checkList {
-		if err := runRestore(name, cfg, set, *dest, "", ow, true, set.restoreWrapFolder()); err != nil {
+		if err := runRestore(name, cfg, set, *dest, "", ow, true, set.restoreWrapFolder(), *noDelete); err != nil {
 			die("%v", err)
 		}
 		return
@@ -506,7 +509,7 @@ func cmdRestore(args []string) {
 		die(M.MissingDest)
 	}
 
-	if err := runRestore(name, cfg, set, *dest, restorePassword(name, cfg, set, *password), ow, false, set.restoreWrapFolder()); err != nil {
+	if err := runRestore(name, cfg, set, *dest, restorePassword(name, cfg, set, *password), ow, false, set.restoreWrapFolder(), *noDelete); err != nil {
 		die("%v", err)
 	}
 }

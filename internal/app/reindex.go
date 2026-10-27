@@ -117,21 +117,33 @@ func runReindex(name string, cfg *Config, set *Settings, password, packStart, pa
 	if len(packs) == 0 {
 		return fmt.Errorf(M.ReindexNoPacks, repo.Output)
 	}
-	if packStart != "" || packEnd != "" {
-		var keep []string
-		for _, p := range packs {
-			if packStart != "" && p < packStart {
-				continue
-			}
-			if packEnd != "" && p > packEnd {
-				continue
-			}
-			keep = append(keep, p)
+	ranged := packStart != "" || packEnd != ""
+	keep := make(map[string]bool, len(packs))
+	for _, p := range packs {
+		if packStart != "" && p < packStart {
+			continue
 		}
-		packs = keep
-		if len(packs) == 0 {
-			return fmt.Errorf(M.ReindexNoPacks, repo.Output)
+		if packEnd != "" && p > packEnd {
+			continue
 		}
+		keep[p] = true
+	}
+	if len(keep) == 0 {
+		return fmt.Errorf(M.ReindexNoPacks, repo.Output)
+	}
+
+	// 索引要反映“最后一次备份时的源目录”，所以删除记录也得照时间线执行。
+	dels, err := loadDelRecords(repo.Output)
+	if err != nil {
+		return err
+	}
+	delNames := make([]string, 0, len(dels))
+	for n := range dels {
+		delNames = append(delNames, n)
+	}
+	timeline, err := buildTimeline(repo.Output, delNames)
+	if err != nil {
+		return err
 	}
 
 	p := indexPath(repo.Output)
@@ -148,9 +160,27 @@ func runReindex(name string, cfg *Config, set *Settings, password, packStart, pa
 		}
 	}
 
-	fmt.Printf(M.ReindexStart, len(packs))
+	fmt.Printf(M.ReindexStart, len(keep))
 	idx := newIndex()
-	for _, pk := range packs {
+	gone := 0
+	for _, step := range timeline {
+		if step.Pack == "" {
+			// --pack-start/--pack-end 重建的只是一段切片，就不套用删除记录了
+			if ranged {
+				continue
+			}
+			for _, rel := range dels[step.Del] {
+				if _, ok := idx.Files[rel]; ok {
+					delete(idx.Files, rel)
+					gone++
+				}
+			}
+			continue
+		}
+		pk := step.Pack
+		if !keep[pk] {
+			continue
+		}
 		entries, lerr := listPackContents(repo.sevenZip(set), filepath.Join(repo.Output, pk), password)
 		if lerr != nil {
 			return fmt.Errorf(M.ReindexListFailed, pk, lerr)
@@ -184,6 +214,9 @@ func runReindex(name string, cfg *Config, set *Settings, password, packStart, pa
 			n++
 		}
 		fmt.Printf(M.ReindexPack, pk, n)
+	}
+	if gone > 0 {
+		fmt.Printf(M.ReindexDeleted, gone)
 	}
 
 	if err := saveIndex(repo.Output, idx); err != nil {
