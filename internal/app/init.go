@@ -118,10 +118,10 @@ func cmdInit(args []string) {
 	fmt.Printf(M.InitDir, appDir())
 	ok := registerSetup(*force)
 
-	if sz := set.sevenZipPath(); fileExists(sz) {
+	if sz := set.sevenZipPath(); sz != "" {
 		fmt.Printf(M.Init7zipOK, sz)
 	} else {
-		fmt.Printf(M.Init7zipMissing, sz)
+		fmt.Print(M.Init7zipMissing)
 	}
 
 	fmt.Print(M.InitHint)

@@ -459,7 +459,7 @@ var zhMessages = &Messages{
 	InitPathExists:  "[跳过] 用户 PATH 里已有: %s\n",
 	InitPathFail:    "[失败] 写用户 PATH: %v\n",
 	Init7zipOK:      "[ok] 7za: %s\n",
-	Init7zipMissing: "[警告] 找不到 7za: %s（可用 zinc config set 7zip_path 指定）\n",
+	Init7zipMissing: "[警告] 找不到 7z.exe / 7za.exe（可用 zinc config set 7zip_path 指定）\n",
 	InitHint:        "\n完成。新开一个终端就能直接敲 zinc；通知不弹就再跑一次 zinc init --force。\n",
 
 	FlagInstall7zip:  "指定 7z.exe / 7za.exe 的路径",
@@ -753,7 +753,7 @@ Notes:
 	InitPathExists:  "[skip] user PATH already contains: %s\n",
 	InitPathFail:    "[failed] writing user PATH: %v\n",
 	Init7zipOK:      "[ok] 7za: %s\n",
-	Init7zipMissing: "[warn] 7za not found: %s (set it with zinc config set 7zip_path)\n",
+	Init7zipMissing: "[warn] 7z.exe / 7za.exe not found (set it with zinc config set 7zip_path)\n",
 	InitHint:        "\nDone. Open a new terminal and type zinc; if notifications still fail, run zinc init --force again.\n",
 
 	FlagInstall7zip:  "path to 7z.exe / 7za.exe",

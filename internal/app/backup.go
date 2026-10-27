@@ -355,7 +355,12 @@ func packOne(repo *Repo, set *Settings, plan packPlan, name, password string, no
 		partPath,
 		"@" + listfile,
 	}
-	cmd := exec.Command(repo.sevenZip(set), args...)
+	// 没有可用的 7-Zip 时 exec.Command("") 只会报一句没人看得懂的话，这里先拦下来。
+	sz := repo.sevenZip(set)
+	if sz == "" {
+		return packResult{}, fmt.Errorf("%s", M.SevenZipMissing)
+	}
+	cmd := exec.Command(sz, args...)
 	cmd.Dir = repo.Source // listfile 里的相对路径按源目录解析
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -364,7 +369,7 @@ func packOne(repo *Repo, set *Settings, plan packPlan, name, password string, no
 	}
 
 	if !noVerify {
-		if err := verifyArchive(repo.sevenZip(set), partPath, password); err != nil {
+		if err := verifyArchive(sz, partPath, password); err != nil {
 			os.Remove(partPath)
 			return packResult{}, fmt.Errorf(M.VerifyFailed, err)
 		}

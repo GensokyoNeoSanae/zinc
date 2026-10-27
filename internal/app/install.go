@@ -99,6 +99,7 @@ func checkSevenZip(p string) (string, error) {
 
 // sevenZipCandidates 按“最可能先被找到”的顺序列出候选。
 // 7z.exe 与 7za.exe 的参数集对 zinc 用到的部分完全一致，装完整版 7-Zip 的用户也能直接用。
+// 这里只找约定位置（PATH、Program Files、LOCALAPPDATA）；装在别处就靠 --7zip 或交互输入。
 func sevenZipCandidates() []string {
 	var cands []string
 	for _, name := range []string{"7za.exe", "7z.exe"} {
@@ -113,7 +114,11 @@ func sevenZipCandidates() []string {
 				filepath.Join(root, "7-Zip", "7za.exe"))
 		}
 	}
-	cands = append(cands, defaultSevenZip)
+	if root := os.Getenv("LOCALAPPDATA"); root != "" {
+		cands = append(cands,
+			filepath.Join(root, "Programs", "7-Zip", "7z.exe"),
+			filepath.Join(root, "Programs", "7-Zip", "7za.exe"))
+	}
 	return cands
 }
 

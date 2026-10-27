@@ -7,8 +7,9 @@ import (
 	"strings"
 )
 
+// 没有内置的 7-Zip 路径：每台机器装的位置都不一样，空值表示“现找”
+// （见 Settings.sevenZipPath 与 sevenZipCandidates）。
 const (
-	defaultSevenZip    = `E:\Tools\7zip\7za.exe`
 	defaultMaxPackByte = int64(4 * 1024 * 1024 * 1024) // 4 GB
 	defaultCompressLvl = 0                             // 存储模式
 )

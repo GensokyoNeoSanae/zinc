@@ -107,11 +107,18 @@ func (s *Settings) compressLevel() int {
 	return *s.CompressionLevel
 }
 
+// sevenZipPath 返回可用的 7-Zip：显式配置优先，没配就在 PATH 和常见安装目录里现找。
+// 找不到时返回空串，由调用方决定怎么报错（不要内置一条“我机器上”的路径）。
 func (s *Settings) sevenZipPath() string {
-	if s.SevenZipPath == "" {
-		return defaultSevenZip
+	if s.SevenZipPath != "" {
+		return s.SevenZipPath
 	}
-	return s.SevenZipPath
+	for _, c := range sevenZipCandidates() {
+		if fileExists(c) {
+			return c
+		}
+	}
+	return ""
 }
 
 func (s *Settings) lang() string { return s.Lang }
