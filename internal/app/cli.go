@@ -448,6 +448,9 @@ func sendSummary(results []BackupResult, notifyEmpty bool) {
 }
 
 func cmdRestore(args []string) {
+	cfg := mustConfig()
+	set := mustSettings()
+
 	fs := flag.NewFlagSet("restore", flag.ExitOnError)
 	dest := fs.String("dest", "", M.FlagDest)
 	password := fs.String("password", "", M.FlagPassword)
@@ -455,6 +458,7 @@ func cmdRestore(args []string) {
 	noOverwrite := fs.Bool("no-overwrite", false, M.FlagNoOverwrite)
 	checkList := fs.Bool("check-list", false, M.FlagCheckList)
 	noDelete := fs.Bool("no-delete", false, M.FlagNoDelete)
+	notify := fs.Bool("notify", set.completeNotify(), M.FlagNotifyWarn)
 	only := fs.String("only", "", M.FlagOnly)
 	from := fs.String("from", "", M.FlagFrom)
 	fs.Parse(reorderArgs(args))
@@ -468,9 +472,6 @@ func cmdRestore(args []string) {
 	if *from != "" && *only == "" {
 		die(M.FromRequiresOnly)
 	}
-
-	cfg := mustConfig()
-	set := mustSettings()
 
 	ow := set.restoreOverwrite()
 	if *overwrite {
@@ -499,8 +500,17 @@ func cmdRestore(args []string) {
 		return
 	}
 
+	opt := restoreOpts{
+		Dest:      *dest,
+		Overwrite: ow,
+		CheckList: *checkList,
+		Wrap:      set.restoreWrapFolder(),
+		NoDelete:  *noDelete,
+		Notify:    *notify,
+	}
+
 	if *checkList {
-		if err := runRestore(name, cfg, set, *dest, "", ow, true, set.restoreWrapFolder(), *noDelete); err != nil {
+		if err := runRestore(name, cfg, set, opt); err != nil {
 			die("%v", err)
 		}
 		return
@@ -508,8 +518,9 @@ func cmdRestore(args []string) {
 	if *dest == "" {
 		die(M.MissingDest)
 	}
+	opt.Password = restorePassword(name, cfg, set, *password)
 
-	if err := runRestore(name, cfg, set, *dest, restorePassword(name, cfg, set, *password), ow, false, set.restoreWrapFolder(), *noDelete); err != nil {
+	if err := runRestore(name, cfg, set, opt); err != nil {
 		die("%v", err)
 	}
 }

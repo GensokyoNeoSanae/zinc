@@ -236,6 +236,9 @@ type Messages struct {
 	DeletingBatch        string
 	RestoreDelSummary    string
 	FlagNoDelete         string
+	FlagNotifyWarn       string
+	ToastRestoreTitle    string
+	ToastRestoreBody     string
 	CheckListDelItem     string
 	DelRecordBadPath     string
 	DelRecordBadHeader   string
@@ -562,6 +565,9 @@ var zhMessages = &Messages{
 	DeletingBatch:        "[删除] %s · 移除 %d 个文件\n",
 	RestoreDelSummary:    "[完成] 按删除记录移除了 %d 个文件\n",
 	FlagNoDelete:         "恢复时不执行备份之后记录的删除",
+	FlagNotifyWarn:       "恢复不完整时发 Windows 通知",
+	ToastRestoreTitle:    "zinc 恢复不完整",
+	ToastRestoreBody:     "%s · %d 个包解压报错，文件可能不完整，用 zinc verify 查",
 	CheckListDelItem:     "  %2d. %-44s %8d 项删除\n",
 	DelRecordBadPath:     "删除记录里有非法路径 %q（记录 %s）",
 	DelRecordBadHeader:   "删除记录 %s 的表头不对（应为 %q）",
@@ -570,8 +576,8 @@ var zhMessages = &Messages{
 	DelRecordEdited:      "[警告] 删除记录 %s 与写入时的哈希不一致（多半被手工加删过行）；每一行都自洽，按现有内容继续\n",
 	DelLineSkipped:       "[警告] 删除记录 %s 有一行不可用，已跳过: %s\n",
 	DelSkipped:           "[警告] 删除记录不可用，按 --no-delete 忽略、只恢复文件: %v\n",
-	DelSkippedAfterFail:  "[跳过] %s · 它所属批次的包没解开，删除记录一起跳过\n",
-	PackFailed:           "[失败] %s · 这个包跳过，继续解后面的包\n",
+	DelSkippedAfterFail:  "[跳过] %s · 它所属批次的包解压报错，删除记录一起跳过\n",
+	PackFailed:           "[警告] %s · 解压报错（能解出来的已经写入目标），继续解后面的包\n",
 	PackErrLine:          "         %s\n",
 	PackPasswordHint:     "[提示] 如果每个包都这样，多半是密码不对而不是包坏了；确认 --password 或 settings.json 里的 default_password\n",
 	RestoreIncomplete:    "[警告] 有 %d 个包没能解开，恢复结果不完整；报 CRC 错误的文件可能以错误内容留在磁盘上，用 zinc verify 确认\n",
@@ -883,6 +889,9 @@ Notes:
 	DeletingBatch:        "[deleted] %s · %d file(s) removed\n",
 	RestoreDelSummary:    "[done] %d file(s) removed according to the deletion records\n",
 	FlagNoDelete:         "restore without applying deletions recorded after the backup",
+	FlagNotifyWarn:       "send a Windows notification when a restore is incomplete",
+	ToastRestoreTitle:    "zinc restore incomplete",
+	ToastRestoreBody:     "%s · %d pack(s) reported errors; files may be incomplete — run zinc verify",
 	CheckListDelItem:     "  %2d. %-44s %8d deletion(s)\n",
 	DelRecordBadPath:     "unsafe path %q in deletion record %s",
 	DelRecordBadHeader:   "deletion record %s has a bad header (expected %q)",
@@ -891,8 +900,8 @@ Notes:
 	DelRecordEdited:      "[warn] deletion record %s no longer matches its recorded hash (probably edited by hand); every line checks out, using the current content\n",
 	DelLineSkipped:       "[warn] deletion record %s has an unusable line, skipped: %s\n",
 	DelSkipped:           "[warn] deletion records unusable, ignoring them because of --no-delete: %v\n",
-	DelSkippedAfterFail:  "[skipped] %s · its batch failed to extract, so the deletion record is skipped too\n",
-	PackFailed:           "[failed] %s · skipped, continuing with the following packs\n",
+	DelSkippedAfterFail:  "[skipped] %s · its batch's pack reported errors, so the deletion record is skipped too\n",
+	PackFailed:           "[warn] %s · errors during extraction (whatever could be extracted is in place); continuing with the following packs\n",
 	PackErrLine:          "         %s\n",
 	PackPasswordHint:     "[hint] if every pack reports this, the password is probably wrong rather than the packs being damaged; check --password or default_password\n",
 	RestoreIncomplete:    "[warn] %d pack(s) could not be extracted; the result is incomplete, and files that failed their CRC may be on disk with wrong content — check with zinc verify\n",

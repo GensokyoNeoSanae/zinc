@@ -283,13 +283,14 @@ One rule: all packs are extracted in name (time) ascending order, so the last ba
 | `--overwrite` | force overwriting |
 | `--no-overwrite` | keep both; same-name files are extracted as `_1`, `_2` |
 | `--no-delete` | restore files only; skip the deletions recorded by later backups |
+| `--notify=false` | do not send the "restore incomplete" toast |
 | `--check-list` | only print the order and sizes (packs and deletion records), change nothing; `--dest` may be omitted |
 | `--only <path>` | restore just that one file or directory, leave everything else alone; deletion records are not applied |
 | `--from <pack>` | with `--only`, take it from a specific pack: full name, unique prefix, or 1-based position in the repo's complete pack list — not the numbering printed by `--check-list` |
 
 Overwrite mode prints a warning when it starts. Restore works through the packs strictly in name order, so a renamed or hand-copied pack changes which version wins — keep the names zinc assigned.
 
-A damaged pack does not stop the restore. Every pack is still tried: a failing one is reported with its 7-Zip error and skipped, the deletion record of that batch is skipped with it (nobody knows what the source looked like at that moment), and the remaining packs still come out. The run then exits non-zero and says the result is incomplete. Note that 7-Zip *does* extract a file whose CRC failed — with the wrong bytes — so `zinc verify` is what tells you which pack to fetch again.
+A damaged pack neither stops the restore nor gets thrown away. 7-Zip extracts everything it can; only the files whose CRC failed come out wrong, and it leaves them on disk. zinc reports that pack's 7-Zip error, skips that batch's deletion record (nobody knows what the source looked like at that moment), carries on with the remaining packs, warns at the end and exits non-zero. With `complete_notify` on — the default — it also sends a toast titled "zinc restore incomplete"; `--notify=false` silences it. Run `zinc verify` to see exactly which pack is bad, then fetch that one again.
 
 ### Restore wrapper folder
 
@@ -358,6 +359,7 @@ Tasks are created through Task Scheduler and point at `zincw.exe` (GUI subsystem
 - Tasks created by `zinc schedule` always pass `--notify` unless the task was created with `--no-notify`; `complete_notify` has no effect on them.
 - `--all` sends one summary; single-repo tasks each send one.
 - Nothing changed → no popup (`--notify-empty` forces one).
+- `zinc restore` only pops up when the result is incomplete — some pack could not be extracted cleanly. A clean restore stays quiet.
 
 Notification details:
 

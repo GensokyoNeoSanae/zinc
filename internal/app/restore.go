@@ -76,10 +76,22 @@ func restoreDest(name, dest string, wrap bool) (string, error) {
 	}
 }
 
+// restoreOpts 是全量恢复的开关集合，参数多了以后按名字传更不容易搞错
+type restoreOpts struct {
+	Dest      string
+	Password  string
+	Overwrite bool
+	CheckList bool
+	Wrap      bool
+	NoDelete  bool
+	Notify    bool
+}
+
 // runRestore 全量恢复：包和删除记录合成一条时间线，包按打包时刻升序解压，
 // 后压的覆盖先压的；记录里删掉的文件在该批次最后一个包解压之后移除，
 // 于是恢复出来的目录等于“最后一次备份时的源目录”。
-func runRestore(name string, cfg *Config, set *Settings, dest, password string, overwrite, checkList, wrap, noDelete bool) error {
+// 某个包解压报错不会中止整场恢复：能解出来的已经落盘，剩下的继续解，最后统一报。
+func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error {
 	repo, err := cfg.repo(name)
 	if err != nil {
 		return err
@@ -87,7 +99,7 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 	// 先把所有删除记录读完并校验：坏记录要在动目标目录之前就暴露出来。
 	dels, derr := loadDelRecords(repo.Output)
 	if derr != nil {
-		if !noDelete {
+		if !opt.NoDelete {
 			return derr
 		}
 		// 用户明确要求不动删除，那记录坏了也不该挡住恢复文件
@@ -113,13 +125,13 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 	}
 
 	mode := M.ModeRename
-	if overwrite {
+	if opt.Overwrite {
 		mode = M.ModeOverwrite
 	}
 
-	destText := dest
-	if destText != "" && wrap {
-		if t, terr := restoreDest(name, dest, wrap); terr == nil {
+	destText := opt.Dest
+	if destText != "" && opt.Wrap {
+		if t, terr := restoreDest(name, opt.Dest, opt.Wrap); terr == nil {
 			destText = t
 		}
 	}
@@ -127,10 +139,10 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 		destText = M.DestUnset
 	}
 
-	if checkList {
+	if opt.CheckList {
 		var total int64
 		fmt.Printf(M.CheckListHeader, packCount, len(dels), mode, destText)
-		if dest != "" && wrap {
+		if opt.Dest != "" && opt.Wrap {
 			fmt.Printf(M.RestoreWrapLine, destText)
 		}
 		for i, e := range entries {
@@ -149,13 +161,13 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 		return nil
 	}
 
-	if dest == "" {
+	if opt.Dest == "" {
 		return errors.New(M.MissingDest)
 	}
-	if err := checkRestoreDest(repo, dest); err != nil {
+	if err := checkRestoreDest(repo, opt.Dest); err != nil {
 		return err
 	}
-	target, err := restoreDest(name, dest, wrap)
+	target, err := restoreDest(name, opt.Dest, opt.Wrap)
 	if err != nil {
 		return err
 	}
@@ -166,15 +178,15 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 	if sz == "" {
 		return errors.New(M.SevenZipMissing)
 	}
-	if overwrite {
+	if opt.Overwrite {
 		fmt.Print(M.RestoreOverwriteWarn)
 	}
-	if wrap {
+	if opt.Wrap {
 		fmt.Printf(M.RestoreWrapLine, target)
 	}
 
 	ao := "-aou"
-	if overwrite {
+	if opt.Overwrite {
 		ao = "-aoa"
 	}
 
@@ -187,10 +199,11 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 		if e.Pack != "" {
 			full := filepath.Join(repo.Output, e.Pack)
 			fmt.Printf(M.Extracting, e.Pack)
-			cmd := exec.Command(sz, "x", "-y", ao, "-sccUTF-8", "-p"+password, full, "-o"+target)
+			// 7z 是“能解的先解、坏的报 CRC”，所以报错时包里其余文件照样落盘，
+			// 这里不能当成整包放弃：记下来、继续解后面的包，最后统一报。
+			cmd := exec.Command(sz, "x", "-y", ao, "-sccUTF-8", "-p"+opt.Password, full, "-o"+target)
 			out, xerr := cmd.CombinedOutput()
 			if xerr != nil {
-				// 坏一个包不该把后面的包全废掉：记下来、继续解，最后统一报。
 				failedPacks = append(failedPacks, e.Pack)
 				failedStems[e.Stem] = true
 				fmt.Printf(M.PackFailed, e.Pack)
@@ -208,10 +221,10 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 			}
 			continue
 		}
-		if noDelete {
+		if opt.NoDelete {
 			continue
 		}
-		// 这一批的包没解开，源目录当时是什么状态就不知道了；
+		// 这一批的包解压报错，源目录当时是什么状态就不知道了；
 		// 这时候照着记录删文件只会把损失叠上去，跳过不删。
 		if failedStems[e.Stem] {
 			fmt.Printf(M.DelSkippedAfterFail, e.Del)
@@ -237,9 +250,14 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 	}
 	fmt.Printf(M.RestoreDone, target)
 	logf("restore %s -> %s (%d packs, %d deleted, %d failed, overwrite=%v, wrap=%v)",
-		name, target, packCount, deletedTotal, len(failedPacks), overwrite, wrap)
+		name, target, packCount, deletedTotal, len(failedPacks), opt.Overwrite, opt.Wrap)
 	if len(failedPacks) > 0 {
 		fmt.Printf(M.RestoreIncomplete, len(failedPacks))
+		if opt.Notify {
+			if err := sendToast(M.ToastRestoreTitle, fmt.Sprintf(M.ToastRestoreBody, name, len(failedPacks))); err != nil {
+				fmt.Printf(M.NotifyFailed, err)
+			}
+		}
 		return fmt.Errorf(M.RestoreFailedPacks, len(failedPacks))
 	}
 	return nil
