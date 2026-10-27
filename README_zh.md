@@ -258,7 +258,7 @@ zinc config set default_password -
 默认恢复会在 `--dest` 下面再建一层 `restore-<仓库名>-<YYYYMMDD_hhmmss_SSS>`（时间取本次恢复开始的时刻），文件解压进这层，不直接散落在 `--dest` 根上：
 
 ```
-D:\recovered\
+<dest>\
   restore-pictures-20261025_170012_334\
     2024\...
 ```
@@ -339,7 +339,7 @@ zinc init --force
 
 图标：放一个 `zinc.ico` 在 `zinc.exe` 旁边，再跑一次 `zinc init --force` 就会用上。
 
-### 删除任务时注意 `all` 与 `--all`
+### 删除任务：`all` 和 `--all` 差两个横线，差的是全部
 
 ```powershell
 zinc unschedule pictures   # 只删 pictures 仓库的任务
@@ -436,7 +436,7 @@ zinc 回答的是“这个目录每次备份时长什么样”，不是“让这
 - **`reindex --pack-start` / `--pack-end` 会用子集覆盖整份索引。** 范围外的包下次备份会被当成新增重压一遍。这两个参数是灾难恢复用的，日常直接跑 `zinc reindex <仓库>`。
 - **符号链接和 junction 不会被扫描。** 源目录本身是 junction 时扫描结果为空（表现为永远“无新增”），源目录内部的 junction 子树也不进索引。请把 `--source` 配成真实路径。
 - **强杀后 `.lock` 残留。** 仓库锁不会自动接管。进程被强杀后要手动删掉 `<output>\.lock`，否则之后每次备份都会等满 `lock_timeout_minutes`（默认 30 分钟）再失败。
-- **索引缺失等于全量重压。** `index.tsv` 被删掉后，下次备份会把它当空仓库，把所有文件重压一遍（不会漏数据，但会多传一遍）。**损坏**的索引是另一回事：那是硬错误，备份会停下，直到你跑 `zinc reindex`。
+- **索引缺失等于全量重压。** `index.tsv` 被删掉之后如果不去重建，下次备份会把它当空仓库，把所有文件重压一遍（不会漏数据，但会多传一遍）。丢了先跑一次 `zinc reindex <仓库>`，这一次重压就省了。**损坏**的索引是另一回事：那是硬错误，备份会停下，直到你跑 `zinc reindex`。
 - **换密码后旧包打不开。** 旧包仍用旧密码加密。
 - **只支持 Windows。** 64 位 Windows 10 或 11。
 
@@ -474,7 +474,7 @@ go build -o zinc-unregister.exe ./cmd/uninstall
 
 `package.ps1` 会调上面两个，产出 `dist\zinc-<版本>-setup.exe`（向导）和 `dist\zinc-<版本>-windows-amd64.zip`（绿色版）。安装包是单文件：Inno 把四个可执行文件、图标、文档和它自己的卸载程序一起压进去。第一页是语言选择，英文默认，简体中文是第二项。
 
-`cmd/` 是四个入口，`internal/app` 是共用代码。Inno 脚本不自己实现注册：装完文件后调 `zinc-register.exe`，卸载前调 `zinc-unregister.exe`，所以注册逻辑只有一份。两个主程序只差子系统：`zinc.exe` 是控制台程序，手动跑能看输出；`zincw.exe` 是 GUI 子系统，计划任务执行时不闪窗口、不抢焦点。项目没有第三方依赖，`go.mod` 只声明了 Go 版本。
+`cmd/` 是四个入口，`internal/app` 是共用代码。Inno 脚本不自己实现注册：装完文件后调 `tools\zinc-register.exe`，卸载前调 `tools\zinc-unregister.exe`，所以注册逻辑只有一份。两个主程序只差子系统：`zinc.exe` 是控制台程序，手动跑能看输出；`zincw.exe` 是 GUI 子系统，计划任务执行时不闪窗口、不抢焦点。项目没有第三方依赖，`go.mod` 只声明了 Go 版本。
 
 ## 参与贡献
 

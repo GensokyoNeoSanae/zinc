@@ -258,7 +258,7 @@ Overwrite mode prints a warning when it starts. Restore works through the packs 
 By default the restore target gets one extra level, `restore-<repo>-<YYYYMMDD_hhmmss_SSS>` (timestamp = when this restore started), and every file lands inside it instead of being scattered over `--dest` itself:
 
 ```
-D:\recovered\
+<dest>\
   restore-pictures-20261025_170012_334\
     2024\...
 ```
@@ -339,7 +339,7 @@ That rewrites the shortcut, the registry entry and the marker in one go, whereve
 
 Icon: drop a `zinc.ico` next to `zinc.exe`, then run `zinc init --force` to pick it up.
 
-### `all` vs `--all` when deleting
+### Deleting tasks: `all` is not `--all`
 
 ```powershell
 zinc unschedule pictures   # only the pictures repo's tasks
@@ -436,7 +436,7 @@ zinc answers "what did this folder look like at each backup", not "make this fol
 - **`reindex --pack-start` / `--pack-end` replace the whole index with a slice.** Packs outside that range are then treated as new on the next backup and re-packed. Those flags exist for disaster recovery only; day to day, run a plain `zinc reindex <repo>`.
 - **Symlinks and junctions are never scanned.** A `--source` that is itself a junction yields an empty scan (it will look like "nothing new" forever), and junction subtrees inside the source are not indexed. Point `--source` at the real path.
 - **A stale `.lock` blocks future backups.** Locks are never taken over automatically. After a killed process, delete `<output>\.lock` by hand, otherwise every later backup waits the full `lock_timeout_minutes` (default 30) and then fails.
-- **A missing index means a full re-pack.** If `index.tsv` is deleted, the next backup treats the repo as empty and compresses everything again (nothing is lost, but the upload is duplicated). A **corrupt** index behaves differently: it is a hard error, and the backup stops until you run `zinc reindex`.
+- **A missing index means a full re-pack.** If `index.tsv` is deleted and you do not rebuild it, the next backup treats the repo as empty and compresses everything again (nothing is lost, but the upload is duplicated). Losing it is cheap if you run `zinc reindex <repo>` first. A **corrupt** index behaves differently: that is a hard error, and the backup stops until you run `zinc reindex`.
 - **Changing the password orphans old packs.** Old packs still use the old password.
 - **Windows only.** 64-bit Windows 10 or 11.
 
@@ -474,7 +474,7 @@ go build -o zinc-unregister.exe ./cmd/uninstall
 
 `package.ps1` calls both and writes `dist\zinc-<version>-setup.exe` (the wizard) and `dist\zinc-<version>-windows-amd64.zip` (portable). The setup is a single file: Inno compresses the four binaries, the icon, the docs and its own uninstaller into it. The first page picks the language — English by default, 简体中文 as the second option.
 
-`cmd/` holds the four entry points and `internal/app` the shared code. The Inno script does not implement registration itself: it runs `zinc-register.exe` after copying the files and `zinc-unregister.exe` before removing them, so the CLI stays the single source of truth. The two main executables differ only in subsystem: `zinc.exe` is a console program so you can watch it work, `zincw.exe` uses the GUI subsystem so scheduled tasks do not flash a console window (or steal focus). There are no third-party dependencies; `go.mod` only declares the Go version.
+`cmd/` holds the four entry points and `internal/app` the shared code. The Inno script does not implement registration itself: it runs `tools\zinc-register.exe` after copying the files and `tools\zinc-unregister.exe` before removing them, so the CLI stays the single source of truth. The two main executables differ only in subsystem: `zinc.exe` is a console program so you can watch it work, `zincw.exe` uses the GUI subsystem so scheduled tasks do not flash a console window (or steal focus). There are no third-party dependencies; `go.mod` only declares the Go version.
 
 ## Contributing
 
