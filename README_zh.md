@@ -482,6 +482,8 @@ go build -o zinc-unregister.exe ./cmd/uninstall
 
 `cmd/` 是四个入口，`internal/app` 是共用代码。Inno 脚本不自己实现注册：装完文件后调 `tools\zinc-register.exe`，卸载前调 `tools\zinc-unregister.exe`，所以注册逻辑只有一份。两个主程序只差子系统：`zinc.exe` 是控制台程序，手动跑能看输出；`zincw.exe` 是 GUI 子系统，计划任务执行时不闪窗口、不抢焦点。项目没有第三方依赖，`go.mod` 只声明了 Go 版本。
 
+`zinc.ico` 是脚本生成的，不是手绘：改脚本顶部的颜色常量后跑 `python tools\make-icon.py`（需要 Pillow）。它按十个尺寸分别绘制 `Zn` 再自己拼 ICO，所以 16px 那一帧不是从 256px 缩下来的。
+
 ## 参与贡献
 
 欢迎提 issue 和 PR。请保持改动聚焦，提交前跑一下 `gofmt`、`go vet`，并把四个 exe 都编译一遍。细节见 [CONTRIBUTING.md](CONTRIBUTING.md)。

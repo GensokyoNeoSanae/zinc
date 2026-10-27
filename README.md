@@ -482,6 +482,8 @@ go build -o zinc-unregister.exe ./cmd/uninstall
 
 `cmd/` holds the four entry points and `internal/app` the shared code. The Inno script does not implement registration itself: it runs `tools\zinc-register.exe` after copying the files and `tools\zinc-unregister.exe` before removing them, so the CLI stays the single source of truth. The two main executables differ only in subsystem: `zinc.exe` is a console program so you can watch it work, `zincw.exe` uses the GUI subsystem so scheduled tasks do not flash a console window (or steal focus). There are no third-party dependencies; `go.mod` only declares the Go version.
 
+`zinc.ico` is generated, not hand-drawn: run `python tools\make-icon.py` (needs Pillow) after changing the colours at the top of that script. It renders the `Zn` mark separately at ten sizes and assembles the ICO itself, so the 16px frame is not a downscaled 256px one.
+
 ## Contributing
 
 Issues and pull requests are welcome. Please keep changes focused, run `gofmt` and `go vet`, and build all four executables before opening a PR. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
