@@ -427,6 +427,7 @@ zinc answers "what did this folder look like at each backup", not "make this fol
 
 - **Deletions do not propagate.** A removed source file is simply not packed again: no deletion pack is produced, its index entry stays where it is, and a restore still brings the old file back. Append-only semantics. Planned for 0.2.0: each batch will also record the files that disappeared since the previous run, and `restore` will delete them between packs so the restored tree matches the last backup. The packs themselves will not be rewritten, so a manual `7z x` still yields every file ever backed up.
 - **Moves and renames re-pack.** The index tracks relative paths, so a new name or directory is one delete plus one add, and the content is compressed again in full. Renaming a tree of attachments can therefore cost a full re-upload of that tree.
+- **Backups only grow.** Nothing in zinc shrinks a repository: packs are never rewritten, so deleting a source folder frees no space in the packs that already contain it. To actually reclaim it, start a new output directory, back up again, then delete the old one.
 - **No import from older volume layouts.** `vol-*.7z.001` archives are not read. Start a fresh repo, or keep the old tree as an archive.
 - **Scheduling needs a real terminal.** `schtasks` cannot run in restricted environments such as sandboxes.
 - **Plain-text password in tasks.** Unavoidable for unattended runs; the threat model is content scanning, not a targeted attacker.
