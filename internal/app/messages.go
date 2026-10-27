@@ -240,7 +240,9 @@ type Messages struct {
 	DelRecordBadPath     string
 	DelRecordBadHeader   string
 	DelRecordNoSum       string
-	DelRecordCorrupt     string
+	DelRecordAllBad      string
+	DelRecordEdited      string
+	DelLineSkipped       string
 	DelSkipped           string
 	DelRecordReadFailed  string
 	DelRecordWriteFailed string
@@ -558,7 +560,9 @@ var zhMessages = &Messages{
 	DelRecordBadPath:     "删除记录里有非法路径 %q（记录 %s）",
 	DelRecordBadHeader:   "删除记录 %s 的表头不对（应为 %q）",
 	DelRecordNoSum:       "删除记录 %s 缺少校验和行（# sha256 …）",
-	DelRecordCorrupt:     "删除记录 %s 的校验和对不上（记录 %s ≠ 实际 %s）：文件被改动或损坏",
+	DelRecordAllBad:      "删除记录 %s 的每一行都不可用（路径或行校验被改坏）",
+	DelRecordEdited:      "[警告] 删除记录 %s 与写入时的哈希不一致（多半被手工加删过行）；每一行都自洽，按现有内容继续\n",
+	DelLineSkipped:       "[警告] 删除记录 %s 有一行不可用，已跳过: %s\n",
 	DelSkipped:           "[警告] 删除记录不可用，按 --no-delete 忽略、只恢复文件: %v\n",
 	DelRecordReadFailed:  "读取删除记录 %s 失败: %v",
 	DelRecordWriteFailed: "写入删除记录失败: %w",
@@ -871,7 +875,9 @@ Notes:
 	DelRecordBadPath:     "unsafe path %q in deletion record %s",
 	DelRecordBadHeader:   "deletion record %s has a bad header (expected %q)",
 	DelRecordNoSum:       "deletion record %s has no checksum line (# sha256 ...)",
-	DelRecordCorrupt:     "deletion record %s failed its checksum (recorded %s, actual %s): the file was modified or damaged",
+	DelRecordAllBad:      "every line of deletion record %s is unusable (path or line checksum damaged)",
+	DelRecordEdited:      "[warn] deletion record %s no longer matches its recorded hash (probably edited by hand); every line checks out, using the current content\n",
+	DelLineSkipped:       "[warn] deletion record %s has an unusable line, skipped: %s\n",
 	DelSkipped:           "[warn] deletion records unusable, ignoring them because of --no-delete: %v\n",
 	DelRecordReadFailed:  "failed to read deletion record %s: %v",
 	DelRecordWriteFailed: "failed to write deletion record: %w",

@@ -3,6 +3,7 @@ package app
 import (
 	"crypto/sha256"
 	"fmt"
+	"hash/crc32"
 	"os"
 	"path"
 	"path/filepath"
@@ -22,15 +23,19 @@ import (
 // 所以它在这个批次的所有包解压完之后执行。包本身永不改写，
 // 手工按名字顺序 7z x 仍然能拿到所有曾经备份过的文件。
 //
-// 记录是纯文本，第二行是路径清单自己的 SHA-256，用来挡位翻转和手改：
+// 记录是纯文本，每行是「路径 + 制表符 + 该路径的 CRC-32」，第二行是整份清单的 SHA-256：
 //
-//	# zinc-deleted 1
+//	# zinc-deleted 2
 //	# sha256 8f14e45fceea167a5a36dedd4bea2543…
-//	notes/old-draft.md
-//	attachments/2026/screenshot.png
+//	notes/old-draft.md	3f2a1b9c
+//	attachments/2026/screenshot.png	8d41e0a7
+//
+// 两层校验分工不同：行内 CRC 回答“这一行还是原来那条路径吗”，
+// 整份 SHA-256 回答“行数、顺序有没有变”（删掉一整行，行校验是看不出来的）。
+// 于是单个字符被改坏只丢那一行，不会让整份记录作废。
 
 const (
-	delMagic     = "# zinc-deleted 1"
+	delMagic     = "# zinc-deleted 2"
 	delSumPrefix = "# sha256 "
 	delExt       = ".rm"
 )
@@ -41,12 +46,18 @@ func isDelName(name string) bool { return delNameRe.MatchString(name) }
 
 func delPath(output, name string) string { return filepath.Join(output, name) }
 
-// delChecksum 算路径清单的哈希：一行一个，含行尾换行，顺序就是文件里的顺序。
-// 不含表头，所以换行符从 LF 变成 CRLF 不影响校验。
-func delChecksum(rels []string) string {
+// delLine 拼一行：路径、制表符、该路径的 CRC-32。
+// 路径里本来就不允许出现制表符（索引也这么要求），所以制表符做分隔符是安全的。
+func delLine(rel string) string {
+	return fmt.Sprintf("%s\t%08x", rel, crc32.ChecksumIEEE([]byte(rel)))
+}
+
+// delSum 算整份清单的哈希：按行拼、含行尾换行。
+// 不含表头，所以换行符从 LF 变成 CRLF 不影响它。
+func delSum(lines []string) string {
 	h := sha256.New()
-	for _, rel := range rels {
-		h.Write([]byte(rel))
+	for _, line := range lines {
+		h.Write([]byte(line))
 		h.Write([]byte("\n"))
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))
@@ -114,14 +125,19 @@ func writeDeletions(output, name string, rels []string) error {
 	}
 	sort.Strings(clean)
 
+	lines := make([]string, 0, len(clean))
+	for _, rel := range clean {
+		lines = append(lines, delLine(rel))
+	}
+
 	var b strings.Builder
 	b.WriteString(delMagic)
 	b.WriteString("\n")
 	b.WriteString(delSumPrefix)
-	b.WriteString(delChecksum(clean))
+	b.WriteString(delSum(lines))
 	b.WriteString("\n")
-	for _, rel := range clean {
-		b.WriteString(rel)
+	for _, line := range lines {
+		b.WriteString(line)
 		b.WriteString("\n")
 	}
 
@@ -137,42 +153,87 @@ func writeDeletions(output, name string, rels []string) error {
 	return nil
 }
 
-// readDeletions 读一份删除记录。表头不对、校验和对不上、出现非法路径都直接报错：
-// 恢复时宁可停下，也不要照着一条看不懂的记录去删文件。
-func readDeletions(output, name string) ([]string, error) {
-	b, err := os.ReadFile(delPath(output, name))
-	if err != nil {
-		return nil, fmt.Errorf(M.DelRecordReadFailed, name, err)
-	}
-	lines := strings.Split(string(b), "\n")
-	if len(lines) == 0 || strings.TrimRight(lines[0], "\r") != delMagic {
-		return nil, fmt.Errorf(M.DelRecordBadHeader, name, delMagic)
-	}
-	if len(lines) < 2 || !strings.HasPrefix(lines[1], delSumPrefix) {
-		return nil, fmt.Errorf(M.DelRecordNoSum, name)
-	}
-	want := strings.TrimSpace(strings.TrimPrefix(lines[1], delSumPrefix))
-
-	var rels []string
-	for _, line := range lines[2:] {
-		line = strings.TrimRight(line, "\r")
-		if line == "" {
-			continue
-		}
-		s, serr := safeRel(line)
-		if serr != nil {
-			return nil, fmt.Errorf(M.DelRecordBadPath, line, name)
-		}
-		rels = append(rels, s)
-	}
-	if got := delChecksum(rels); got != want {
-		return nil, fmt.Errorf(M.DelRecordCorrupt, name, shortHash(want), shortHash(got))
-	}
-	return rels, nil
+// delRecord 是一份删除记录的解析结果。
+// 坏行单独挑出来、剩下的照用：少删一条只是恢复时多出一个文件，
+// 比整份记录作废、整个仓库恢复不了要好得多。
+type delRecord struct {
+	Paths   []string
+	Damaged []string // 无法使用的原始行（路径或校验被改坏）
+	Edited  bool     // 整份哈希对不上，但每一行自身都自洽（多半被手工加删过行）
 }
 
-// loadDelRecords 一次读完所有删除记录。恢复前先把它们全部校验完，
-// 这样一条坏记录不会等到删了一半才发现。
+// splitDelLine 拆一行「路径 + 制表符 + CRC-32」，并对路径做安全校验。
+// 任何一步不对都返回 false：这一行就当没写过。
+func splitDelLine(line string) (string, bool) {
+	rel, sum, ok := strings.Cut(line, "\t")
+	if !ok {
+		return "", false
+	}
+	rel = strings.TrimSpace(rel)
+	sum = strings.ToLower(strings.TrimSpace(sum))
+	if rel == "" || sum == "" {
+		return "", false
+	}
+	s, serr := safeRel(rel)
+	if serr != nil {
+		return "", false
+	}
+	if fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(s))) != sum {
+		return "", false
+	}
+	return s, true
+}
+
+// readDeletions 读一份删除记录。
+// 表头、校验和行缺失属于结构问题（看不懂这是什么文件），直接报错；
+// 单行坏掉只记进 Damaged，由调用方决定怎么提示。
+func readDeletions(output, name string) (delRecord, error) {
+	var rec delRecord
+	b, err := os.ReadFile(delPath(output, name))
+	if err != nil {
+		return rec, fmt.Errorf(M.DelRecordReadFailed, name, err)
+	}
+	// 记事本保存会加 BOM、把换行变成 CRLF：两种都照收
+	lines := strings.Split(strings.TrimPrefix(string(b), "\ufeff"), "\n")
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], "\r")
+	}
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != delMagic {
+		return rec, fmt.Errorf(M.DelRecordBadHeader, name, delMagic)
+	}
+	if len(lines) < 2 || !strings.HasPrefix(strings.TrimSpace(lines[1]), delSumPrefix) {
+		return rec, fmt.Errorf(M.DelRecordNoSum, name)
+	}
+	want := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(lines[1]), delSumPrefix))
+
+	var body []string
+	for _, line := range lines[2:] {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		rel, ok := splitDelLine(line)
+		if !ok {
+			rec.Damaged = append(rec.Damaged, line)
+			continue
+		}
+		rec.Paths = append(rec.Paths, rel)
+		body = append(body, line)
+	}
+
+	switch {
+	case delSum(body) == want:
+	case len(rec.Damaged) > 0:
+		// 有坏行时整份哈希必然对不上，不用再报警一次
+	default:
+		rec.Edited = true
+	}
+	if len(rec.Paths) == 0 && len(rec.Damaged) > 0 {
+		return rec, fmt.Errorf(M.DelRecordAllBad, name)
+	}
+	return rec, nil
+}
+
+// loadDelRecords 一次读完所有删除记录，坏行与改动各打印一条提示。
 func loadDelRecords(output string) (map[string][]string, error) {
 	names, err := listDelFiles(output)
 	if err != nil {
@@ -180,11 +241,17 @@ func loadDelRecords(output string) (map[string][]string, error) {
 	}
 	out := make(map[string][]string, len(names))
 	for _, n := range names {
-		rels, rerr := readDeletions(output, n)
+		rec, rerr := readDeletions(output, n)
 		if rerr != nil {
 			return nil, rerr
 		}
-		out[n] = rels
+		for _, bad := range rec.Damaged {
+			fmt.Printf(M.DelLineSkipped, n, bad)
+		}
+		if rec.Edited {
+			fmt.Printf(M.DelRecordEdited, n)
+		}
+		out[n] = rec.Paths
 	}
 	return out, nil
 }

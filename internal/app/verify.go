@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -102,7 +103,7 @@ func runVerify(name string, cfg *Config, samplePct int) error {
 	logf("verify %s: ok=%d bad=%d missing=%d rm_ok=%d rm_bad=%d rm_missing=%d",
 		name, ok, bad, missing, rmOK, rmBad, rmMissing)
 	if bad > 0 || missing > 0 || rmBad > 0 || rmMissing > 0 {
-		return fmt.Errorf(M.VerifyFailedMsg, name)
+		return errors.New(M.VerifyFailedMsg)
 	}
 	return nil
 }

@@ -63,11 +63,12 @@ func TestDeletionRecordRoundTrip(t *testing.T) {
 	if err := writeDeletions(out, tStem1+delExt, rels); err != nil {
 		t.Fatalf("writeDeletions: %v", err)
 	}
-	got, err := readDeletions(out, tStem1+delExt)
+	rec, err := readDeletions(out, tStem1+delExt)
 	if err != nil {
 		t.Fatalf("readDeletions: %v", err)
 	}
 	want := []string{"a/y.md", "a/z.md", "b.txt"}
+	got := rec.Paths
 	if len(got) != len(want) {
 		t.Fatalf("got %d paths, want %d: %v", len(got), len(want), got)
 	}
@@ -80,13 +81,11 @@ func TestDeletionRecordRoundTrip(t *testing.T) {
 
 // recText 拼一份格式完整的删除记录，用来构造坏样本
 func recText(paths ...string) string {
-	var b strings.Builder
-	b.WriteString(delMagic + "\n")
-	b.WriteString(delSumPrefix + delChecksum(paths) + "\n")
-	for _, p := range paths {
-		b.WriteString(p + "\n")
+	lines := make([]string, len(paths))
+	for i, p := range paths {
+		lines[i] = delLine(p)
 	}
-	return b.String()
+	return delMagic + "\n" + delSumPrefix + delSum(lines) + "\n" + strings.Join(lines, "\n") + "\n"
 }
 
 func TestDeletionRecordRejectsBadHeaderAndPaths(t *testing.T) {
@@ -100,17 +99,17 @@ func TestDeletionRecordRejectsBadHeaderAndPaths(t *testing.T) {
 		t.Error("missing header should be rejected")
 	}
 
-	// 有表头、有校验和，但路径越界：校验和是对的，就该由 safeRel 拦下来
+	// 整份都是越界路径：每行都被 safeRel 拦下，等于一行都用不了
 	body := recText("../escape.txt")
 	if err := os.WriteFile(delPath(out, tStem2+delExt), []byte(body), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := readDeletions(out, tStem2+delExt); err == nil {
-		t.Error("path traversal should be rejected")
+		t.Error("a record where every line is unusable should be rejected")
 	}
 }
 
-func TestDeletionRecordChecksum(t *testing.T) {
+func TestDeletionRecordDamage(t *testing.T) {
 	out := t.TempDir()
 	good := []string{"a/one.md", "b/two.md"}
 
@@ -118,16 +117,19 @@ func TestDeletionRecordChecksum(t *testing.T) {
 	if err := writeDeletions(out, tStem1+delExt, good); err != nil {
 		t.Fatalf("writeDeletions: %v", err)
 	}
-	got, err := readDeletions(out, tStem1+delExt)
+	rec, err := readDeletions(out, tStem1+delExt)
 	if err != nil {
 		t.Fatalf("readDeletions: %v", err)
 	}
-	if len(got) != 2 || got[0] != good[0] || got[1] != good[1] {
-		t.Fatalf("round trip mismatch: %v", got)
+	if len(rec.Paths) != 2 || rec.Paths[0] != good[0] || rec.Paths[1] != good[1] {
+		t.Fatalf("round trip mismatch: %v", rec.Paths)
+	}
+	if len(rec.Damaged) != 0 || rec.Edited {
+		t.Fatalf("clean record reported as damaged: %+v", rec)
 	}
 
-	// 少一行校验和
-	noSum := delMagic + "\na/one.md\n"
+	// 少一行校验和 = 结构坏了，看不懂这是什么文件
+	noSum := delMagic + "\n" + delLine("a/one.md") + "\n"
 	if err := os.WriteFile(delPath(out, tStem2+delExt), []byte(noSum), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -135,22 +137,50 @@ func TestDeletionRecordChecksum(t *testing.T) {
 		t.Error("record without a checksum line should be rejected")
 	}
 
-	// 偷换一条路径、但不改校验和：必须报错，不能当没事
-	tampered := strings.Replace(recText(good...), "b/two.md", "b/three.md", 1)
-	if err := os.WriteFile(delPath(out, "20260101_000000_000"+delExt), []byte(tampered), 0644); err != nil {
+	// 一个字符被改坏（行 CRC 对不上）：只丢那一行，另一行照用
+	flip := strings.Replace(recText(good...), "b/two.md", "b/three.md", 1)
+	if err := os.WriteFile(delPath(out, "20260101_000000_000"+delExt), []byte(flip), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readDeletions(out, "20260101_000000_000"+delExt); err == nil {
-		t.Error("tampered record should fail its checksum")
+	rec, err = readDeletions(out, "20260101_000000_000"+delExt)
+	if err != nil {
+		t.Fatalf("a single damaged line must not kill the record: %v", err)
+	}
+	if len(rec.Damaged) != 1 || len(rec.Paths) != 1 || rec.Paths[0] != "a/one.md" {
+		t.Fatalf("expected one damaged line + one usable path, got %+v", rec)
+	}
+	if rec.Edited {
+		t.Error("a record with damaged lines must not also be reported as edited")
 	}
 
-	// CRLF 只是换行风格，校验和不受影响
-	crlf := strings.ReplaceAll(recText(good...), "\n", "\r\n")
-	if err := os.WriteFile(delPath(out, "20260102_000000_000"+delExt), []byte(crlf), 0644); err != nil {
+	// 整行被删掉（行校验看不出来，靠整份哈希）：仍然可用，只是标记为被改过
+	lines := strings.Split(recText(good...), "\n")
+	removed := strings.Join(append(lines[:3:3], lines[4:]...), "\n")
+	if err := os.WriteFile(delPath(out, "20260102_000000_000"+delExt), []byte(removed), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readDeletions(out, "20260102_000000_000"+delExt); err != nil {
-		t.Errorf("CRLF record should still validate: %v", err)
+	rec, err = readDeletions(out, "20260102_000000_000"+delExt)
+	if err != nil {
+		t.Fatalf("readDeletions: %v", err)
+	}
+	if !rec.Edited {
+		t.Error("a removed line should be reported as an edited record")
+	}
+	if len(rec.Paths) != 1 || rec.Paths[0] != "a/one.md" {
+		t.Fatalf("surviving line should still be used, got %v", rec.Paths)
+	}
+
+	// 记事本：BOM + CRLF 都照收
+	crlf := "\ufeff" + strings.ReplaceAll(recText(good...), "\n", "\r\n")
+	if err := os.WriteFile(delPath(out, "20260103_000000_000"+delExt), []byte(crlf), 0644); err != nil {
+		t.Fatal(err)
+	}
+	rec, err = readDeletions(out, "20260103_000000_000"+delExt)
+	if err != nil {
+		t.Fatalf("BOM+CRLF record should still validate: %v", err)
+	}
+	if len(rec.Paths) != 2 || len(rec.Damaged) != 0 || rec.Edited {
+		t.Fatalf("BOM+CRLF record parsed wrong: %+v", rec)
 	}
 }
 

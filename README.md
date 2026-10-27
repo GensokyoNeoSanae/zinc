@@ -112,7 +112,7 @@ zinc reindex pictures --yes   # overwrite an existing index (the previous file i
 
 ### How are deletions recorded?
 
-A pack only ever adds files, so "this one is gone" cannot live inside a pack. It goes into a deletion record: a plain-text sidecar next to the packs, one relative path per line, named after the batch that noticed the disappearance.
+A pack only ever adds files, so "this one is gone" cannot live inside a pack. It goes into a deletion record: a plain-text sidecar next to the packs, one relative path per line (followed by a CRC-32 column), named after the batch that noticed the disappearance.
 
 ```
 <output>\
@@ -122,19 +122,20 @@ A pack only ever adds files, so "this one is gone" cannot live inside a pack. It
 ```
 
 ```
-# zinc-deleted 1
-# sha256 8f14e45fceea167a5a36dedd4bea2543…
-notes/old-draft.md
-attachments/2026/screenshot.png
+# zinc-deleted 2
+# sha256 86314d871a3443ad7fe9af59b2b9a71ae82d48f491db9e15479b8c4124bf3281
+notes/old-draft.md	c1ebf7ba
+attachments/2026/screenshot.png	864b8d6a
 ```
 
 - **Order comes from the name.** The record is named after the last pack of its batch, so it sorts right behind it. `restore` runs the packs and the records off the same timeline, which is why a file that is deleted and later re-added comes back in the right version.
-- **Both kinds of file carry a hash.** The second line is the SHA-256 of the path list itself, so a flipped bit or a hand edit is caught when the record is read; `manifest.json` records the whole file's hash as well, and `zinc verify` recomputes both. A record that fails either check stops the restore instead of deleting the wrong thing.
-- **A damaged record does not lock the repository.** `zinc restore --no-delete` skips the records (with a warning) and restores the files anyway — and the packs alone are always readable by hand.
+- **Two layers of checksums, so damage stays local.** Each line ends with the CRC-32 of its path; the second line is the SHA-256 of the whole list, which is what notices a line being added or removed. A flipped character turns exactly one line unusable — you lose one deletion, which shows up as one extra file, never as the wrong file being deleted.
+- **A damaged record does not lock the repository.** A bad line is skipped with a warning and the rest still applies; a hand-edited record (lines added or removed, every remaining line still self-consistent) is used as it stands with a warning. Only a broken header or a missing checksum line stops the restore, because then the file is not a deletion record any more — `zinc restore --no-delete` still gets your files back in any case.
+- **Notepad-proof.** A UTF-8 BOM, CRLF line endings, blank lines and stray spaces around a path are all accepted. `zinc verify` compares bytes, so an edited record shows up there as changed — that is the alarm, not a failure of the restore path.
 - **Only files that really went away.** Files matching an `exclude` pattern are never recorded as deleted, and neither is anything under a directory the scan could not read — a permissions error must not turn into a restore that deletes real files.
 - **A missing source is not a mass deletion.** If `--source` does not exist, the backup stops with "source does not exist" instead of recording thousands of deletions. An empty but present folder, however, is read literally: everything in it is gone, and that is recorded.
-- **Checked before anything is touched.** Restore validates every path in every record first: absolute paths, drive letters, `..` segments and NTFS streams abort the run before a single file is extracted.
-- **The past is never rewritten.** Old packs keep every file they ever held, so a manual `7z x` still restores everything. If you want a manual restore to match the last backup exactly, delete the paths listed in the `.rm` files after extracting the last pack.
+- **Checked before anything is touched.** Restore validates every path in every record before extracting the first pack: absolute paths, drive letters, `..` segments and NTFS streams make that line unusable (it is skipped and reported), and a structurally broken record stops the restore before anything is written.
+- **The past is never rewritten.** Old packs keep every file they ever held, so a manual `7z x` still restores everything. If you want a manual restore to match the last backup exactly, delete the paths listed in the `.rm` files (first tab-separated field) after extracting the last pack.
 
 ### Why can't I restore "as of a date"?
 
