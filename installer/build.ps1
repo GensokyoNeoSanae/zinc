@@ -1,4 +1,4 @@
-﻿# 用 Inno Setup 6 编译安装包。
+# 用 Inno Setup 6 编译安装包。
 # 需要 ISCC.exe：可以装在工作区（_tools\InnoSetup6）或默认安装位置，也可以用 -Iscc 指定。
 param(
     [string]$Version = '0.1.0',
@@ -9,6 +9,14 @@ param(
 $ErrorActionPreference = 'Stop'
 if ($Version.StartsWith('v') -or $Version.StartsWith('V')) { $Version = $Version.Substring(1) }
 $root = Split-Path -Parent $PSScriptRoot
+
+# VersionInfoVersion 只吃 1-4 段纯数字：0.0.0-dev → 0.0.0.0，v0.1.1 → 0.1.1.0。
+# 展示版本（AppVersion）可以是任意字符串，文件版本必须干净，否则 ISCC 直接报 invalid。
+$numeric = '0.0.0.0'
+if ($Version -match '^(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?') {
+    $build = if ($Matches[4]) { $Matches[4] } else { '0' }
+    $numeric = "$($Matches[1]).$($Matches[2]).$($Matches[3]).$build"
+}
 
 if (-not $Iscc) {
     $candidates = @(
@@ -40,7 +48,7 @@ if (-not $Iscc -or -not (Test-Path $Iscc)) {
 & (Join-Path $root 'build.ps1') -Go $Go
 
 # 2. 编译安装包（输出到 dist\zinc-<版本>-setup.exe）
-& $Iscc "/DAppVersion=$Version" (Join-Path $PSScriptRoot 'zinc.iss')
+& $Iscc "/DAppVersion=$Version" "/DAppVersionNumeric=$numeric" (Join-Path $PSScriptRoot 'zinc.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compile failed' }
 
 # 清掉可能带上的 Internet 标记，避免双击时多一次 SmartScreen

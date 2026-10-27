@@ -1,9 +1,16 @@
 ; zinc 安装包（Inno Setup 6）
-; 编译：ISCC.exe /DAppVersion=0.1.0 installer\zinc.iss
+; 编译：ISCC.exe /DAppVersion=0.1.0 /DAppVersionNumeric=0.1.0.0 installer\zinc.iss
 ; 第一页是语言选择：英文默认，第二项简体中文。
 
 #ifndef AppVersion
   #define AppVersion "0.1.0"
+#endif
+
+; VersionInfoVersion 只接受 1-4 段纯数字。"0.0.0-dev" 这类展示版本直接塞进去，
+; ISCC 会报 "Value of [Setup] section directive VersionInfoVersion is invalid"，
+; 所以展示版本（AppVersion）和文件版本（AppVersionNumeric）分开传。
+#ifndef AppVersionNumeric
+  #define AppVersionNumeric "0.1.0.0"
 #endif
 
 #define AppName "zinc"
@@ -19,7 +26,7 @@ AppPublisher={#AppPublisher}
 AppPublisherURL={#AppURL}
 AppSupportURL={#AppURL}
 AppUpdatesURL={#AppURL}/releases
-VersionInfoVersion={#AppVersion}.0
+VersionInfoVersion={#AppVersionNumeric}
 VersionInfoCompany={#AppPublisher}
 VersionInfoDescription={#AppName} setup
 DefaultDirName={localappdata}\Programs\zinc
