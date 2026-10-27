@@ -501,8 +501,8 @@ var zhMessages = &Messages{
 	InstallHeader:    "zinc 安装\n程序目录: %s\n\n",
 	Install7zipOK:    "[ok] 7-Zip: %s\n",
 	PromptSevenZip:   "没有找到 7-Zip。请先安装（https://www.7-zip.org/），或输入 7z.exe / 7za.exe 的完整路径（留空退出）: ",
-	SevenZipMissing:  "[失败] 没有可用的 7-Zip。zinc 依赖 7z.exe 或 7za.exe；装好后重跑 zinc-register.exe，或用 --7zip <路径> 指定。",
-	SevenZipNotFound: "[失败] 7-Zip 路径不可用: %s",
+	SevenZipMissing:  "没有可用的 7-Zip。zinc 依赖 7z.exe 或 7za.exe；装好后重跑 zinc-register.exe，或用 --7zip <路径> 指定。",
+	SevenZipNotFound: "7-Zip 路径不可用: %s",
 	InstallDone:      "\n完成。新开一个终端就能直接敲 zinc；接下来设置备份根目录：\n  zinc root D:\\Backup\\zinc\n",
 	PressEnter:       "\n按 Enter 关闭窗口……",
 
@@ -825,8 +825,8 @@ Notes:
 	InstallHeader:    "zinc install\nprogram dir: %s\n\n",
 	Install7zipOK:    "[ok] 7-Zip: %s\n",
 	PromptSevenZip:   "7-Zip was not found. Install it first (https://www.7-zip.org/), or type the full path to 7z.exe / 7za.exe (empty to abort): ",
-	SevenZipMissing:  "[failed] no usable 7-Zip. zinc needs 7z.exe or 7za.exe; install it and re-run zinc-register.exe, or pass --7zip <path>.",
-	SevenZipNotFound: "[failed] not a usable 7-Zip path: %s",
+	SevenZipMissing:  "no usable 7-Zip. zinc needs 7z.exe or 7za.exe; install it and re-run zinc-register.exe, or pass --7zip <path>.",
+	SevenZipNotFound: "not a usable 7-Zip path: %s",
 	InstallDone:      "\nDone. Open a new terminal and type zinc. Next, pick a backup root:\n  zinc root D:\\Backup\\zinc\n",
 	PressEnter:       "\nPress Enter to close this window...",
 
