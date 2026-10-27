@@ -51,7 +51,7 @@ zinc 把一个或多个源目录（称为“仓库”）备份到同一个输出
 - **多仓库**：图片、视频、文档共用同一个同步根，各自有独立的上限、密码和排除名单。
 - **定时任务**：按天、按周或按月创建计划任务，跑完弹 Windows 通知。
 - **中英双语**：内置两套消息，默认跟随 Windows 界面语言。
-- **零第三方依赖**：只用标准库，两个小程序加一个 `7za.exe`。
+- **零第三方依赖**：只用标准库，四个小程序加一个 7-Zip。
 
 ## 工作原理
 
@@ -102,36 +102,36 @@ zinc reindex 图片 --yes    # 覆盖已有索引（旧文件会留一份 .bak�
 
 `reindex` 走的是 `7za l -slt`，不解压任何内容。
 
-### 为什么没有 `--until`
+### 为什么不能“恢复到某一天”？
 
-包是原子的，日期不是。一个包可以横跨好几天，按日期切要么带进太新的文件，要么丢掉本该有的文件。真正需要的东西只有两样：要最新状态就全量恢复，要确认没坏就 `zinc verify`。
+因为包不是按天切的。一个包里可能装着横跨好几天的文件，硬按日期截断，要么把太新的文件带进来，要么把本该有的文件丢掉。想拿最新状态，`zinc restore` 就是；想确认数据没坏，用 `zinc verify`。确实需要按时间点回溯历史，那是 kopia、restic 这类仓库型工具的活。
 
 ## 环境要求
 
 - **Windows 10 / 11，64 位。** zinc 用到计划任务、Windows 通知和 Win32 控制台接口，不在其他平台上构建或运行。
-- **7-Zip。** zinc 调用 `7z.exe` 或 `7za.exe`，装官方 7-Zip 就够。`zinc-register.exe` 会先读 7-Zip 自己的注册表项，再看 `PATH` 和常见安装目录，并把找到的路径写进 `settings.json`。
+- **7-Zip。** zinc 调用 `7z.exe` 或 `7za.exe`，装官方 7-Zip 就够。安装包会找到已有的 7-Zip 并把路径写进 `settings.json`；如果它装在奇怪的位置，装的时候手动指一下，或者之后用 `zinc config set 7zip_path <路径>` 指定。
 - **Go 1.27 或更新**，仅从源码构建时需要。
 
 ## 安装
 
-1. 从 [releases 页面](https://github.com/GensokyoNeoSanae/zinc/releases) 下载 `zinc-<版本>-setup.exe` 并运行。第一页选语言，英文默认，第二项是简体中文。安装包没有代码签名，SmartScreen 可能弹出“Windows 已保护你的电脑”，点 **更多信息 → 仍要运行** 即可。向导不需要管理员权限：默认装到 `%LOCALAPPDATA%\Programs\zinc`，注册通知身份，并把目录加进当前用户的 `PATH`。
+1. 从 [releases 页面](https://github.com/GensokyoNeoSanae/zinc/releases) 下载 `zinc-<版本>-setup.exe` 并运行。第一页选语言，英文默认，第二项是简体中文。安装包没有代码签名，SmartScreen 可能弹出“Windows 已保护你的电脑”，点 **更多信息 → 仍要运行** 即可。向导不需要管理员权限：默认装到 `%LOCALAPPDATA%\Programs\zinc`（目标目录页可以改，安装包不会沿用上一次的选择），注册通知身份，并把目录加进当前用户的 `PATH`。
 2. 确认装了 7-Zip（<https://www.7-zip.org/>）。向导会读 7-Zip 自己的注册表项，再看 `PATH` 和常见安装目录；也可以手动指定别的路径，路径右边的 **自动查找** 会重新搜一遍。没有可用的 7-Zip 不会继续。如果还没装，可以勾选这一页的 **自动安装 7-Zip（需要联网）**，并选择装到哪里（默认 `C:\Program Files\7-Zip`）：向导从官网下载官方安装包并静默安装，过程中会弹一次管理员提权。
 3. 开一个**新**终端，选备份根目录：
 
    ```powershell
-   zinc root D:\Backup\zinc
+   zinc root D:\Backup\zinc        # 示例路径，换成你自己的
    ```
 
    之后新建的仓库默认输出到 `<root>\<仓库名>`。
 
-向导会把 `zinc.exe`、`zincw.exe`、`uninstall.exe` 和文档装进安装目录；`settings.json`、`repos.json` 也在那里，不进备份。
+向导会把 `zinc.exe`、`zincw.exe`、`tools\` 下的两个辅助程序、这份 README 和 `LICENSE` 装进你选的目录；`settings.json`、`repos.json` 也在那里按需生成，不进备份。卸载程序（`unins000.exe`）由安装包生成，卸载请走 **设置 → 应用**，别指望复制某个文件出去。
 
-想要绿色版的话，release 里另有一份 `zinc-<版本>-windows-amd64.zip`：解压到任意目录，跑里面的 `tools\zinc-register.exe` 即可。`zinc init` 是同一套注册的轻量版，留给已经手动配好 `7zip_path` 的人。
+想要绿色版的话，release 里另有一份 `zinc-<版本>-windows-amd64.zip`：解压到任意目录，跑里面的 `tools\zinc-register.exe` 即可。它做的事和安装包一样——注册通知身份、写用户 `PATH`、检查 7-Zip，只是不会出现在“设置 → 应用”里。`zinc init` 是更轻的一档：通知和 `PATH` 照做，但 7-Zip 只提示、不强制。
 
 ## 快速开始
 
 ```powershell
-# 建仓库
+# 建仓库（本文里所有路径都是示例，换成你自己的目录）
 zinc add pictures --source D:\Storage\Pictures
 zinc add videos   --source D:\Storage\Videos
 
@@ -157,7 +157,7 @@ zinc restore pictures --check-list
 
 | 命令 | 说明 |
 |---|---|
-| `zinc init [--force]` | 一次性初始化：注册通知、把程序目录加进用户 `PATH` |
+| `zinc init [--force]` | 重新注册通知、把程序目录写进用户 `PATH`。安装包已经做过，只在通知失效、或 `zinc` 命令找不到时用；绿色版也靠它 |
 | `zinc root [<path>]` | 查看或设置全局输出根目录 |
 | `zinc list` | 列出仓库 |
 | `zinc add <name> --source <path> [--output <path>]` | 新建仓库 |
@@ -196,7 +196,7 @@ zinc restore pictures --check-list
 | `restore_wrap_folder` | `true` | 整仓恢复时在外层包一个 `restore-<仓库>-<时间>` 文件夹 |
 | `max_pack_byte` | `4G` | 单包上限，支持 `4G`、`50M` 或纯字节 |
 | `compression_level` | `0` | 7z 压缩等级 0-9；`0` = 仅存储 |
-| `7zip_path` | `E:\Tools\7zip\7za.exe` | `7za.exe` 的路径 |
+| `7zip_path` | 安装时自动检测 | `7z.exe` / `7za.exe` 的路径；空 = 在 `PATH` 和常见安装目录里找 |
 | `lang` | 空 | `zh` 或 `en`；空 = 跟随 Windows |
 | `lock_timeout_minutes` | `30` | 仓库锁最长等待分钟数 |
 | `exclude` | `[]` | 排除名单，glob；`set` 追加 |
@@ -323,21 +323,21 @@ zinc schedule pictures --monthly 1,15 --at 20:00 --password yourpassword
 
 通知机制：
 
-Windows 通知要求应用有 AUMID（AppUserModelID），未打包的 exe 默认没有。第一次 `--notify` 时 zinc 会创建三样东西：
+Windows 通知要求应用有 AUMID（AppUserModelID），未打包的 exe 默认没有。安装包在安装时就把下面三样建好；绿色版则是在第一次 `--notify` 时建：
 
 1. `%APPDATA%\Microsoft\Windows\Start Menu\Programs\zinc.lnk`，写入 AUMID `zinc.backup`
 2. `HKCU\Software\Classes\AppUserModelId\zinc.backup`（DisplayName = zinc）
 3. 程序目录下的 `.aumid_ok` 标记，之后不再重复
 
-**三样都在，通知才能弹。** 如果通知突然不弹了，把这三样全删掉再触发一次备份，会自动重建：
+**三样都在，通知才能弹。** 如果通知突然不弹了，让 zinc 自己重建一遍，不用到处找文件删：
 
 ```powershell
-Remove-Item "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\zinc.lnk" -ErrorAction SilentlyContinue
-Remove-Item 'C:\Tools\zinc\.aumid_ok' -ErrorAction SilentlyContinue
-Remove-Item 'HKCU:\Software\Classes\AppUserModelId\zinc.backup' -Recurse -ErrorAction SilentlyContinue
+zinc init --force
 ```
 
-图标：放一个 `zinc.ico` 在 `zinc.exe` 旁边。创建快捷方式时才会读取，**换图标要删掉 `zinc.lnk` 再触发**。
+它会一次性重写快捷方式、注册表项和标记文件，不管程序装在哪个目录。
+
+图标：放一个 `zinc.ico` 在 `zinc.exe` 旁边，再跑一次 `zinc init --force` 就会用上。
 
 ### 删除任务时注意 `all` 与 `--all`
 
@@ -375,12 +375,12 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 |---|---|
 | `zinc.exe` | 控制台版，手动跑 |
 | `zincw.exe` | GUI 版，计划任务用 |
-| `tools\zinc-register.exe` | 安装：检查 7-Zip、注册通知、写用户 `PATH` |
-| `tools\zinc-unregister.exe` | 卸载：清计划任务、通知注册、`PATH` 项 |
-| `uninstall.exe` | 卸载向导，安装时生成，“应用和功能”里点卸载就是它 |
+| `tools\zinc-register.exe` | 注册辅助程序，由安装包调用：检查 7-Zip、注册通知、写用户 `PATH` |
+| `tools\zinc-unregister.exe` | 反过来：清计划任务、通知注册、`PATH` 项 |
+| `unins000.exe` | 安装包生成的卸载程序，**设置 → 应用**里点卸载跑的就是它 |
 | `zinc.ico` | 可选，通知快捷方式图标 |
 | `repos.json` | 仓库注册表，首次 `add` 时生成 |
-| `settings.json` | 全局默认值，首次 `config set` 时生成 |
+| `settings.json` | 全局默认值，安装时写入 7-Zip 路径，之后由 `config set` 维护 |
 | `logs\zinc-YYYYMMDD.log` | 按天一个文件，保留最近 10 份 |
 | `.aumid_ok` | 通知注册标记 |
 
@@ -401,11 +401,11 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 
 ### 换机
 
-1. 装 7-Zip（或把 `7z.exe` / `7za.exe` 放到某个位置）
-2. 整个程序目录复制过去（或重新解压一份），跑 `tools\zinc-register.exe`
-3. `zinc root <新根目录>`
-4. 复制 `repos.json`、`settings.json`，或者重新 `add` 和 `config`
-5. 重新 `schedule` 建任务（计划任务属于本机，不跟着走）
+备份数据本身不用操心：包就是普通归档。跟着机器走的只有设置。
+
+1. 在新机器上跑一遍安装包。7-Zip 检查、通知注册、`PATH` 它都会做，不用手工复制程序目录。
+2. 用 `zinc root <根目录>` 指到同一份备份位置；再把旧机器安装目录里的 `repos.json`、`settings.json` 复制到新目录，各仓库的源目录、输出目录和密码就都回来了。手工重新 `add`、`config` 一遍效果相同。
+3. 重新建计划任务（`zinc schedule ...`）：任务计划程序里的条目属于本机，不会跟着走。
 
 ## 卸载
 
@@ -444,11 +444,11 @@ zinc 回答的是“这个目录每次备份时长什么样”，不是“让这
 
 | 现象 | 原因与处理 |
 |---|---|
-| 装完提示 `zinc: command not found` | `PATH` 只对新开的终端生效；或重新跑一次 `zinc init` |
+| 装完敲 `zinc` 提示不是内部或外部命令 | `PATH` 只对新开的终端生效；如果一直不行，跑一次 `zinc init --force` |
 | 安装包报 `unable to create the directory ... is-XXXX.tmp` / `Error 5` | 安装器写不了 `%TEMP%`（被重定向到别的盘，或被安全软件挡住）。在 `cmd` 里先 `set TEMP=%LOCALAPPDATA%\Temp`、`set TMP=%LOCALAPPDATA%\Temp` 再启动安装包，或把这些变量指到可写目录 |
-| 提示 `[warn] 7za not found` | 7-Zip 不在默认路径；`zinc config set 7zip_path <7za.exe 路径>` |
+| 提示 `[警告] 找不到 7z.exe / 7za.exe` | 7-Zip 不在 zinc 会去找的位置；装一个，或者 `zinc config set 7zip_path <7z.exe 路径>` |
 | 备份卡很久然后失败 | 残留的 `<output>\.lock`；手动删掉再跑一次 |
-| 通知突然不弹了 | 删掉快捷方式、`.aumid_ok` 和 AppUserModelId 注册表项，再触发一次备份 |
+| 通知突然不弹了 | 跑一次 `zinc init --force`，它会重建快捷方式、注册表项和标记文件 |
 | `restore --from` 说不认识这个包 | 用 `--check-list` 打印的包名；裸数字按整个仓库的包顺序编址，不是那个列表的编号 |
 | 恢复出来不是想要的版本 | 先 `zinc restore <仓库> --only <路径> --check-list` 看版本分布，再用 `--from` 指定 |
 | 某个文件备份不进去 | 被独占打开（例如 Excel）。它会被跳过且**不写索引**，下次备份自动重试 |
