@@ -180,6 +180,9 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 
 	deletedTotal := 0
 	var deletedPaths []string
+	var failedPacks []string
+	failedStems := make(map[string]bool, 0)
+	pwHinted := false
 	for _, e := range entries {
 		if e.Pack != "" {
 			full := filepath.Join(repo.Output, e.Pack)
@@ -187,12 +190,31 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 			cmd := exec.Command(sz, "x", "-y", ao, "-sccUTF-8", "-p"+password, full, "-o"+target)
 			out, xerr := cmd.CombinedOutput()
 			if xerr != nil {
-				fmt.Print(M.RestorePartial)
-				return fmt.Errorf(M.ExtractFailed, e.Pack, xerr, string(out))
+				// 坏一个包不该把后面的包全废掉：记下来、继续解，最后统一报。
+				failedPacks = append(failedPacks, e.Pack)
+				failedStems[e.Stem] = true
+				fmt.Printf(M.PackFailed, e.Pack)
+				if line := sevenZipErrorLine(string(out)); line != "" {
+					fmt.Printf(M.PackErrLine, line)
+					// 只有“整包都打不开”才像是密码问题；CRC 错误里也带 “Wrong password?”，别误报
+					low := strings.ToLower(line)
+					unopen := strings.Contains(low, "cannot open") || strings.Contains(low, "can not open") || strings.Contains(low, "can't open")
+					if !pwHinted && unopen && strings.Contains(low, "password") {
+						fmt.Print(M.PackPasswordHint)
+						pwHinted = true
+					}
+				}
+				logf("restore %s: pack %s failed: %v", name, e.Pack, xerr)
 			}
 			continue
 		}
 		if noDelete {
+			continue
+		}
+		// 这一批的包没解开，源目录当时是什么状态就不知道了；
+		// 这时候照着记录删文件只会把损失叠上去，跳过不删。
+		if failedStems[e.Stem] {
+			fmt.Printf(M.DelSkippedAfterFail, e.Del)
 			continue
 		}
 		rels := dels[e.Del]
@@ -214,9 +236,39 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 		fmt.Printf(M.RestoreDelSummary, deletedTotal)
 	}
 	fmt.Printf(M.RestoreDone, target)
-	logf("restore %s -> %s (%d packs, %d deleted, overwrite=%v, wrap=%v)",
-		name, target, packCount, deletedTotal, overwrite, wrap)
+	logf("restore %s -> %s (%d packs, %d deleted, %d failed, overwrite=%v, wrap=%v)",
+		name, target, packCount, deletedTotal, len(failedPacks), overwrite, wrap)
+	if len(failedPacks) > 0 {
+		fmt.Printf(M.RestoreIncomplete, len(failedPacks))
+		return fmt.Errorf(M.RestoreFailedPacks, len(failedPacks))
+	}
 	return nil
+}
+
+// sevenZipErrorLine 从 7z 的输出里挑一行能读懂的错误，
+// 别把整屏横幅（版本号、扫描、统计）倒给用户。
+// 7z 打错包时先打一行 "ERROR: <包路径>"，那行只是定位不是原因，跳过。
+func sevenZipErrorLine(out string) string {
+	fallback := ""
+	for _, raw := range strings.Split(out, "\n") {
+		t := strings.TrimSpace(raw)
+		if t == "" || strings.HasPrefix(t, "7-Zip") || strings.HasPrefix(t, "Scanning") ||
+			strings.HasPrefix(t, "Extracting archive") || strings.HasPrefix(t, "Path = ") ||
+			strings.HasSuffix(t, ".7z") {
+			continue
+		}
+		switch {
+		case strings.Contains(t, "CRC Failed"), strings.Contains(t, "Data Error"),
+			strings.Contains(t, "Headers Error"), strings.Contains(t, "Wrong password"),
+			strings.HasPrefix(t, "Cannot open"), strings.HasPrefix(t, "Can not open"),
+			strings.HasPrefix(t, "Can't open"):
+			return t
+		}
+		if fallback == "" && strings.HasPrefix(t, "ERROR:") {
+			fallback = t
+		}
+	}
+	return fallback
 }
 
 // checkRestoreDest 拒绝会把源文件或备份自身覆盖掉的恢复目标。

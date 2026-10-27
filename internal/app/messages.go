@@ -244,6 +244,12 @@ type Messages struct {
 	DelRecordEdited      string
 	DelLineSkipped       string
 	DelSkipped           string
+	DelSkippedAfterFail  string
+	PackFailed           string
+	PackErrLine          string
+	PackPasswordHint     string
+	RestoreIncomplete    string
+	RestoreFailedPacks   string
 	DelRecordReadFailed  string
 	DelRecordWriteFailed string
 	DelRemoveFailed      string
@@ -564,6 +570,12 @@ var zhMessages = &Messages{
 	DelRecordEdited:      "[警告] 删除记录 %s 与写入时的哈希不一致（多半被手工加删过行）；每一行都自洽，按现有内容继续\n",
 	DelLineSkipped:       "[警告] 删除记录 %s 有一行不可用，已跳过: %s\n",
 	DelSkipped:           "[警告] 删除记录不可用，按 --no-delete 忽略、只恢复文件: %v\n",
+	DelSkippedAfterFail:  "[跳过] %s · 它所属批次的包没解开，删除记录一起跳过\n",
+	PackFailed:           "[失败] %s · 这个包跳过，继续解后面的包\n",
+	PackErrLine:          "         %s\n",
+	PackPasswordHint:     "[提示] 如果每个包都这样，多半是密码不对而不是包坏了；确认 --password 或 settings.json 里的 default_password\n",
+	RestoreIncomplete:    "[警告] 有 %d 个包没能解开，恢复结果不完整；报 CRC 错误的文件可能以错误内容留在磁盘上，用 zinc verify 确认\n",
+	RestoreFailedPacks:   "%d 个包解压失败",
 	DelRecordReadFailed:  "读取删除记录 %s 失败: %v",
 	DelRecordWriteFailed: "写入删除记录失败: %w",
 	DelRemoveFailed:      "删除 %s 失败: %v",
@@ -879,6 +891,12 @@ Notes:
 	DelRecordEdited:      "[warn] deletion record %s no longer matches its recorded hash (probably edited by hand); every line checks out, using the current content\n",
 	DelLineSkipped:       "[warn] deletion record %s has an unusable line, skipped: %s\n",
 	DelSkipped:           "[warn] deletion records unusable, ignoring them because of --no-delete: %v\n",
+	DelSkippedAfterFail:  "[skipped] %s · its batch failed to extract, so the deletion record is skipped too\n",
+	PackFailed:           "[failed] %s · skipped, continuing with the following packs\n",
+	PackErrLine:          "         %s\n",
+	PackPasswordHint:     "[hint] if every pack reports this, the password is probably wrong rather than the packs being damaged; check --password or default_password\n",
+	RestoreIncomplete:    "[warn] %d pack(s) could not be extracted; the result is incomplete, and files that failed their CRC may be on disk with wrong content — check with zinc verify\n",
+	RestoreFailedPacks:   "%d pack(s) failed to extract",
 	DelRecordReadFailed:  "failed to read deletion record %s: %v",
 	DelRecordWriteFailed: "failed to write deletion record: %w",
 	DelRemoveFailed:      "failed to remove %s: %v",

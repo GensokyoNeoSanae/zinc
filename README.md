@@ -289,6 +289,8 @@ One rule: all packs are extracted in name (time) ascending order, so the last ba
 
 Overwrite mode prints a warning when it starts. Restore works through the packs strictly in name order, so a renamed or hand-copied pack changes which version wins — keep the names zinc assigned.
 
+A damaged pack does not stop the restore. Every pack is still tried: a failing one is reported with its 7-Zip error and skipped, the deletion record of that batch is skipped with it (nobody knows what the source looked like at that moment), and the remaining packs still come out. The run then exits non-zero and says the result is incomplete. Note that 7-Zip *does* extract a file whose CRC failed — with the wrong bytes — so `zinc verify` is what tells you which pack to fetch again.
+
 ### Restore wrapper folder
 
 By default the restore target gets one extra level, `restore-<repo>-<YYYYMMDD_hhmmss_SSS>` (timestamp = when this restore started), and every file lands inside it instead of being scattered over `--dest` itself:
@@ -491,6 +493,7 @@ zinc answers "what did this folder look like at each backup", and a restore repr
 | Notifications stopped appearing | Run `zinc init --force` to rebuild the shortcut, the registry entry and the marker |
 | `restore --from` rejects the value | Pass a pack filename printed by `--check-list`; a bare number is looked up in the repo's complete pack list, not in that printout |
 | Restore picks the wrong version | Run `zinc restore <repo> --only <path> --check-list` to see which packs hold the file, then use `--from` |
+| `restore` reports `N pack(s) failed to extract` | The packs are damaged (bit rot, a broken upload, a half-synced cloud folder). The rest of the repository was still restored. Run `zinc verify` to see every bad pack, delete them from the output folder and fetch the same names from another copy, or extract what you can by hand |
 | One file fails to back up | It is locked exclusively (an open Excel workbook, for example). It is skipped **without touching the index**, so the next run retries automatically |
 
 ## Building from source
