@@ -29,6 +29,14 @@ jobs:
       - name: Build binaries
         run: .\build.ps1
 
+      - name: Ensure Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            Write-Host 'Inno Setup missing on this runner, installing it'
+            choco install innosetup --no-progress -y
+          }
+
       - name: Build installer
         run: .\installer\build.ps1 -Version 0.0.0-dev
 
@@ -42,7 +50,7 @@ jobs:
             zinc-register.exe
             zinc-unregister.exe
             zinc.ico
-            installer/build/setup.exe
+            dist/*-setup.exe
           if-no-files-found: error
 
       - name: Package release
