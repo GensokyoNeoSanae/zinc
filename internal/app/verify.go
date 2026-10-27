@@ -39,11 +39,27 @@ func runVerify(name string, cfg *Config, samplePct int) error {
 		name string
 		hash string
 	}
+	// 删除记录也要校验：它坏了，恢复时不是少删就是删错
+	rmOK, rmBad, rmMissing := 0, 0, 0
 	var all []packCheck
 	for _, b := range m.Batches {
-		// 删除记录不参与哈希校验，但缺了就意味着恢复时不会删掉那些文件
-		if b.Rm != "" && !fileExists(filepath.Join(repo.Output, b.Rm)) {
-			fmt.Printf(M.VerifyRmMissing, b.Rm)
+		if b.Rm != "" {
+			h, herr := sha256File(filepath.Join(repo.Output, b.Rm))
+			switch {
+			case os.IsNotExist(herr):
+				rmMissing++
+				fmt.Printf(M.VerifyRmMissing, b.Rm)
+			case herr != nil:
+				rmBad++
+				fmt.Printf(M.VerifyRmCorrupt, b.Rm)
+			case b.RmHash == "":
+				rmOK++ // 旧账本没记哈希，只能确认文件还在
+			case h != b.RmHash:
+				rmBad++
+				fmt.Printf(M.VerifyRmCorrupt, b.Rm)
+			default:
+				rmOK++
+			}
 		}
 		for i, f := range b.Files {
 			if i >= len(b.Hashes) {
@@ -79,9 +95,13 @@ func runVerify(name string, cfg *Config, samplePct int) error {
 		ok++
 	}
 
+	if rmOK+rmBad+rmMissing > 0 {
+		fmt.Printf(M.VerifyRmSummary, rmOK, rmBad, rmMissing)
+	}
 	fmt.Printf(M.VerifySummary, name, ok, bad, missing)
-	logf("verify %s: ok=%d bad=%d missing=%d", name, ok, bad, missing)
-	if bad > 0 || missing > 0 {
+	logf("verify %s: ok=%d bad=%d missing=%d rm_ok=%d rm_bad=%d rm_missing=%d",
+		name, ok, bad, missing, rmOK, rmBad, rmMissing)
+	if bad > 0 || missing > 0 || rmBad > 0 || rmMissing > 0 {
 		return fmt.Errorf(M.VerifyFailedMsg, name)
 	}
 	return nil

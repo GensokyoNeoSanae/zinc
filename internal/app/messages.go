@@ -239,10 +239,15 @@ type Messages struct {
 	CheckListDelItem     string
 	DelRecordBadPath     string
 	DelRecordBadHeader   string
+	DelRecordNoSum       string
+	DelRecordCorrupt     string
+	DelSkipped           string
 	DelRecordReadFailed  string
 	DelRecordWriteFailed string
 	DelRemoveFailed      string
 	VerifyRmMissing      string
+	VerifyRmCorrupt      string
+	VerifyRmSummary      string
 
 	// restore
 	FlagOverwrite        string
@@ -427,7 +432,7 @@ var zhMessages = &Messages{
 	MissingFile:     "[缺失] %s\n",
 	CorruptFile:     "[损坏] %s\n",
 	VerifySummary:   "%s: 通过 %d, 损坏 %d, 缺失 %d\n",
-	VerifyFailedMsg: "%s 校验未通过",
+	VerifyFailedMsg: "校验未通过",
 
 	FlagAllSchedule:   "为全部仓库建总任务",
 	FlagDaily:         "每天",
@@ -550,12 +555,17 @@ var zhMessages = &Messages{
 	RestoreDelSummary:    "[完成] 按删除记录移除了 %d 个文件\n",
 	FlagNoDelete:         "恢复时不执行备份之后记录的删除",
 	CheckListDelItem:     "  %2d. %-44s %8d 项删除\n",
-	DelRecordBadPath:     "删除记录里有非法路径 %q（记录 %s），已中止",
-	DelRecordBadHeader:   "删除记录 %s 的表头不对（应为 %q），已中止",
+	DelRecordBadPath:     "删除记录里有非法路径 %q（记录 %s）",
+	DelRecordBadHeader:   "删除记录 %s 的表头不对（应为 %q）",
+	DelRecordNoSum:       "删除记录 %s 缺少校验和行（# sha256 …）",
+	DelRecordCorrupt:     "删除记录 %s 的校验和对不上（记录 %s ≠ 实际 %s）：文件被改动或损坏",
+	DelSkipped:           "[警告] 删除记录不可用，按 --no-delete 忽略、只恢复文件: %v\n",
 	DelRecordReadFailed:  "读取删除记录 %s 失败: %v",
 	DelRecordWriteFailed: "写入删除记录失败: %w",
 	DelRemoveFailed:      "删除 %s 失败: %v",
-	VerifyRmMissing:      "[警告] 删除记录缺失: %s\n",
+	VerifyRmMissing:      "[缺失] 删除记录 %s\n",
+	VerifyRmCorrupt:      "[损坏] 删除记录 %s\n",
+	VerifyRmSummary:      "删除记录: 通过 %d, 损坏 %d, 缺失 %d\n",
 
 	FlagOverwrite:        "恢复时覆盖同名文件",
 	FlagNoOverwrite:      "恢复时不覆盖，同名文件重命名为 _1",
@@ -735,7 +745,7 @@ Notes:
 	MissingFile:     "[missing] %s\n",
 	CorruptFile:     "[corrupt] %s\n",
 	VerifySummary:   "%s: passed %d, corrupt %d, missing %d\n",
-	VerifyFailedMsg: "%s verification failed",
+	VerifyFailedMsg: "verification failed",
 
 	FlagAllSchedule:   "create one task for all repos",
 	FlagDaily:         "daily",
@@ -858,12 +868,17 @@ Notes:
 	RestoreDelSummary:    "[done] %d file(s) removed according to the deletion records\n",
 	FlagNoDelete:         "restore without applying deletions recorded after the backup",
 	CheckListDelItem:     "  %2d. %-44s %8d deletion(s)\n",
-	DelRecordBadPath:     "unsafe path %q in deletion record %s; aborted",
-	DelRecordBadHeader:   "deletion record %s has a bad header (expected %q); aborted",
+	DelRecordBadPath:     "unsafe path %q in deletion record %s",
+	DelRecordBadHeader:   "deletion record %s has a bad header (expected %q)",
+	DelRecordNoSum:       "deletion record %s has no checksum line (# sha256 ...)",
+	DelRecordCorrupt:     "deletion record %s failed its checksum (recorded %s, actual %s): the file was modified or damaged",
+	DelSkipped:           "[warn] deletion records unusable, ignoring them because of --no-delete: %v\n",
 	DelRecordReadFailed:  "failed to read deletion record %s: %v",
 	DelRecordWriteFailed: "failed to write deletion record: %w",
 	DelRemoveFailed:      "failed to remove %s: %v",
-	VerifyRmMissing:      "[warn] deletion record is missing: %s\n",
+	VerifyRmMissing:      "[missing] deletion record %s\n",
+	VerifyRmCorrupt:      "[corrupt] deletion record %s\n",
+	VerifyRmSummary:      "deletion records: %d ok, %d corrupt, %d missing\n",
 
 	FlagOverwrite:        "overwrite files with the same name on restore",
 	FlagNoOverwrite:      "keep both: same-name files are restored as _1",

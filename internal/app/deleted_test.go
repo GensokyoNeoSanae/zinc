@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -77,9 +78,21 @@ func TestDeletionRecordRoundTrip(t *testing.T) {
 	}
 }
 
+// recText 拼一份格式完整的删除记录，用来构造坏样本
+func recText(paths ...string) string {
+	var b strings.Builder
+	b.WriteString(delMagic + "\n")
+	b.WriteString(delSumPrefix + delChecksum(paths) + "\n")
+	for _, p := range paths {
+		b.WriteString(p + "\n")
+	}
+	return b.String()
+}
+
 func TestDeletionRecordRejectsBadHeaderAndPaths(t *testing.T) {
 	out := t.TempDir()
 
+	// 缺表头
 	if err := os.WriteFile(delPath(out, tStem1+delExt), []byte("a.txt\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -87,12 +100,57 @@ func TestDeletionRecordRejectsBadHeaderAndPaths(t *testing.T) {
 		t.Error("missing header should be rejected")
 	}
 
-	body := delMagic + "\n../escape.txt\n"
+	// 有表头、有校验和，但路径越界：校验和是对的，就该由 safeRel 拦下来
+	body := recText("../escape.txt")
 	if err := os.WriteFile(delPath(out, tStem2+delExt), []byte(body), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := readDeletions(out, tStem2+delExt); err == nil {
 		t.Error("path traversal should be rejected")
+	}
+}
+
+func TestDeletionRecordChecksum(t *testing.T) {
+	out := t.TempDir()
+	good := []string{"a/one.md", "b/two.md"}
+
+	// 正常记录：读回来必须一致
+	if err := writeDeletions(out, tStem1+delExt, good); err != nil {
+		t.Fatalf("writeDeletions: %v", err)
+	}
+	got, err := readDeletions(out, tStem1+delExt)
+	if err != nil {
+		t.Fatalf("readDeletions: %v", err)
+	}
+	if len(got) != 2 || got[0] != good[0] || got[1] != good[1] {
+		t.Fatalf("round trip mismatch: %v", got)
+	}
+
+	// 少一行校验和
+	noSum := delMagic + "\na/one.md\n"
+	if err := os.WriteFile(delPath(out, tStem2+delExt), []byte(noSum), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readDeletions(out, tStem2+delExt); err == nil {
+		t.Error("record without a checksum line should be rejected")
+	}
+
+	// 偷换一条路径、但不改校验和：必须报错，不能当没事
+	tampered := strings.Replace(recText(good...), "b/two.md", "b/three.md", 1)
+	if err := os.WriteFile(delPath(out, "20260101_000000_000"+delExt), []byte(tampered), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readDeletions(out, "20260101_000000_000"+delExt); err == nil {
+		t.Error("tampered record should fail its checksum")
+	}
+
+	// CRLF 只是换行风格，校验和不受影响
+	crlf := strings.ReplaceAll(recText(good...), "\n", "\r\n")
+	if err := os.WriteFile(delPath(out, "20260102_000000_000"+delExt), []byte(crlf), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readDeletions(out, "20260102_000000_000"+delExt); err != nil {
+		t.Errorf("CRLF record should still validate: %v", err)
 	}
 }
 

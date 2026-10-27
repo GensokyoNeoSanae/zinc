@@ -85,9 +85,14 @@ func runRestore(name string, cfg *Config, set *Settings, dest, password string, 
 		return err
 	}
 	// 先把所有删除记录读完并校验：坏记录要在动目标目录之前就暴露出来。
-	dels, err := loadDelRecords(repo.Output)
-	if err != nil {
-		return err
+	dels, derr := loadDelRecords(repo.Output)
+	if derr != nil {
+		if !noDelete {
+			return derr
+		}
+		// 用户明确要求不动删除，那记录坏了也不该挡住恢复文件
+		fmt.Printf(M.DelSkipped, derr)
+		dels = map[string][]string{}
 	}
 	delNames := make([]string, 0, len(dels))
 	for n := range dels {

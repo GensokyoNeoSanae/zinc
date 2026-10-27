@@ -123,11 +123,14 @@ A pack only ever adds files, so "this one is gone" cannot live inside a pack. It
 
 ```
 # zinc-deleted 1
+# sha256 8f14e45fceea167a5a36dedd4bea2543…
 notes/old-draft.md
 attachments/2026/screenshot.png
 ```
 
 - **Order comes from the name.** The record is named after the last pack of its batch, so it sorts right behind it. `restore` runs the packs and the records off the same timeline, which is why a file that is deleted and later re-added comes back in the right version.
+- **Both kinds of file carry a hash.** The second line is the SHA-256 of the path list itself, so a flipped bit or a hand edit is caught when the record is read; `manifest.json` records the whole file's hash as well, and `zinc verify` recomputes both. A record that fails either check stops the restore instead of deleting the wrong thing.
+- **A damaged record does not lock the repository.** `zinc restore --no-delete` skips the records (with a warning) and restores the files anyway — and the packs alone are always readable by hand.
 - **Only files that really went away.** Files matching an `exclude` pattern are never recorded as deleted, and neither is anything under a directory the scan could not read — a permissions error must not turn into a restore that deletes real files.
 - **A missing source is not a mass deletion.** If `--source` does not exist, the backup stops with "source does not exist" instead of recording thousands of deletions. An empty but present folder, however, is read literally: everything in it is gone, and that is recorded.
 - **Checked before anything is touched.** Restore validates every path in every record first: absolute paths, drive letters, `..` segments and NTFS streams abort the run before a single file is extracted.
@@ -198,7 +201,7 @@ zinc restore pictures --check-list
 | `zinc backup <name\|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]` | back up |
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <path>] [--from <pack>]` | restore everything or one path |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | rebuild the index from the packs |
-| `zinc verify <name\|--all> [--sample <pct>]` | SHA-256 check of the packs |
+| `zinc verify <name\|--all> [--sample <pct>]` | SHA-256 check of the packs and of the deletion records |
 | `zinc status [<name>]` | show status |
 | `zinc schedule <name\|--all> --daily --at HH:MM` | daily schedule |
 | `zinc schedule <name\|--all> --weekly 1,3 --at HH:MM` | weekly (1 = Monday) |
@@ -399,7 +402,7 @@ Output root (sync this folder to your cloud drive):
 | File | Location | Upload | Purpose |
 |---|---|---|---|
 | `*.7z` | `<output>/` | yes | the data; every pack is a complete archive |
-| `*.rm` | `<output>/` | yes | deletions of that batch; restore needs them to remove files, so upload them with the packs |
+| `*.rm` | `<output>/` | yes | deletions of that batch with their checksum; restore needs them to remove files, so upload them with the packs |
 | `index.tsv` | `<output>/` | yes | incremental detection cache; rebuild with `zinc reindex` if lost |
 | `manifest.json` | `<output>/` | yes | per-batch SHA-256 records for `verify`; must be uploaded, otherwise a new machine cannot verify old packs |
 

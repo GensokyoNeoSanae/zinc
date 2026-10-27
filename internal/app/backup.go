@@ -653,9 +653,18 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 	if len(hashes) > 0 {
 		sum := sha256.Sum256([]byte(strings.Join(hashes, "|")))
 		res.BatchHash = fmt.Sprintf("%x", sum)
-	} else if rmName != "" {
-		// 只有删除的批次没有包，用记录本身的哈希当批次标识
-		if h, herr := sha256File(delPath(repo.Output, rmName)); herr == nil {
+	}
+	rmHash := ""
+	if rmName != "" {
+		h, herr := sha256File(delPath(repo.Output, rmName))
+		if herr != nil {
+			undo()
+			res.Err = herr
+			return res
+		}
+		rmHash = h
+		if len(hashes) == 0 {
+			// 只有删除的批次没有包，用记录本身的哈希当批次标识
 			res.BatchHash = h
 		}
 	}
@@ -665,7 +674,16 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 
 	tag := started.Format("2006-01-02_15-04-05")
 	// manifest 先写：失败就把本批次的包和删除记录清掉，索引不动，整批当作没发生过。
-	if err := writeManifest(repo.Output, name, tag, names, hashes, res.BatchHash, from, to, len(del), rmName); err != nil {
+	if err := writeManifest(repo.Output, name, tag, batchMeta{
+		Packs:   names,
+		Hashes:  hashes,
+		Hash:    res.BatchHash,
+		From:    from,
+		To:      to,
+		Rm:      rmName,
+		RmHash:  rmHash,
+		Deleted: len(del),
+	}); err != nil {
 		undo()
 		res.Err = err
 		return res
@@ -741,6 +759,19 @@ type ManifestBatch struct {
 	To      string   `json:"to,omitempty"`
 	Deleted int      `json:"deleted,omitempty"`
 	Rm      string   `json:"rm,omitempty"`
+	RmHash  string   `json:"rm_hash,omitempty"`
+}
+
+// batchMeta 是写 manifest 时要登记的这批信息
+type batchMeta struct {
+	Packs   []string
+	Hashes  []string
+	Hash    string
+	From    string
+	To      string
+	Rm      string
+	RmHash  string
+	Deleted int
 }
 
 func manifestPath(output string) string {
@@ -750,7 +781,7 @@ func manifestPath(output string) string {
 // writeManifest 追加一个批次到 manifest.json。
 // 先写临时文件再改名；读到损坏的旧 manifest 时把它改名保留并报错，
 // 绝不把损坏内容当成空账本继续追加。
-func writeManifest(output, repo, tag string, packs, hashes []string, batchHash, from, to string, deleted int, rm string) error {
+func writeManifest(output, repo, tag string, batch batchMeta) error {
 	if err := os.MkdirAll(output, 0755); err != nil {
 		return fmt.Errorf(M.ManifestWriteFailed, err)
 	}
@@ -770,13 +801,14 @@ func writeManifest(output, repo, tag string, packs, hashes []string, batchHash, 
 	}
 	m.Batches = append(m.Batches, ManifestBatch{
 		Time:    tag,
-		Hash:    batchHash,
-		Files:   baseNames(packs),
-		Hashes:  hashes,
-		From:    from,
-		To:      to,
-		Deleted: deleted,
-		Rm:      rm,
+		Hash:    batch.Hash,
+		Files:   baseNames(batch.Packs),
+		Hashes:  batch.Hashes,
+		From:    batch.From,
+		To:      batch.To,
+		Deleted: batch.Deleted,
+		Rm:      batch.Rm,
+		RmHash:  batch.RmHash,
 	})
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {

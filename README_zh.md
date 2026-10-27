@@ -123,11 +123,14 @@ zinc reindex 图片 --yes    # 覆盖已有索引（旧文件会留一份 .bak�
 
 ```
 # zinc-deleted 1
+# sha256 8f14e45fceea167a5a36dedd4bea2543…
 notes/旧稿.md
 attachments/2026/截图.png
 ```
 
 - **顺序由文件名决定。** 记录挂在它那一批最后一个包的时间上，所以紧接着那个包排序。`restore` 把包和记录放在同一条时间线上跑，这就是为什么“删掉又加回来”的文件能恢复到正确的那一版。
+- **两种文件都带哈希。** 第二行是路径清单自己的 SHA-256，位翻转或手改在读记录时就会被抓住；`manifest.json` 里另记一份整文件哈希，`zinc verify` 两边都重算。任何一项对不上都直接停下，而不是照着一条可疑记录去删文件。
+- **记录坏了不会把仓库锁死。** `zinc restore --no-delete` 会跳过记录（给一条提示）照样把文件恢复出来；包本身也一直能手工解压。
 - **只记真的没了的文件。** 命中 `exclude` 的不算删除，扫描时读不进去的目录（权限问题）下面的也不算——一次权限报错不该变成恢复时删掉真文件。
 - **源目录整个不在，不等于全删了。** 如果 `--source` 不存在，备份直接报“源目录不存在”停下，而不会记下几千条删除。但如果目录在、只是里面空了，那就照实记：里面的东西确实都没了。
 - **动手之前先校验。** 恢复会先把所有记录里的路径过一遍：绝对路径、盘符、`..` 段、NTFS 数据流，任何一种都直接中止，一个文件都不解压。
@@ -198,7 +201,7 @@ zinc restore pictures --check-list
 | `zinc backup <name\|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]` | 备份 |
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <路径>] [--from <包>]` | 恢复全量或单个路径 |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | 从包重建索引 |
-| `zinc verify <name\|--all> [--sample <pct>]` | 校验包的 SHA-256 |
+| `zinc verify <name\|--all> [--sample <pct>]` | 校验包与删除记录的 SHA-256 |
 | `zinc status [<name>]` | 查看状态 |
 | `zinc schedule <name\|--all> --daily --at HH:MM` | 每天定时 |
 | `zinc schedule <name\|--all> --weekly 1,3 --at HH:MM` | 每周定时（1 = 周一） |
@@ -399,7 +402,7 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 | 文件 | 位置 | 上传网盘 | 用途 |
 |---|---|---|---|
 | `*.7z` | `<output>/` | 是 | 数据本身，每个都是完整归档 |
-| `*.rm` | `<output>/` | 是 | 这一批的删除记录；恢复要靠它删掉文件，必须跟包一起上传 |
+| `*.rm` | `<output>/` | 是 | 这一批的删除记录及其校验和；恢复要靠它删掉文件，必须跟包一起上传 |
 | `index.tsv` | `<output>/` | 是 | 增量检测缓存，丢了用 `zinc reindex` 重建 |
 | `manifest.json` | `<output>/` | 是 | 每批的 SHA-256 记录，`verify` 用；必须随包上传，否则换机后没法校验旧包 |
 

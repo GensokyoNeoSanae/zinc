@@ -1,6 +1,7 @@
 package app
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path"
@@ -21,15 +22,17 @@ import (
 // 所以它在这个批次的所有包解压完之后执行。包本身永不改写，
 // 手工按名字顺序 7z x 仍然能拿到所有曾经备份过的文件。
 //
-// 记录是纯文本，一行一个相对路径（斜杠分隔）：
+// 记录是纯文本，第二行是路径清单自己的 SHA-256，用来挡位翻转和手改：
 //
 //	# zinc-deleted 1
+//	# sha256 8f14e45fceea167a5a36dedd4bea2543…
 //	notes/old-draft.md
 //	attachments/2026/screenshot.png
 
 const (
-	delMagic = "# zinc-deleted 1"
-	delExt   = ".rm"
+	delMagic     = "# zinc-deleted 1"
+	delSumPrefix = "# sha256 "
+	delExt       = ".rm"
 )
 
 var delNameRe = regexp.MustCompile(`^\d{8}_\d{6}_\d{3}(_\d+)?\.rm$`)
@@ -37,6 +40,17 @@ var delNameRe = regexp.MustCompile(`^\d{8}_\d{6}_\d{3}(_\d+)?\.rm$`)
 func isDelName(name string) bool { return delNameRe.MatchString(name) }
 
 func delPath(output, name string) string { return filepath.Join(output, name) }
+
+// delChecksum 算路径清单的哈希：一行一个，含行尾换行，顺序就是文件里的顺序。
+// 不含表头，所以换行符从 LF 变成 CRLF 不影响校验。
+func delChecksum(rels []string) string {
+	h := sha256.New()
+	for _, rel := range rels {
+		h.Write([]byte(rel))
+		h.Write([]byte("\n"))
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
 
 // listDelFiles 列出输出目录里的删除记录（字典序）
 func listDelFiles(output string) ([]string, error) {
@@ -103,6 +117,9 @@ func writeDeletions(output, name string, rels []string) error {
 	var b strings.Builder
 	b.WriteString(delMagic)
 	b.WriteString("\n")
+	b.WriteString(delSumPrefix)
+	b.WriteString(delChecksum(clean))
+	b.WriteString("\n")
 	for _, rel := range clean {
 		b.WriteString(rel)
 		b.WriteString("\n")
@@ -120,7 +137,7 @@ func writeDeletions(output, name string, rels []string) error {
 	return nil
 }
 
-// readDeletions 读一份删除记录。表头不对、出现非法路径都直接报错：
+// readDeletions 读一份删除记录。表头不对、校验和对不上、出现非法路径都直接报错：
 // 恢复时宁可停下，也不要照着一条看不懂的记录去删文件。
 func readDeletions(output, name string) ([]string, error) {
 	b, err := os.ReadFile(delPath(output, name))
@@ -131,8 +148,13 @@ func readDeletions(output, name string) ([]string, error) {
 	if len(lines) == 0 || strings.TrimRight(lines[0], "\r") != delMagic {
 		return nil, fmt.Errorf(M.DelRecordBadHeader, name, delMagic)
 	}
+	if len(lines) < 2 || !strings.HasPrefix(lines[1], delSumPrefix) {
+		return nil, fmt.Errorf(M.DelRecordNoSum, name)
+	}
+	want := strings.TrimSpace(strings.TrimPrefix(lines[1], delSumPrefix))
+
 	var rels []string
-	for _, line := range lines[1:] {
+	for _, line := range lines[2:] {
 		line = strings.TrimRight(line, "\r")
 		if line == "" {
 			continue
@@ -142,6 +164,9 @@ func readDeletions(output, name string) ([]string, error) {
 			return nil, fmt.Errorf(M.DelRecordBadPath, line, name)
 		}
 		rels = append(rels, s)
+	}
+	if got := delChecksum(rels); got != want {
+		return nil, fmt.Errorf(M.DelRecordCorrupt, name, shortHash(want), shortHash(got))
 	}
 	return rels, nil
 }
