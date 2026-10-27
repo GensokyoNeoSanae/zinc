@@ -67,18 +67,24 @@ scan source  →  diff against index  →  plan packs  →  7za a (.part)  →  
 4. **Pack.** Each pack is written as `7za a -t7z -p<password> -mhe=on -mx<N> -scsUTF-8 -sccUTF-8` into a `.part` file. After packing, `7za t` verifies the archive; only then is it renamed to its final name. A failed batch is deleted and the index is left untouched.
 5. **Record.** The index and the SHA-256 manifest are updated (write to temporary file, then rename).
 
-### Pack naming
+### Why is each pack named after a timestamp?
 
 ```
 YYYYMMDD_hhmmss_SSS.7z
 20261025_070012_334.7z
 ```
 
-The name is the moment **that pack started packing**, fixed width at 19 characters, so lexicographic order equals chronological order. Name collisions append `_1`, `_2` (compared numerically when sorting). If the system clock jumps backwards, the name falls back to "latest existing pack + 1 ms" and a warning is printed, so the order stays strictly increasing.
+The name is not decoration: **it is the restore order.** A full restore walks the packs in name order and lets later packs overwrite earlier ones, so the name has to be strictly increasing and must never change afterwards.
+
+That is why it records the moment **the pack started packing**, fixed width at 19 characters so lexicographic order equals chronological order. Collisions append `_1`, `_2` (compared numerically when sorting), and if the system clock jumps backwards the name falls back to "latest existing pack + 1 ms" with a warning, so the order never stops increasing.
 
 Packing time is used instead of content mtime because restore correctness depends on "the later backup wins". If a file is backed up as a new version and the old version is later copied back (a downgrade, a vault rollback), its content mtime moves backwards. A pack named after content time would then sort before the newest pack, and a full restore would silently produce a mixed, wrong state. Content mtime ranges are still recorded in the index, just not in the filename.
 
-### Index
+### What is `index.tsv` for?
+
+It is what makes a backup incremental, and it is the only thing zinc has to read to decide what changed. Every run scans the source and asks one question per file: is this path stored already, and did its size or mtime move? `index.tsv` answers that by mapping every backed-up path to the pack that holds it. Without it there is no diff: zinc treats the repo as empty and compresses everything again.
+
+Restore uses it too — `--only` looks the path up here and jumps straight to the pack that holds the newest copy instead of walking the whole chain.
 
 `<output>/index.tsv` is a cache; the packs are authoritative.
 
