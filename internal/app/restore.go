@@ -96,6 +96,10 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 	if err != nil {
 		return err
 	}
+	// 输出目录还不存在（从没备份成功过）：别让 os.ReadDir 的原始错误漏给用户
+	if _, serr := os.Stat(repo.Output); serr != nil {
+		return fmt.Errorf(M.NoPacksRestore, repo.Output)
+	}
 	// 先把所有删除记录读完并校验：坏记录要在动目标目录之前就暴露出来。
 	dels, derr := loadDelRecords(repo.Output)
 	if derr != nil {

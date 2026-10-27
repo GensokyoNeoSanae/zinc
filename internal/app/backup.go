@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 )
 
 // fileInfo 是一个待备份文件的快照
@@ -376,6 +378,21 @@ func planPacks(files []fileInfo, maxBytes int64) []packPlan {
 	return plans
 }
 
+// writeListfile 写 7za 的清单文件：UTF-16LE 带 BOM、CRLF 换行。
+// 不用 UTF-8：7-Zip 23.01 的 UTF-8 清单解析不了非 BMP 字符（文件名里带 emoji
+// 就整批失败，报 “Incorrect item in listfile”），而 UTF-16LE 清单能吃下任意字符。
+func writeListfile(p string, rels []string) error {
+	var buf bytes.Buffer
+	buf.Write([]byte{0xFF, 0xFE}) // BOM
+	for _, rel := range rels {
+		for _, u := range utf16.Encode([]rune(rel)) {
+			buf.Write([]byte{byte(u), byte(u >> 8)})
+		}
+		buf.Write([]byte{'\r', 0x00, '\n', 0x00}) // CRLF 也必须是 UTF-16LE 码元
+	}
+	return os.WriteFile(p, buf.Bytes(), 0644)
+}
+
 // packOne 把一个 plan 打成独立的 .7z：先写 .part，自检通过再改名
 func packOne(repo *Repo, set *Settings, plan packPlan, name, password string, noVerify bool) (packResult, error) {
 	finalPath := filepath.Join(repo.Output, name)
@@ -386,7 +403,7 @@ func packOne(repo *Repo, set *Settings, plan packPlan, name, password string, no
 	for _, f := range plan.Files {
 		rels = append(rels, f.Rel)
 	}
-	if err := os.WriteFile(listfile, []byte(strings.Join(rels, "\n")+"\n"), 0644); err != nil {
+	if err := writeListfile(listfile, rels); err != nil {
 		return packResult{}, fmt.Errorf(M.WriteListfileFailed, err)
 	}
 	defer os.Remove(listfile)
@@ -396,7 +413,7 @@ func packOne(repo *Repo, set *Settings, plan packPlan, name, password string, no
 		"-p" + password,
 		"-mhe=on",
 		fmt.Sprintf("-mx=%d", repo.compressLevel(set)),
-		"-scsUTF-8",
+		"-scsUTF-16LE",
 		"-sccUTF-8",
 		partPath,
 		"@" + listfile,
