@@ -38,6 +38,7 @@ zinc backs up one or more source folders ("repos") into a single output root. Ev
 - **A split volume is still a single archive.** With `-v4g`, one missing or damaged piece can make the whole volume set useless. zinc writes complete packs instead: losing one pack costs one batch.
 - **Restoring should not require the backup tool.** Each pack is a plain 7-Zip archive with an encrypted header. `7z x` in filename order is the entire restore procedure.
 - **Upload volume should follow change volume.** A file-level index means a photo added today does not re-upload last year's library.
+- **It is an archive, not a mirror.** A finished pack is never rewritten or trimmed. That is what keeps restores tool-independent, and it is also why deletions and renames are not propagated, see [Limitations](#limitations) for what that rules out.
 
 ## Features
 
@@ -422,8 +423,10 @@ If you moved the program folder after installing, the tasks still point at the o
 
 ## Limitations
 
-- **Deletions do not propagate.** A removed source file is simply not packed again: no deletion pack is produced, its index entry stays where it is, and a restore still brings the old file back. Append-only semantics.
-- **Moves and renames re-pack.** The index tracks relative paths, so a new name or directory is one delete plus one add, and the content is compressed again in full.
+zinc answers "what did this folder look like at each backup", not "make this folder look like that one". Folders you reorganize constantly, such as notes, Obsidian vaults or source trees, are a poor fit; a repository-based tool such as [kopia](https://kopia.io/) or [restic](https://restic.net/) handles those better, at the cost of needing the tool to restore.
+
+- **Deletions do not propagate.** A removed source file is simply not packed again: no deletion pack is produced, its index entry stays where it is, and a restore still brings the old file back. Append-only semantics. Planned for 0.2.0: each batch will also record the files that disappeared since the previous run, and `restore` will delete them between packs so the restored tree matches the last backup. The packs themselves will not be rewritten, so a manual `7z x` still yields every file ever backed up.
+- **Moves and renames re-pack.** The index tracks relative paths, so a new name or directory is one delete plus one add, and the content is compressed again in full. Renaming a tree of attachments can therefore cost a full re-upload of that tree.
 - **No import from older volume layouts.** `vol-*.7z.001` archives are not read. Start a fresh repo, or keep the old tree as an archive.
 - **Scheduling needs a real terminal.** `schtasks` cannot run in restricted environments such as sandboxes.
 - **Plain-text password in tasks.** Unavoidable for unattended runs; the threat model is content scanning, not a targeted attacker.
