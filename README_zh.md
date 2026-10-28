@@ -377,7 +377,7 @@ zinc init --force
 
 它会一次性重写快捷方式、注册表项和标记文件，不管程序装在哪个目录。
 
-图标：放一个 `zinc.ico` 在 `zinc.exe` 旁边，再跑一次 `zinc init --force` 就会用上。
+图标：把 `zinc.ico` 和 `zinc.png` 放在 `zinc.exe` 旁边，再跑一次 `zinc init --force`。`.ico` 给开始菜单快捷方式用；`.png` 是 **设置 → 通知** 列表和弹窗本身显示的那个图标——通知身份只认 PNG，缺了它就会退回 Windows 默认图标。
 
 ### 删除任务：`all` 和 `--all` 差两个横线，差的是全部
 
@@ -420,7 +420,8 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 | `tools\zinc-register.exe` | 注册辅助程序，由安装包调用：检查 7-Zip、注册通知、写用户 `PATH` |
 | `tools\zinc-unregister.exe` | 反过来：清计划任务、通知注册、`PATH` 项 |
 | `unins000.exe` | 安装包生成的卸载程序，**设置 → 应用**里点卸载跑的就是它 |
-| `zinc.ico` | 可选，通知快捷方式图标 |
+| `zinc.ico` | 可选，开始菜单快捷方式的图标 |
+| `zinc.png` | 可选，256px，通知身份和弹窗上的图标用它 |
 | `repos.json` | 仓库注册表，首次 `add` 时生成 |
 | `settings.json` | 全局默认值，安装时写入 7-Zip 路径，之后由 `config set` 维护 |
 | `logs\zinc-YYYYMMDD.log` | 按天一个文件，保留最近 10 份 |
@@ -522,7 +523,7 @@ go build -o zinc-unregister.exe ./cmd/uninstall
 
 `cmd/` 是四个入口，`internal/app` 是共用代码。Inno 脚本不自己实现注册：装完文件后调 `tools\zinc-register.exe`，卸载前调 `tools\zinc-unregister.exe`，所以注册逻辑只有一份。两个主程序只差子系统：`zinc.exe` 是控制台程序，手动跑能看输出；`zincw.exe` 是 GUI 子系统，计划任务执行时不闪窗口、不抢焦点。项目没有第三方依赖，`go.mod` 只声明了 Go 版本。
 
-`zinc.ico` 是脚本生成的，不是手绘：改脚本顶部的颜色常量后跑 `python tools\make-icon.py`（需要 Pillow）。它按十个尺寸分别绘制 `Zn` 再自己拼 ICO，所以 16px 那一帧不是从 256px 缩下来的。
+`zinc.ico` 和 `zinc.png` 都是脚本生成的，不是手绘：改脚本顶部的颜色常量后跑 `python tools\make-icon.py --png zinc.png`（需要 Pillow）。它按十个尺寸分别绘制 `Zn` 再自己拼 ICO，所以 16px 那一帧不是从 256px 缩下来的；PNG 是 256px 那一帧，Windows 通知要的就是它。
 
 ## 参与贡献
 

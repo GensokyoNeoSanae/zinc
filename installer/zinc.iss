@@ -105,6 +105,7 @@ Source: "..\zincw.exe";          DestDir: "{app}"; Flags: ignoreversion
 Source: "..\zinc-register.exe";   DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "..\zinc-unregister.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "..\zinc.ico";           DestDir: "{app}"; Flags: ignoreversion
+Source: "..\zinc.png";           DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md";          DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README_zh.md";       DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE";            DestDir: "{app}"; Flags: ignoreversion

@@ -30,7 +30,7 @@ $name = "zinc-$Version-windows-amd64"
 $stage = Join-Path $dist $name
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
-foreach ($f in 'zinc.exe','zincw.exe','zinc.ico','README.md','README_zh.md','LICENSE') {
+foreach ($f in 'zinc.exe','zincw.exe','zinc.ico','zinc.png','README.md','README_zh.md','LICENSE') {
     Copy-Item (Join-Path $root $f) $stage
 }
 $tools = Join-Path $stage 'tools'

@@ -119,6 +119,7 @@ def main():
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="zinc.ico")
+    ap.add_argument("--png", default="", help="另外导出一张 256×256 的 PNG（通知图标用）")
     ap.add_argument("--preview", default="")
     ap.add_argument("--fill", default="#F1F5F9", help="字形颜色，如 #F1F5F9")
     ap.add_argument("--stroke", default="#2F3843", help="描边颜色")
@@ -133,6 +134,11 @@ def main():
 
     frames = [render(s) for s in SIZES]
     write_ico(args.out, frames)
+
+    if args.png:
+        # Windows 的通知身份（IconUri / toast 的 appLogoOverride）认 PNG，不认 ICO
+        render(256).save(args.png, format="PNG", optimize=True)
+        print(f"wrote {args.png} (256x256)")
 
     if args.preview:
         # 预览：256 大图 + 实际尺寸一行，直接看各尺寸是不是还能认出 Zn
