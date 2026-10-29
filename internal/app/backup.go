@@ -1,9 +1,11 @@
 package app
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -255,12 +257,32 @@ type packPlan struct {
 
 // packResult 是一个已经落盘的包
 type packResult struct {
-	Name  string
-	Files []fileInfo
-	Hash  string
-	Size  int64
-	Start string
-	End   string
+	Name    string
+	Files   []fileInfo // 计划打进这个包的文件
+	Skipped []string   // 其中实际没能进去的（打包时读不到），不写索引，下次自动重试
+	Hash    string
+	Size    int64
+	Start   string
+	End     string
+}
+
+// Kept 返回真正进了包的文件（计划清单减去被跳过的）
+func (r packResult) Kept() []fileInfo {
+	if len(r.Skipped) == 0 {
+		return r.Files
+	}
+	bad := make(map[string]struct{}, len(r.Skipped))
+	for _, s := range r.Skipped {
+		bad[s] = struct{}{}
+	}
+	out := make([]fileInfo, 0, len(r.Files))
+	for _, f := range r.Files {
+		if _, skip := bad[f.Rel]; skip {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 var packNameRe = regexp.MustCompile(`^\d{8}_\d{6}_\d{3}(_\d+)?\.7z$`)
@@ -393,6 +415,35 @@ func writeListfile(p string, rels []string) error {
 	return os.WriteFile(p, buf.Bytes(), 0644)
 }
 
+// solidArg 生成 7z 的 -ms 参数：n<=0 表示非固实（每个文件独立块），
+// 否则给固实块上限。块越小，单点损坏波及的后续文件越少，代价是跨块
+// 不再互相引用、压缩率略降；7z 的默认是一整包一个块，那正是最脆的。
+// 单位必须带后缀：实测 -ms=67108864（纯字节）会被 7-Zip 判为参数错误，
+// -ms=64m 才行；这里统一向上取整到 MB，兼容老版本也读得懂。
+func solidArg(n int64) string {
+	if n <= 0 {
+		return "-ms=off"
+	}
+	mb := (n + (1 << 20) - 1) >> 20
+	return fmt.Sprintf("-ms=%dm", mb)
+}
+
+// packArgs 组装 7z 打包命令行。-mx 和 -ms 都按仓库 > settings 的优先级取值；
+// 单拎出来是为了能脱离 7za 直接断言参数。
+func packArgs(repo *Repo, set *Settings, password, partPath, listfile string) []string {
+	return []string{
+		"a", "-y", "-t7z",
+		"-p" + password,
+		"-mhe=on",
+		fmt.Sprintf("-mx=%d", repo.compressLevel(set)),
+		solidArg(repo.solidBlock(set)),
+		"-scsUTF-16LE",
+		"-sccUTF-8",
+		partPath,
+		"@" + listfile,
+	}
+}
+
 // packOne 把一个 plan 打成独立的 .7z：先写 .part，自检通过再改名
 func packOne(repo *Repo, set *Settings, plan packPlan, name, password string, noVerify bool) (packResult, error) {
 	finalPath := filepath.Join(repo.Output, name)
@@ -408,16 +459,7 @@ func packOne(repo *Repo, set *Settings, plan packPlan, name, password string, no
 	}
 	defer os.Remove(listfile)
 
-	args := []string{
-		"a", "-y", "-t7z",
-		"-p" + password,
-		"-mhe=on",
-		fmt.Sprintf("-mx=%d", repo.compressLevel(set)),
-		"-scsUTF-16LE",
-		"-sccUTF-8",
-		partPath,
-		"@" + listfile,
-	}
+	args := packArgs(repo, set, password, partPath, listfile)
 	// 没有可用的 7-Zip 时 exec.Command("") 只会报一句没人看得懂的话，这里先拦下来。
 	sz := repo.sevenZip(set)
 	if sz == "" {
@@ -426,9 +468,27 @@ func packOne(repo *Repo, set *Settings, plan packPlan, name, password string, no
 	cmd := exec.Command(sz, args...)
 	cmd.Dir = repo.Source // listfile 里的相对路径按源目录解析
 	out, err := cmd.CombinedOutput()
+	var skipped []string
 	if err != nil {
-		os.Remove(partPath)
-		return packResult{}, fmt.Errorf(M.CompressFailed, err, string(out))
+		// 退出码 1 是 7-Zip 的 WARNING：个别文件读不到被跳过，归档本身照样完整可用
+		// （实测 23.01：报 "Cannot open N file"，其余文件全部写入，包能正常列出和校验）。
+		// 这跟「打包前预检发现文件被占」是同一件事，处理也必须一样：跳过、不写索引、
+		// 下次重试。退出码 >=2 才是真的没打出来（写盘失败、参数错误、内存不足）。
+		if exitCodeOf(err) != 1 {
+			os.Remove(partPath)
+			return packResult{}, fmt.Errorf(M.CompressFailed, err, string(out))
+		}
+		// 谁没进去，以归档头为准，不解析 7-Zip 的告警文案（文案随语言变）。
+		skipped, err = missingFromArchive(sz, partPath, password, rels)
+		if err != nil {
+			os.Remove(partPath)
+			return packResult{}, fmt.Errorf(M.CompressFailed, err, string(out))
+		}
+		// 一个都没打进去，说明不是「个别文件占用」，按真失败处理，别把它当成功。
+		if len(skipped) >= len(rels) {
+			os.Remove(partPath)
+			return packResult{}, fmt.Errorf(M.CompressFailed, err, string(out))
+		}
 	}
 
 	if !noVerify {
@@ -452,10 +512,10 @@ func packOne(repo *Repo, set *Settings, plan packPlan, name, password string, no
 	if st, serr := os.Stat(finalPath); serr == nil {
 		size = st.Size()
 	}
-	return packResult{Name: name, Files: plan.Files, Hash: h, Size: size, Start: plan.Start, End: plan.End}, nil
+	return packResult{Name: name, Files: plan.Files, Skipped: skipped, Hash: h, Size: size, Start: plan.Start, End: plan.End}, nil
 }
 
-// cleanupStaleParts 清掉上次中断留下的 .part 与 .rm.tmp。
+// cleanupStaleParts 清掉上次中断留下的 .part、.rm.tmp 与 .list 清单。
 // 调用前必须已持有仓库锁，否则可能删掉正在写的临时文件。
 func cleanupStaleParts(output string) {
 	ents, err := os.ReadDir(output)
@@ -470,23 +530,26 @@ func cleanupStaleParts(output string) {
 		}
 		if strings.HasSuffix(n, ".rm.tmp") && isDelName(strings.TrimSuffix(n, ".tmp")) {
 			os.Remove(filepath.Join(output, n))
+			continue
+		}
+		// packOne 的清单文件：正常路径靠 defer 删，但 Ctrl+C / 崩溃时 defer 不执行，
+		// 会一直留在输出目录里（用户实测见过）。
+		if strings.HasPrefix(n, ".list-") && strings.HasSuffix(n, ".txt") {
+			os.Remove(filepath.Join(output, n))
 		}
 	}
 }
 
-// packAll 规划并打包全部文件。任一步失败则清掉本次已生成的所有包。
-func packAll(repo *Repo, set *Settings, files []fileInfo, password string, noVerify bool) ([]packResult, error) {
+// packAll 规划并打包全部文件。每打完一个包就交给 onPack 提交一次：
+// 已经提交的包不会因为后面某个包失败而消失——这就是「逐包提交」的全部意义。
+// 返回已提交的包；中途失败时也把已提交的那部分一起返回，由调用方决定怎么记账。
+func packAll(repo *Repo, set *Settings, files []fileInfo, password string, noVerify bool, onPack func(packResult) error) ([]packResult, error) {
 	sortByMTime(files)
 	limit := repo.maxPackByte(set)
 	plans := planPacks(files, limit)
 
 	last := latestPackTime(repo.Output)
-	var results []packResult
-	cleanup := func() {
-		for _, r := range results {
-			os.Remove(filepath.Join(repo.Output, r.Name))
-		}
-	}
+	submitted := make([]packResult, 0, len(plans))
 
 	for _, plan := range plans {
 		if len(plan.Files) == 1 && plan.Files[0].Size > limit {
@@ -501,12 +564,45 @@ func packAll(repo *Repo, set *Settings, files []fileInfo, password string, noVer
 		name := uniquePackName(repo.Output, ts)
 		r, err := packOne(repo, set, plan, name, password, noVerify)
 		if err != nil {
-			cleanup()
-			return nil, err
+			return submitted, err
 		}
-		results = append(results, r)
+		if err := onPack(r); err != nil {
+			return submitted, err
+		}
+		submitted = append(submitted, r)
 	}
-	return results, nil
+	return submitted, nil
+}
+
+// commitPack 把一个已经落盘的包登记进账本：包 fsync → manifest → 索引。
+// 顺序不能反：manifest 在前，崩了最多重复登记一次；索引在前，会留下
+// verify 永远看不见的幽灵包。包必须先落盘，否则断电后索引会指向一个不存在的
+// 文件，下次扫描误以为已备份而静默跳过——那是唯一会丢数据的方向。
+func commitPack(repo *Repo, repoName, tag string, idx *Index, r packResult) error {
+	full := filepath.Join(repo.Output, r.Name)
+	kept := r.Kept()
+	// 整包文件全被跳过：这不是有用的包，别登记，直接扔掉。
+	if len(kept) == 0 {
+		os.Remove(full)
+		return nil
+	}
+	if err := syncFile(full); err != nil {
+		return err
+	}
+	if err := writeManifest(repo.Output, repoName, tag, batchMeta{
+		Packs:  []string{r.Name},
+		Hashes: []string{r.Hash},
+		Hash:   r.Hash,
+		From:   r.Start,
+		To:     r.End,
+	}); err != nil {
+		return err
+	}
+	id := idx.addPack(r.Name, r.Start, r.End)
+	for _, f := range kept {
+		idx.Files[f.Rel] = &FileEntry{Size: f.Size, MTime: f.MTime, Pack: id}
+	}
+	return saveIndex(repo.Output, idx)
 }
 
 // runBackup 执行单仓库备份。返回结果而非直接退出，方便 --all 汇总。
@@ -616,118 +712,181 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 		return res
 	}
 
+	tag := started.Format("2006-01-02_15-04-05")
+
+	// 逐包提交：每成功一个包就 fsync → manifest → 索引。后面哪个包炸了，前面已提交的
+	// 包留在盘上也留在账上，下次接着压 —— 一个文件被占用不再毁掉整批。
 	var packs []packResult
+	var packSkipped []string
+	var packErr error
 	if len(ready) > 0 {
-		packs, err = packAll(repo, set, ready, password, noVerify)
-		if err != nil {
-			res.Err = err
-			return res
-		}
+		packs, packErr = packAll(repo, set, ready, password, noVerify, func(r packResult) error {
+			if err := commitPack(repo, name, tag, idx, r); err != nil {
+				return err
+			}
+			packSkipped = append(packSkipped, r.Skipped...)
+			return nil
+		})
 	}
 
-	hashes := make([]string, 0, len(packs))
 	names := make([]string, 0, len(packs))
+	hashes := make([]string, 0, len(packs))
 	var total int64
-	from, to := "", ""
 	for _, p := range packs {
-		id := idx.addPack(p.Name, p.Start, p.End)
-		for _, f := range p.Files {
-			idx.Files[f.Rel] = &FileEntry{Size: f.Size, MTime: f.MTime, Pack: id}
-		}
-		hashes = append(hashes, p.Hash)
 		names = append(names, p.Name)
+		hashes = append(hashes, p.Hash)
 		total += p.Size
-		if from == "" || p.Start < from {
-			from = p.Start
-		}
-		if p.End > to {
-			to = p.End
-		}
-	}
-
-	// 删除记录挂在最后一个包的时间上，所以必须在 packAll 之后才能定名字。
-	rmName := ""
-	if len(del) > 0 {
-		rmName = delRecordName(repo.Output, packs)
-	}
-	// 后续任何一步失败，本批次的包和记录一起撤掉，整批当作没发生过。
-	undo := func() {
-		for _, n := range names {
-			os.Remove(filepath.Join(repo.Output, n))
-		}
-		if rmName != "" {
-			os.Remove(delPath(repo.Output, rmName))
-		}
-	}
-	if rmName != "" {
-		if err := writeDeletions(repo.Output, rmName, del); err != nil {
-			undo()
-			res.Err = err
-			return res
-		}
-	}
-
-	if len(hashes) > 0 {
-		sum := sha256.Sum256([]byte(strings.Join(hashes, "|")))
-		res.BatchHash = fmt.Sprintf("%x", sum)
-	}
-	rmHash := ""
-	if rmName != "" {
-		h, herr := sha256File(delPath(repo.Output, rmName))
-		if herr != nil {
-			undo()
-			res.Err = herr
-			return res
-		}
-		rmHash = h
-		if len(hashes) == 0 {
-			// 只有删除的批次没有包，用记录本身的哈希当批次标识
-			res.BatchHash = h
-		}
 	}
 	res.TotalSize = total
 	res.Packs = names
+	res.BatchHash = batchHashOf(hashes, "")
+	// 打包时读不到的文件：跟预检跳过的一样，不写索引、下次重试。
+	res.Skipped += len(packSkipped)
+
+	shown = 0
+	for _, p := range packSkipped {
+		if shown >= 3 {
+			break
+		}
+		fmt.Printf(M.PackSkipItem, p)
+		shown++
+	}
+	if len(packSkipped) > shown {
+		fmt.Printf(M.PackSkipMore, len(packSkipped)-shown)
+	}
+
+	// 中途失败：已提交的包留下；删除记录一律不写 —— 下次扫描会重新发现这些「消失」，
+	// 自愈。写了一半的删除记录比没写危险得多。
+	if packErr != nil {
+		res.Err = packErr
+		res.DelCount = 0
+		if len(packs) > 0 {
+			fmt.Printf(M.PartialCommit, name, len(packs), humanSize(total), len(packSkipped))
+		}
+		logf("backup %s: partial, %d packs committed, %s, %d files left, err=%v",
+			name, len(packs), humanSize(total), len(packSkipped), packErr)
+		return res
+	}
+
+	// 删除记录是整个 run 的最后一个动作，而且必须「先落 .rm、再从索引删 del 条目」。
+	// 顺序反了就是永久漏备：下次扫描看不到这些路径，「消失」永远不会被记录。
+	rmName := ""
+	if len(del) > 0 {
+		rmName = delRecordName(repo.Output, packs)
+		if err := writeDeletions(repo.Output, rmName, del); err != nil {
+			res.Err = err
+			return res
+		}
+		rmHash, herr := sha256File(delPath(repo.Output, rmName))
+		if herr != nil {
+			res.Err = herr
+			return res
+		}
+		if err := writeManifest(repo.Output, name, tag, batchMeta{
+			Hash:    batchHashOf(nil, rmHash),
+			Rm:      rmName,
+			RmHash:  rmHash,
+			Deleted: len(del),
+		}); err != nil {
+			res.Err = err
+			return res
+		}
+		// 索引跟着源目录走：删掉的文件不再登记，否则下次还会被当成「刚消失」。
+		for _, rel := range del {
+			delete(idx.Files, rel)
+		}
+		if err := saveIndex(repo.Output, idx); err != nil {
+			res.Err = err
+			return res
+		}
+		res.DelCount = len(del)
+		res.BatchHash = batchHashOf(hashes, rmHash)
+	}
 	res.DelRecord = rmName
 
-	tag := started.Format("2006-01-02_15-04-05")
-	// manifest 先写：失败就把本批次的包和删除记录清掉，索引不动，整批当作没发生过。
-	if err := writeManifest(repo.Output, name, tag, batchMeta{
-		Packs:   names,
-		Hashes:  hashes,
-		Hash:    res.BatchHash,
-		From:    from,
-		To:      to,
-		Rm:      rmName,
-		RmHash:  rmHash,
-		Deleted: len(del),
-	}); err != nil {
-		undo()
-		res.Err = err
-		return res
-	}
-
-	// 索引跟着源目录走：删掉的文件不再登记，否则下次还会被当成“刚消失”。
-	for _, rel := range del {
-		delete(idx.Files, rel)
-	}
-	if err := saveIndex(repo.Output, idx); err != nil {
-		if rmName != "" {
-			os.Remove(delPath(repo.Output, rmName))
-		}
-		res.Err = err
-		return res
-	}
-
+	filesPacked := len(ready) - len(packSkipped)
 	if len(packs) > 0 {
-		fmt.Printf(M.DetailLine+"\n", name, len(ready), humanSize(total), len(packs),
+		fmt.Printf(M.DetailLine+"\n", name, filesPacked, humanSize(total), len(packs),
 			fmt.Sprintf(M.EncFrom, encFrom), res.ScanDur.Milliseconds(), shortHash(res.BatchHash))
 	}
 	if len(del) > 0 {
 		fmt.Printf(M.DeletedLine, name, len(del), rmName)
 	}
 	logf("backup %s: %d files, %d packs, %d deleted, %s, hash=%s",
-		name, len(ready), len(packs), len(del), humanSize(total), res.BatchHash)
+		name, filesPacked, len(packs), len(del), humanSize(total), res.BatchHash)
 	return res
+}
+
+// exitCodeOf 取出子进程的退出码。进程根本没起来（比如路径不存在）时返回 -1，
+// 调用方会把它当成「非 1」，也就是硬失败——这是对的，那种情况不该静默跳过。
+func exitCodeOf(err error) int {
+	if err == nil {
+		return 0
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return ee.ExitCode()
+	}
+	return -1
+}
+
+// archivePaths 读归档头，返回包内实际存在的相对路径集合（斜杠分隔）。
+// 只读头不解压；加密包的头部要密码。用归档本身当裁判，而不是解析 7-Zip 的
+// 告警文案 —— 文案随界面语言变，中文文件名里还可能有冒号、等号之类。
+func archivePaths(sevenZip, archive, password string) (map[string]struct{}, error) {
+	cmd := exec.Command(sevenZip, "l", "-slt", "-p"+password, "-sccUTF-8", archive)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("7za l: %v\n%s", err, string(out))
+	}
+	got := make(map[string]struct{})
+	body := false
+	sc := bufio.NewScanner(bytes.NewReader(out))
+	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	for sc.Scan() {
+		line := sc.Text()
+		if line == "----------" { // 这行之前是归档自身的元信息，那里也有一个 Path = 归档自己
+			body = true
+			continue
+		}
+		if !body || !strings.HasPrefix(line, "Path = ") {
+			continue
+		}
+		got[filepath.ToSlash(strings.TrimPrefix(line, "Path = "))] = struct{}{}
+	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	return got, nil
+}
+
+// missingFromArchive 返回「计划里有、包里没有」的文件（相对路径、斜杠分隔）。
+func missingFromArchive(sevenZip, archive, password string, want []string) ([]string, error) {
+	got, err := archivePaths(sevenZip, archive, password)
+	if err != nil {
+		return nil, err
+	}
+	var missing []string
+	for _, rel := range want {
+		if _, ok := got[rel]; !ok {
+			missing = append(missing, rel)
+		}
+	}
+	return missing, nil
+}
+
+// syncFile 把包内容刷到盘上，提交索引前必须做：Windows 的 rename 不保证目录项
+// 落盘，断电后可能留下「索引登记了、包不在」——那会让下次扫描误以为已备份而静默跳过。
+func syncFile(p string) error {
+	f, err := os.OpenFile(p, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // verifyArchive 用 7za t 校验包内所有数据块（CRC32）
@@ -759,6 +918,16 @@ func baseNames(paths []string) []string {
 		out[i] = filepath.Base(p)
 	}
 	return out
+}
+
+// batchHashOf 是 batch_hash 的算法：包哈希按顺序拼接再取 sha256；
+// 一个包都没有（只有删除记录）时退化成删除记录自己的哈希。
+func batchHashOf(hashes []string, rmHash string) string {
+	if len(hashes) == 0 {
+		return rmHash
+	}
+	sum := sha256.Sum256([]byte(strings.Join(hashes, "|")))
+	return fmt.Sprintf("%x", sum)
 }
 
 // Manifest 记录每批次的包哈希，供事后 verify
@@ -816,17 +985,37 @@ func writeManifest(output, repo, tag string, batch batchMeta) error {
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf(M.ManifestReadFailed, err)
 	}
-	m.Batches = append(m.Batches, ManifestBatch{
-		Time:    tag,
-		Hash:    batch.Hash,
-		Files:   baseNames(batch.Packs),
-		Hashes:  batch.Hashes,
-		From:    batch.From,
-		To:      batch.To,
-		Deleted: batch.Deleted,
-		Rm:      batch.Rm,
-		RmHash:  batch.RmHash,
-	})
+	// 同一次备份（tag 相同）的多个包合并进同一批：逐包提交不该把「一批 = 一次备份」
+	// 变成「一批 = 一个包」，否则 status 会显示成备份了几十次。
+	if n := len(m.Batches); n > 0 && tag != "" && m.Batches[n-1].Time == tag {
+		b := &m.Batches[n-1]
+		b.Files = append(b.Files, baseNames(batch.Packs)...)
+		b.Hashes = append(b.Hashes, batch.Hashes...)
+		if batch.From != "" && (b.From == "" || batch.From < b.From) {
+			b.From = batch.From
+		}
+		if batch.To > b.To {
+			b.To = batch.To
+		}
+		if batch.Rm != "" {
+			b.Rm = batch.Rm
+			b.RmHash = batch.RmHash
+			b.Deleted += batch.Deleted
+		}
+		b.Hash = batchHashOf(b.Hashes, b.RmHash)
+	} else {
+		m.Batches = append(m.Batches, ManifestBatch{
+			Time:    tag,
+			Hash:    batch.Hash,
+			Files:   baseNames(batch.Packs),
+			Hashes:  batch.Hashes,
+			From:    batch.From,
+			To:      batch.To,
+			Deleted: batch.Deleted,
+			Rm:      batch.Rm,
+			RmHash:  batch.RmHash,
+		})
+	}
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return fmt.Errorf(M.ManifestWriteFailed, err)

@@ -181,6 +181,9 @@ zinc list
 zinc status
 zinc status pictures
 
+# 一次展开所有仓库的详情（不只是单行摘要）
+zinc status --all
+
 # 恢复（默认覆盖同名文件）
 zinc restore pictures --dest D:\restore\pictures
 
@@ -203,10 +206,11 @@ zinc restore pictures --check-list
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <路径>] [--from <包>]` | 恢复全量或单个路径 |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | 从包重建索引 |
 | `zinc verify <name\|--all> [--sample <pct>]` | 校验包与删除记录的 SHA-256 |
-| `zinc status [<name>]` | 查看状态 |
+| `zinc status [--all] [<name>]` | 查看状态；`--all` 一次展开所有仓库的详情 |
 | `zinc schedule <name\|--all> --daily --at HH:MM` | 每天定时 |
 | `zinc schedule <name\|--all> --weekly 1,3 --at HH:MM` | 每周定时（1 = 周一） |
 | `zinc schedule <name\|--all> --monthly 1,15 --at HH:MM [--yes]` | 每月定时 |
+| `zinc schedule --list` | 列出当前所有计划任务（计划、下次运行、状态） |
 | `zinc unschedule <name>` | 删除该仓库的定时任务 |
 | `zinc unschedule all` | 删除“备份全部”的汇总任务（`zinc-all-*`） |
 | `zinc unschedule --all` | 删除所有 zinc 任务（**慎用**） |
@@ -231,6 +235,7 @@ zinc restore pictures --check-list
 | `restore_wrap_folder` | `true` | 整仓恢复时在外层包一个 `restore-<仓库>-<时间>` 文件夹 |
 | `max_pack_byte` | `4G` | 单包上限，支持 `4G`、`50M` 或纯字节 |
 | `compression_level` | `0` | 7z 压缩等级 0-9；`0` = 仅存储 |
+| `solid_block` | `64M` | 7z 固实块上限；`off` = 每文件独立块。块只在文件边界切分，单个大文件始终独占一块；块越小，单个坏字节连累的文件越少，压缩率略降 |
 | `7zip_path` | 安装时自动检测 | `7z.exe` / `7za.exe` 的路径；空 = 在 `PATH` 和常见安装目录里找 |
 | `lang` | 空 | `zh` 或 `en`；空 = 跟随 Windows |
 | `lock_timeout_minutes` | `30` | 仓库锁最长等待分钟数 |

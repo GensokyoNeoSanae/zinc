@@ -12,6 +12,7 @@ import (
 const (
 	defaultMaxPackByte = int64(4 * 1024 * 1024 * 1024) // 4 GB
 	defaultCompressLvl = 0                             // 存储模式
+	defaultSolidBlock  = int64(64 * 1024 * 1024)       // 固实块上限 64 MB
 )
 
 // Repo 是一个备份仓库的配置。字段留空表示回落到 settings.json。
@@ -20,6 +21,7 @@ type Repo struct {
 	Output        string   `json:"output"`
 	MaxPackByte   int64    `json:"max_pack_byte,omitempty"`
 	CompressLevel *int     `json:"compression_level,omitempty"`
+	SolidBlock    *int64   `json:"solid_block,omitempty"` // 0 = 非固实（每文件独立块）
 	SevenZipPath  string   `json:"7zip_path,omitempty"`
 	Password      string   `json:"password,omitempty"`
 	Exclude       []string `json:"exclude,omitempty"`
@@ -37,6 +39,14 @@ func (r *Repo) compressLevel(s *Settings) int {
 		return *r.CompressLevel
 	}
 	return s.compressLevel()
+}
+
+// solidBlock 返回固实块上限（字节）；0 表示非固实，每个文件独立块。
+func (r *Repo) solidBlock(s *Settings) int64 {
+	if r.SolidBlock != nil {
+		return *r.SolidBlock
+	}
+	return s.solidBlock()
 }
 
 func (r *Repo) sevenZip(s *Settings) string {

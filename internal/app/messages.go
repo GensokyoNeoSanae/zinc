@@ -33,6 +33,7 @@ type Messages struct {
 	NoRepos            string
 	ListItem           string
 	UsageList          string
+	UsageStatus        string
 	UsageRoot          string
 	RootNotDir         string
 	UsageAdd           string
@@ -56,6 +57,7 @@ type Messages struct {
 
 	// backup
 	FlagAllBackup       string
+	FlagAllStatus       string
 	FlagPassword        string
 	FlagNotify          string
 	FlagNotifyEmpty     string
@@ -130,6 +132,23 @@ type Messages struct {
 	NoMatch           string
 	FlagAllUnschedule string
 	UsageUnschedule   string
+
+	// schedule --list
+	FlagListSchedule   string
+	ScheduleHeader     string
+	NoSchedule         string
+	NoScheduleHint     string
+	ScheduleItemName   string
+	ScheduleItemDetail string
+	CronDaily          string
+	CronWeekly         string
+	CronMonthly        string
+	SchedNextNone      string
+	StateReady         string
+	StateDisabled      string
+	StateRunning       string
+	StateQueued        string
+	StateUnknown       string
 
 	// status
 	StatusBrief           string
@@ -230,6 +249,9 @@ type Messages struct {
 	LockedItem       string
 	LockedMore       string
 	AllLocked        string
+	PackSkipItem     string
+	PackSkipMore     string
+	PartialCommit    string
 
 	// 删除记录
 	DeletedLine          string
@@ -304,6 +326,7 @@ type Messages struct {
 	// set flags
 	FlagMaxPackByte string
 	FlagCompress    string
+	FlagSolid       string
 	FlagExclude     string
 
 	// status
@@ -325,7 +348,8 @@ var zhMessages = &Messages{
   zinc add <name> --source <path> [--output <path>]
   zinc remove <name>
   zinc set <name> [--source <path>] [--output <path>] [--password <pw>]
-                  [--max-pack-byte <n>] [--compress <0-9>] [--exclude <glob>]
+                  [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>]
+                  [--exclude <glob>]
   zinc config [get|set|unset|path] [<key>] [<value>]      全局设置
   zinc backup <name|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]
   zinc restore <name> [--dest <path>] [--password <pw>]
@@ -334,14 +358,16 @@ var zhMessages = &Messages{
                        只恢复这一个文件/目录；配 --check-list 可列出它有哪些版本
   zinc reindex <name> [--password <pw>] [--pack-start <名>] [--pack-end <名>] [--yes]
   zinc verify <name|--all> [--sample <pct>]
-  zinc status [<name>]
+  zinc status [--all] [<name>]
   zinc schedule <name|--all> --daily --at HH:MM[,HH:MM...]
   zinc schedule <name|--all> --weekly 1,3 --at HH:MM
   zinc schedule <name|--all> --monthly 1,15 --at HH:MM [--yes]
+  zinc schedule --list                 列出当前所有计划任务
   zinc unschedule [<name>|--all]
 
 说明:
   - 每个包都是独立完整的加密 7z，文件名就是打包时刻，恢复按名字升序
+  - 固实块默认 64M：块里坏一个字节，该块后续文件就解不出来；--solid off 改成每文件独立块
   - 不给 --password 时交互输入；settings.json 里设了 default_password 就不再询问
   - 恢复默认覆盖同名文件（--no-overwrite 则保留两份），--check-list 只列顺序不动手
   - 恢复会执行之后备份记下的删除（--no-delete 保留这些文件）；删除记录是输出目录里的 .rm 旁注
@@ -372,6 +398,7 @@ var zhMessages = &Messages{
 
 	RootUnset:          "(未设置)",
 	UsageList:          "用法: zinc list",
+	UsageStatus:        "用法: zinc status [--all] [<name>]（--all 不能和仓库名一起用）",
 	UsageRoot:          "用法: zinc root [<path>]",
 	RootNotDir:         "root 路径已存在且不是目录: %s",
 	NoRepos:            "还没有仓库，先 zinc add",
@@ -384,8 +411,8 @@ var zhMessages = &Messages{
 	AddedRepo:          "已添加 %s\n  源:   %s\n  输出: %s\n",
 	UsageRemove:        "用法: zinc remove <name>",
 	RemovedRepo:        "已移除仓库 %s（包文件和索引未删除）\n",
-	UsageSet:           "用法: zinc set <name> [--source <path>] [--output <path>]",
-	NeedSourceOrOutput: "至少给一个 --source 或 --output",
+	UsageSet:           "用法: zinc set <name> [--source <path>] [--output <path>] [--password <pw>]\n                    [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>] [--exclude <glob>]",
+	NeedSourceOrOutput: "至少给一个设置项：--source / --output / --password / --max-pack-byte / --compress / --solid / --exclude",
 	UpdatedRepo:        "已更新 %s\n  源:   %s\n  输出: %s\n",
 	PathInvalid:        "路径无效: %s（%v）",
 	SourceOutputSame:   "源目录与输出目录不能相同: %s",
@@ -396,6 +423,7 @@ var zhMessages = &Messages{
 	RemoveHasTasks:     "[警告] 仓库 %s 还有 %d 个计划任务（%s），可用 zinc unschedule %s 删除\n",
 
 	FlagAllBackup:       "备份全部仓库",
+	FlagAllStatus:       "一次展开所有仓库的详细信息",
 	FlagPassword:        "备份密码",
 	FlagNotify:          "发送 Windows 通知",
 	FlagNotifyEmpty:     "无新增也通知",
@@ -467,6 +495,22 @@ var zhMessages = &Messages{
 	NoMatch:           "没有匹配的任务",
 	FlagAllUnschedule: "删除全部 zinc 任务",
 	UsageUnschedule:   "用法: zinc unschedule <name> 或 zinc unschedule --all",
+
+	FlagListSchedule:   "列出当前所有计划任务",
+	ScheduleHeader:     "[计划] %d 个任务\n\n",
+	NoSchedule:         "当前没有 zinc 的计划任务",
+	NoScheduleHint:     "用 zinc schedule <仓库> --daily --at 03:00 添加",
+	ScheduleItemName:   "  %s\n",
+	ScheduleItemDetail: "    %s · 下次 %s · %s\n",
+	CronDaily:          "每天 %s",
+	CronWeekly:         "每周 %s %s",
+	CronMonthly:        "每月 %s %s",
+	SchedNextNone:      "未安排",
+	StateReady:         "就绪",
+	StateDisabled:      "已禁用",
+	StateRunning:       "运行中",
+	StateQueued:        "排队中",
+	StateUnknown:       "未知",
 
 	StatusBrief:           "%-12s %6d 文件 / %3d 批次 / %3d 包   最后备份 %-19s\n",
 	StatusSource:          "  源:   %s\n",
@@ -560,6 +604,9 @@ var zhMessages = &Messages{
 	LockedItem:       "[占用] %s（下次备份会重试）\n",
 	LockedMore:       "  …另有 %d 个文件被占用\n",
 	AllLocked:        "%s · 变更的 %d 个文件全被占用，本次跳过\n",
+	PackSkipItem:     "[跳过] %s（打包时读不到，下次备份会重试）\n",
+	PackSkipMore:     "  …另有 %d 个文件本次没能打进包\n",
+	PartialCommit:    "%s · 部分完成：已提交 %d 包（%s），%d 个文件留待下次\n",
 
 	DeletedLine:          "[删除] %s · %d 个文件已从源目录消失（记录 %s）\n",
 	DeletingBatch:        "[删除] %s · 移除 %d 个文件\n",
@@ -630,6 +677,7 @@ var zhMessages = &Messages{
 
 	FlagMaxPackByte: "单包上限，如 4G / 50M / 纯字节",
 	FlagCompress:    "压缩等级 0-9",
+	FlagSolid:       "固实块上限，如 64M / off（off = 每文件独立块，最抗损）",
 	FlagExclude:     "排除规则，可重复",
 
 	StatusPacks:   "  包: %d 批次 / %d 个包 / %s\n",
@@ -648,7 +696,8 @@ Usage:
   zinc add <name> --source <path> [--output <path>]
   zinc remove <name>
   zinc set <name> [--source <path>] [--output <path>] [--password <pw>]
-                  [--max-pack-byte <n>] [--compress <0-9>] [--exclude <glob>]
+                  [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>]
+                  [--exclude <glob>]
   zinc config [get|set|unset|path] [<key>] [<value>]      global settings
   zinc backup <name|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]
   zinc restore <name> [--dest <path>] [--password <pw>]
@@ -657,14 +706,16 @@ Usage:
                        restore just that file/dir; add --check-list to list its versions
   zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]
   zinc verify <name|--all> [--sample <pct>]
-  zinc status [<name>]
+  zinc status [--all] [<name>]
   zinc schedule <name|--all> --daily --at HH:MM[,HH:MM...]
   zinc schedule <name|--all> --weekly 1,3 --at HH:MM
   zinc schedule <name|--all> --monthly 1,15 --at HH:MM [--yes]
+  zinc schedule --list                 list all scheduled tasks
   zinc unschedule [<name>|--all]
 
 Notes:
   - every pack is a complete encrypted 7z; its name is the packing time, restore goes by name
+  - solid blocks default to 64M: one bad byte can cost the rest of that block; --solid off makes one block per file
   - without --password it prompts; a default_password in settings.json skips the prompt
   - restore overwrites same-name files by default; --no-overwrite keeps both
   - restore also applies deletions recorded by later backups; --no-delete keeps those files
@@ -696,6 +747,7 @@ Notes:
 
 	RootUnset:          "(not set)",
 	UsageList:          "usage: zinc list",
+	UsageStatus:        "usage: zinc status [--all] [<name>] (--all cannot be combined with a repo name)",
 	UsageRoot:          "usage: zinc root [<path>]",
 	RootNotDir:         "root path exists and is not a directory: %s",
 	NoRepos:            "no repos yet, run zinc add first",
@@ -708,8 +760,8 @@ Notes:
 	AddedRepo:          "added %s\n  source: %s\n  output: %s\n",
 	UsageRemove:        "usage: zinc remove <name>",
 	RemovedRepo:        "removed repo %s (packs and index are kept)\n",
-	UsageSet:           "usage: zinc set <name> [--source <path>] [--output <path>]",
-	NeedSourceOrOutput: "at least one of --source or --output is required",
+	UsageSet:           "usage: zinc set <name> [--source <path>] [--output <path>] [--password <pw>]\n                    [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>] [--exclude <glob>]",
+	NeedSourceOrOutput: "at least one setting is required: --source / --output / --password / --max-pack-byte / --compress / --solid / --exclude",
 	UpdatedRepo:        "updated %s\n  source: %s\n  output: %s\n",
 	PathInvalid:        "invalid path: %s (%v)",
 	SourceOutputSame:   "source and output must differ: %s",
@@ -720,6 +772,7 @@ Notes:
 	RemoveHasTasks:     "[warning] repo %s still has %d scheduled task(s) (%s); remove them with zinc unschedule %s\n",
 
 	FlagAllBackup:       "back up all repos",
+	FlagAllStatus:       "show details for every repo at once",
 	FlagPassword:        "backup password",
 	FlagNotify:          "send a Windows notification",
 	FlagNotifyEmpty:     "notify even when nothing changed",
@@ -791,6 +844,22 @@ Notes:
 	NoMatch:           "no matching tasks",
 	FlagAllUnschedule: "delete all zinc tasks",
 	UsageUnschedule:   "usage: zinc unschedule <name> or zinc unschedule --all",
+
+	FlagListSchedule:   "list all scheduled tasks",
+	ScheduleHeader:     "[schedule] %d task(s)\n\n",
+	NoSchedule:         "no zinc scheduled tasks",
+	NoScheduleHint:     "add one with zinc schedule <repo> --daily --at 03:00",
+	ScheduleItemName:   "  %s\n",
+	ScheduleItemDetail: "    %s · next %s · %s\n",
+	CronDaily:          "daily %s",
+	CronWeekly:         "weekly %s %s",
+	CronMonthly:        "monthly %s %s",
+	SchedNextNone:      "not scheduled",
+	StateReady:         "ready",
+	StateDisabled:      "disabled",
+	StateRunning:       "running",
+	StateQueued:        "queued",
+	StateUnknown:       "unknown",
 
 	StatusBrief:           "%-12s %6d files / %3d batches / %3d packs   last backup %-19s\n",
 	StatusSource:          "  source: %s\n",
@@ -884,6 +953,9 @@ Notes:
 	LockedItem:       "[locked] %s (will retry next backup)\n",
 	LockedMore:       "  …and %d more locked files\n",
 	AllLocked:        "%s · all %d changed files are locked, skipped this run\n",
+	PackSkipItem:     "[skip] %s (unreadable while packing, will retry next backup)\n",
+	PackSkipMore:     "  …and %d more files left out of this pack\n",
+	PartialCommit:    "%s · partial: committed %d pack(s) (%s), %d files left for next run\n",
 
 	DeletedLine:          "[deleted] %s · %d file(s) disappeared from the source (recorded in %s)\n",
 	DeletingBatch:        "[deleted] %s · %d file(s) removed\n",
@@ -954,6 +1026,7 @@ Notes:
 
 	FlagMaxPackByte: "pack size limit, e.g. 4G / 50M / bytes",
 	FlagCompress:    "compression level 0-9",
+	FlagSolid:       "solid block limit, e.g. 64M / off (off = one block per file, most damage-tolerant)",
 	FlagExclude:     "exclude pattern, repeatable",
 
 	StatusPacks:   "  packs: %d batches / %d packs / %s\n",

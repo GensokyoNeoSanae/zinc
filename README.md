@@ -181,6 +181,9 @@ zinc list
 zinc status
 zinc status pictures
 
+# expand every repo's details in one go
+zinc status --all
+
 # restore (overwrites same-name files by default)
 zinc restore pictures --dest D:\restore\pictures
 
@@ -203,10 +206,11 @@ zinc restore pictures --check-list
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <path>] [--from <pack>]` | restore everything or one path |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | rebuild the index from the packs |
 | `zinc verify <name\|--all> [--sample <pct>]` | SHA-256 check of the packs and of the deletion records |
-| `zinc status [<name>]` | show status |
+| `zinc status [--all] [<name>]` | show status; `--all` expands every repo |
 | `zinc schedule <name\|--all> --daily --at HH:MM` | daily schedule |
 | `zinc schedule <name\|--all> --weekly 1,3 --at HH:MM` | weekly (1 = Monday) |
 | `zinc schedule <name\|--all> --monthly 1,15 --at HH:MM [--yes]` | monthly |
+| `zinc schedule --list` | list all scheduled tasks (plan, next run, state) |
 | `zinc unschedule <name>` | delete that repo's tasks |
 | `zinc unschedule all` | delete the "back up all" summary task (`zinc-all-*`) |
 | `zinc unschedule --all` | delete **all** zinc tasks (careful) |
@@ -231,6 +235,7 @@ Global settings live in `<program dir>\settings.json`. They are **not** part of 
 | `restore_wrap_folder` | `true` | wrap a full restore in `restore-<repo>-<time>` |
 | `max_pack_byte` | `4G` | pack size limit; accepts `4G`, `50M` or plain bytes |
 | `compression_level` | `0` | 7z level 0-9; `0` = store only |
+| `solid_block` | `64M` | 7z solid block limit; `off` = one block per file. Blocks only split at file boundaries, so a single huge file always owns one block; smaller blocks limit how many later files one bad byte can cost you, at a slight compression cost |
 | `7zip_path` | detected at install | path to `7z.exe` / `7za.exe`; empty = search `PATH` and the usual install folders |
 | `lang` | empty | `zh` or `en`; empty = detect from Windows |
 | `lock_timeout_minutes` | `30` | longest wait for the repo lock |

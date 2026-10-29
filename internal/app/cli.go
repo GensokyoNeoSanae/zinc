@@ -15,7 +15,7 @@ func usage() {
 var flagNeedsValue = map[string]bool{
 	"source": true, "output": true, "dest": true, "password": true,
 	"sample": true, "at": true, "weekly": true, "monthly": true,
-	"max-pack-byte": true, "compress": true, "exclude": true,
+	"max-pack-byte": true, "compress": true, "solid": true, "exclude": true,
 	"pack-start": true, "pack-end": true, "only": true, "from": true,
 	"7zip": true,
 }
@@ -231,6 +231,7 @@ func cmdSet(args []string) {
 	password := fs.String("password", "", M.FlagPassword)
 	maxPack := fs.String("max-pack-byte", "", M.FlagMaxPackByte)
 	compress := fs.Int("compress", -1, M.FlagCompress)
+	solid := fs.String("solid", "", M.FlagSolid)
 	var excludes multiFlag
 	fs.Var(&excludes, "exclude", M.FlagExclude)
 	fs.Parse(reorderArgs(args))
@@ -243,7 +244,7 @@ func cmdSet(args []string) {
 	if err != nil {
 		die("%v", err)
 	}
-	if *source == "" && *output == "" && *password == "" && *maxPack == "" && *compress < 0 && len(excludes) == 0 {
+	if *source == "" && *output == "" && *password == "" && *maxPack == "" && *compress < 0 && *solid == "" && len(excludes) == 0 {
 		die(M.NeedSourceOrOutput)
 	}
 	if *source != "" {
@@ -289,6 +290,13 @@ func cmdSet(args []string) {
 		}
 		v := *compress
 		repo.CompressLevel = &v
+	}
+	if *solid != "" {
+		n, perr := parseSolid(*solid)
+		if perr != nil {
+			die(M.ConfigBadValue, "solid_block", *solid)
+		}
+		repo.SolidBlock = &n
 	}
 	if len(excludes) > 0 {
 		repo.Exclude = append(repo.Exclude, excludes...)
@@ -405,6 +413,10 @@ func cmdBackup(args []string) {
 		r := runBackup(n, cfg, set, s, pw, encFrom, *noVerify)
 		if r.Err != nil {
 			fmt.Printf(M.BackupFailed, n, r.Err)
+			// 失败必须进日志：否则事后只知道「没备份成」，不知道死在哪一步、
+			// 已提交了多少、还剩多少没压，全是黑盒。
+			logf("backup %s: FAILED after %d packs (%s), %d files left, err=%v",
+				n, len(r.Packs), humanSize(r.TotalSize), r.Skipped, r.Err)
 			failed = true
 		}
 		results = append(results, r)
@@ -571,11 +583,41 @@ func cmdVerify(args []string) {
 }
 
 func cmdStatus(args []string) {
+	fs := flag.NewFlagSet("status", flag.ExitOnError)
+	all := fs.Bool("all", false, M.FlagAllStatus)
+	fs.Parse(reorderArgs(args))
+
 	cfg := mustConfig()
 	set := mustSettings()
+
+	// --all：每个仓库都展开成详情，仓库之间空一行。
+	if *all {
+		if fs.NArg() > 0 {
+			die(M.UsageStatus)
+		}
+		names := cfg.sortedNames()
+		if len(names) == 0 {
+			fmt.Println(M.NoRepos)
+			return
+		}
+		var firstErr error
+		for i, n := range names {
+			if i > 0 {
+				fmt.Println()
+			}
+			if err := runStatus(n, cfg, set); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+		if firstErr != nil {
+			os.Exit(1)
+		}
+		return
+	}
+
 	name := ""
-	if len(args) > 0 {
-		name = args[0]
+	if fs.NArg() > 0 {
+		name = fs.Arg(0)
 	}
 	if err := runStatus(name, cfg, set); err != nil {
 		os.Exit(1)
@@ -671,6 +713,7 @@ func cmdReindex(args []string) {
 
 func cmdSchedule(args []string) {
 	fs := flag.NewFlagSet("schedule", flag.ExitOnError)
+	list := fs.Bool("list", false, M.FlagListSchedule)
 	all := fs.Bool("all", false, M.FlagAllSchedule)
 	daily := fs.Bool("daily", false, M.FlagDaily)
 	weekly := fs.String("weekly", "", M.FlagWeekly)
@@ -680,6 +723,14 @@ func cmdSchedule(args []string) {
 	noNotify := fs.Bool("no-notify", false, M.FlagNoNotify)
 	yes := fs.Bool("yes", false, M.FlagYes)
 	fs.Parse(reorderArgs(args))
+
+	// --list 是只读查询，不需要仓库名、周期、时间，也不需要密码。
+	if *list {
+		if err := runListSchedules(); err != nil {
+			die("%v", err)
+		}
+		return
+	}
 
 	var kind, days string
 	switch {

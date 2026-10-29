@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -195,4 +196,203 @@ Get-ScheduledTask -TaskName 'zinc-*' | Where-Object { $_.TaskName.StartsWith($p,
 		}
 	}
 	return names, nil
+}
+
+// ---------- schedule --list ----------
+
+// schedRow 是 zinc schedule --list 里的一行（一个计划任务）。
+type schedRow struct {
+	name  string
+	state string
+	next  string
+	cls   string // 触发器 CIM 类名，如 MSFT_TaskDailyTrigger
+	start string // StartBoundary，如 2026-10-28T03:00:00
+	week  string // 周触发器的 bitmask
+	month string // 月触发器的日号，逗号分隔
+}
+
+// listTasksScript 每个任务输出一行 TSV：
+// Name / State / NextRunTime / TriggerClass / StartBoundary / DaysOfWeek / DaysOfMonth
+// 用 -join [char]9 而不是反引号转义，Go 的 raw string 才能原样传给 PowerShell。
+const listTasksScript = `
+$ErrorActionPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$p = $env:ZINC_TASK_PREFIX
+$tasks = @(Get-ScheduledTask -TaskName 'zinc-*' | Where-Object { $_.TaskName.StartsWith($p, [System.StringComparison]::OrdinalIgnoreCase) })
+foreach ($t in $tasks) {
+    $info = Get-ScheduledTaskInfo -TaskName $t.TaskName
+    $tr = @($t.Triggers)
+    $cls = ''
+    $sb = ''
+    $dw = ''
+    $dm = ''
+    if ($tr.Count -gt 0) {
+        $x = $tr[0]
+        $cls = [string]$x.CimClass.CimClassName
+        $sb = [string]$x.StartBoundary
+        if ($x.DaysOfWeek) { $dw = [string]$x.DaysOfWeek }
+        if ($x.DaysOfMonth) { $dm = ($x.DaysOfMonth -join ',') }
+    }
+    $next = ''
+    if ($info -and $info.NextRunTime) { $next = $info.NextRunTime.ToString('yyyy-MM-dd HH:mm') }
+    Write-Output ((@($t.TaskName, [string]$t.State, $next, $cls, $sb, $dw, $dm)) -join [char]9)
+}
+`
+
+// parseTaskLines 解析 listTasksScript 的 TSV 输出。字段不足的行直接跳过。
+func parseTaskLines(out string) []schedRow {
+	var rows []schedRow
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if !strings.HasPrefix(line, "zinc-") {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		if len(f) < 7 {
+			continue
+		}
+		rows = append(rows, schedRow{
+			name:  f[0],
+			state: f[1],
+			next:  f[2],
+			cls:   f[3],
+			start: f[4],
+			week:  f[5],
+			month: f[6],
+		})
+	}
+	return rows
+}
+
+// runListSchedules 打印当前所有 zinc 计划任务。
+func runListSchedules() error {
+	out, err := runPowerShell(listTasksScript, "zinc-")
+	if err != nil {
+		return fmt.Errorf(M.QueryFailed, err, string(out))
+	}
+	renderSchedules(os.Stdout, parseTaskLines(string(out)))
+	return nil
+}
+
+// renderSchedules 把任务清单写到 w；抽出来是为了能脱离 PowerShell 断言格式。
+func renderSchedules(w io.Writer, rows []schedRow) {
+	if len(rows) == 0 {
+		fmt.Fprintln(w, M.NoSchedule)
+		fmt.Fprintln(w, M.NoScheduleHint)
+		return
+	}
+	fmt.Fprintf(w, M.ScheduleHeader, len(rows))
+	for _, r := range rows {
+		fmt.Fprintf(w, M.ScheduleItemName, r.name)
+		fmt.Fprintf(w, M.ScheduleItemDetail, schedDesc(r), schedNext(r), schedState(r))
+	}
+}
+
+// triggerKind 把 CIM 类名归一成 daily/weekly/monthly；不认识的返回空串。
+// 用后缀而不是全名匹配：CIM 类名带 MSFT_Task 前缀，但不同 Windows 版本的
+// 命名空间/前缀可能不完全一致，末尾的 Daily/Weekly/Monthly 是稳的。
+func triggerKind(cls string) string {
+	switch {
+	case strings.HasSuffix(cls, "DailyTrigger"):
+		return "daily"
+	case strings.HasSuffix(cls, "WeeklyTrigger"):
+		return "weekly"
+	case strings.HasSuffix(cls, "MonthlyTrigger"):
+		return "monthly"
+	}
+	return ""
+}
+
+// triggerClock 取触发时刻 HH:MM：优先 StartBoundary，退回任务名末尾的 HHMM。
+func triggerClock(r schedRow) string {
+	if i := strings.IndexByte(r.start, 'T'); i >= 0 && len(r.start) >= i+6 {
+		return r.start[i+1 : i+6]
+	}
+	// 任务名以「-HHMM」结尾；只有这四位是合法时间才算数，
+	// 否则 zinc-demo 这种名字会被切出 de:mo。
+	if i := strings.LastIndexByte(r.name, '-'); i >= 0 && len(r.name) == i+5 {
+		if n, err := strconv.Atoi(r.name[i+1:]); err == nil {
+			if hh, mm := n/100, n%100; hh < 24 && mm < 60 {
+				return fmt.Sprintf("%02d:%02d", hh, mm)
+			}
+		}
+	}
+	return "?"
+}
+
+// schedWeekdays 把 MSFT_TaskWeeklyTrigger 的 bitmask 转回 zinc 的 1-7（1=周一）。
+func schedWeekdays(mask string) string {
+	n, err := strconv.Atoi(strings.TrimSpace(mask))
+	if err != nil || n <= 0 {
+		return "?"
+	}
+	var out []string
+	for _, p := range []struct{ bit, num int }{
+		{2, 1}, {4, 2}, {8, 3}, {16, 4}, {32, 5}, {64, 6}, {1, 7},
+	} {
+		if n&p.bit != 0 {
+			out = append(out, strconv.Itoa(p.num))
+		}
+	}
+	if len(out) == 0 {
+		return "?"
+	}
+	return strings.Join(out, ",")
+}
+
+// schedDesc 拼出人类可读的计划，如「每天 03:00」「每周 1,3 03:00」。
+func schedDesc(r schedRow) string {
+	clock := triggerClock(r)
+	kind := triggerKind(r.cls)
+	// 只有类名完全没拿到时才按属性推断；拿到了但不认识就原样显示，
+	// 免得把用户手建的 TimeTrigger 说成「每天」。
+	if kind == "" && r.cls == "" {
+		switch {
+		case strings.TrimSpace(r.month) != "":
+			kind = "monthly"
+		case strings.TrimSpace(r.week) != "":
+			kind = "weekly"
+		case strings.TrimSpace(r.start) != "":
+			kind = "daily"
+		}
+	}
+	switch kind {
+	case "daily":
+		return fmt.Sprintf(M.CronDaily, clock)
+	case "weekly":
+		return fmt.Sprintf(M.CronWeekly, schedWeekdays(r.week), clock)
+	case "monthly":
+		days := strings.TrimSpace(r.month)
+		if days == "" {
+			days = "?"
+		}
+		return fmt.Sprintf(M.CronMonthly, days, clock)
+	}
+	if r.cls == "" {
+		return "?"
+	}
+	return r.cls
+}
+
+func schedNext(r schedRow) string {
+	if strings.TrimSpace(r.next) == "" {
+		return M.SchedNextNone
+	}
+	return r.next
+}
+
+func schedState(r schedRow) string {
+	switch strings.ToLower(strings.TrimSpace(r.state)) {
+	case "ready":
+		return M.StateReady
+	case "disabled":
+		return M.StateDisabled
+	case "running":
+		return M.StateRunning
+	case "queued":
+		return M.StateQueued
+	case "":
+		return M.StateUnknown
+	}
+	return r.state
 }

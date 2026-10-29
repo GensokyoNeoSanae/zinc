@@ -19,6 +19,7 @@ type Settings struct {
 	RestoreWrapFolder  *bool    `json:"restore_wrap_folder,omitempty"`
 	MaxPackByte        int64    `json:"max_pack_byte,omitempty"`
 	CompressionLevel   *int     `json:"compression_level,omitempty"`
+	SolidBlock         *int64   `json:"solid_block,omitempty"` // 0 = 非固实（每文件独立块）
 	SevenZipPath       string   `json:"7zip_path,omitempty"`
 	Lang               string   `json:"lang,omitempty"`
 	LockTimeoutMinutes int      `json:"lock_timeout_minutes,omitempty"`
@@ -107,6 +108,14 @@ func (s *Settings) compressLevel() int {
 	return *s.CompressionLevel
 }
 
+// solidBlock 返回固实块上限（字节）；0 表示非固实，每个文件独立块。
+func (s *Settings) solidBlock() int64 {
+	if s.SolidBlock == nil {
+		return defaultSolidBlock
+	}
+	return *s.SolidBlock
+}
+
 // sevenZipPath 返回可用的 7-Zip：显式配置优先，没配（或配了个不存在的文件）就在
 // PATH 和常见安装目录里现找。找不到时返回空串，由调用方决定怎么报错。
 // 配置的路径不做存在性检查就去 exec，用户只会看到一句“这个包解压报错”——那是在骗人。
@@ -149,6 +158,7 @@ const (
 	kString cfgKind = iota
 	kBool
 	kSize
+	kSolid // 容量写法，额外接受 off（0 = 非固实）
 	kInt
 	kList
 )
@@ -165,6 +175,7 @@ var cfgKeys = []cfgKey{
 	{"restore_wrap_folder", kBool, "恢复时在外层包一个 restore-<仓库>-<时间> 文件夹（默认 true）"},
 	{"max_pack_byte", kSize, "单包上限，支持 4G / 50M / 纯字节"},
 	{"compression_level", kInt, "7z 压缩等级 0-9（0=仅存储）"},
+	{"solid_block", kSolid, "7z 固实块上限：64M / off（块越小越抗损，压缩率略降）"},
 	{"7zip_path", kString, "7za.exe 路径"},
 	{"lang", kString, "界面语言 zh / en，空=自动"},
 	{"lock_timeout_minutes", kInt, "仓库锁最长等待分钟数"},
@@ -205,6 +216,11 @@ func cfgValueString(s *Settings, key string) string {
 		return fmt.Sprintf("%d (%s)", s.maxPackByte(), humanSize(s.maxPackByte()))
 	case "compression_level":
 		return strconv.Itoa(s.compressLevel())
+	case "solid_block":
+		if n := s.solidBlock(); n > 0 {
+			return fmt.Sprintf("%d (%s)", n, humanSize(n))
+		}
+		return "off"
 	case "7zip_path":
 		return s.sevenZipPath()
 	case "lang":
@@ -230,6 +246,11 @@ func cfgValueRaw(s *Settings, key string) string {
 	switch key {
 	case "max_pack_byte":
 		return strconv.FormatInt(s.maxPackByte(), 10)
+	case "solid_block":
+		if n := s.solidBlock(); n > 0 {
+			return strconv.FormatInt(n, 10)
+		}
+		return "off"
 	case "lock_timeout_minutes":
 		return strconv.Itoa(int(s.lockTimeout() / time.Minute))
 	}
@@ -249,6 +270,8 @@ func cfgIsSet(s *Settings, key string) bool {
 		return s.MaxPackByte != 0
 	case "compression_level":
 		return s.CompressionLevel != nil
+	case "solid_block":
+		return s.SolidBlock != nil
 	case "7zip_path":
 		return s.SevenZipPath != ""
 	case "lang":
@@ -303,6 +326,12 @@ func cfgSet(s *Settings, key, val string) error {
 			return fmt.Errorf(M.ConfigBadValue, key, val)
 		}
 		s.MaxPackByte = n
+	case kSolid:
+		n, err := parseSolid(val)
+		if err != nil {
+			return fmt.Errorf(M.ConfigBadValue, key, val)
+		}
+		s.SolidBlock = &n
 	case kInt:
 		n, err := strconv.Atoi(val)
 		if err != nil {
@@ -343,6 +372,8 @@ func cfgUnset(s *Settings, key string) error {
 		s.MaxPackByte = 0
 	case "compression_level":
 		s.CompressionLevel = nil
+	case "solid_block":
+		s.SolidBlock = nil
 	case "7zip_path":
 		s.SevenZipPath = ""
 	case "lang":
@@ -355,6 +386,16 @@ func cfgUnset(s *Settings, key string) error {
 		s.CompleteNotify = nil
 	}
 	return nil
+}
+
+// parseSolid 解析固实块上限：off 或 0 表示非固实（每文件独立块），
+// 其余按 64M / 4G / 纯字节 这类容量写法。
+func parseSolid(s string) (int64, error) {
+	v := strings.TrimSpace(s)
+	if strings.EqualFold(v, "off") || strings.EqualFold(v, "none") || v == "0" {
+		return 0, nil
+	}
+	return parseSize(v)
 }
 
 // parseSize 解析 4G / 50M / 1024 这样的容量写法（1024 进制）
