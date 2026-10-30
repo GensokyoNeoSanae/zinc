@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -105,7 +104,7 @@ func runSchedule(name string, all bool, kind, days, times, password string, noNo
 			return fmt.Errorf(M.UnknownPeriod, kind)
 		}
 
-		out, err := exec.Command("schtasks", args...).CombinedOutput()
+		out, err := hiddenCmd("schtasks", args...).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf(M.TaskCreateFailed, taskName, err, string(out))
 		}
@@ -132,7 +131,7 @@ func weekdayList(days string) (string, error) {
 const taskPrefixEnv = "ZINC_TASK_PREFIX"
 
 func runPowerShell(script, prefix string) ([]byte, error) {
-	cmd := exec.Command(powershellPath(), "-NoProfile", "-Command", script)
+	cmd := hiddenCmd(powershellPath(), "-NoProfile", "-Command", script)
 	cmd.Env = append(os.Environ(), taskPrefixEnv+"="+prefix)
 	return cmd.CombinedOutput()
 }

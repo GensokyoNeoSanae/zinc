@@ -31,6 +31,8 @@ func Main() {
 		cmdRestore(rest)
 	case "reindex":
 		cmdReindex(rest)
+	case "compact":
+		cmdCompact(rest)
 	case "verify":
 		cmdVerify(rest)
 	case "status":

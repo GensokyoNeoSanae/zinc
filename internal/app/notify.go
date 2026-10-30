@@ -12,6 +12,13 @@ import (
 // AUMID：Windows 通知用它识别「这是哪个应用发的」
 const appID = "zinc.backup"
 
+// hiddenPowerShellCmd 返回一个隐藏窗口的 PowerShell 调用。
+// -WindowStyle Hidden 是文档写法，某些系统上仍会先闪一下；hiddenCmd 里的
+// CREATE_NO_WINDOW 从进程创建那一刻就不分配控制台，双保险。
+func hiddenPowerShellCmd(script string) *exec.Cmd {
+	return hiddenCmd(powershellPath(), "-NoProfile", "-WindowStyle", "Hidden", "-Command", script)
+}
+
 // shortcutHelper 用 COM 给 .lnk 快捷方式设置 System.AppUserModel.ID。
 // 未打包的 exe 必须有带 AUMID 的开始菜单快捷方式，WinRT Toast 才能工作。
 const shortcutHelper = `using System;
@@ -160,7 +167,7 @@ func ensureShortcutForce(force bool) error {
 	os.Remove(tmp)
 	script := shortcutScript(exe, tmp, ico, png)
 
-	out, err := exec.Command(powershellPath(), "-NoProfile", "-Command", script).CombinedOutput()
+	out, err := hiddenPowerShellCmd(script).CombinedOutput()
 	if err != nil {
 		os.Remove(tmp) // 只清理临时文件，保留已有的 zinc.lnk
 		return fmt.Errorf(M.RegisterFailed, err, string(out))
@@ -255,7 +262,7 @@ $toast = New-Object Windows.UI.Notifications.ToastNotification $doc
 [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('%s').Show($toast)
 `, psQuote(xml), appID)
 
-	out, err := exec.Command(powershellPath(), "-NoProfile", "-Command", script).CombinedOutput()
+	out, err := hiddenPowerShellCmd(script).CombinedOutput()
 	if err != nil {
 		logf("toast failed: %v %s", err, string(out))
 		return fmt.Errorf(M.ToastFailed, err)

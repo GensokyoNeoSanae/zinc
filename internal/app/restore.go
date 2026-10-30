@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
@@ -195,6 +194,7 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 	}
 
 	deletedTotal := 0
+	delMissingTotal := 0
 	var deletedPaths []string
 	var failedPacks []string
 	failedStems := make(map[string]bool, 0)
@@ -205,7 +205,8 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 			fmt.Printf(M.Extracting, e.Pack)
 			// 7z 是“能解的先解、坏的报 CRC”，所以报错时包里其余文件照样落盘，
 			// 这里不能当成整包放弃：记下来、继续解后面的包，最后统一报。
-			cmd := exec.Command(sz, "x", "-y", ao, "-sccUTF-8", "-p"+opt.Password, full, "-o"+target)
+			cmd := hiddenCmd(sz, "x", "-y", ao, "-sccUTF-8", "-p"+opt.Password, full, "-o"+target,
+				"-x!"+placeholderName)
 			out, xerr := cmd.CombinedOutput()
 			if xerr != nil {
 				failedPacks = append(failedPacks, e.Pack)
@@ -235,11 +236,14 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 			continue
 		}
 		rels := dels[e.Del]
-		removed, _, derr := applyDeletions(target, rels)
+		removed, missing, derr := applyDeletions(target, rels)
 		if derr != nil {
 			fmt.Print(M.RestorePartial)
 			return derr
 		}
+		// 「删不到」是正常的：compact 清掉旧副本之后，这条记录要删的东西本来就没被解出来。
+		// 只计数，不中止，更不能把后面重新放回来的同名文件当成余党。
+		delMissingTotal += missing
 		if removed > 0 {
 			fmt.Printf(M.DeletingBatch, e.Del, removed)
 			deletedTotal += removed
@@ -251,6 +255,13 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 	}
 	if deletedTotal > 0 {
 		fmt.Printf(M.RestoreDelSummary, deletedTotal)
+	}
+	if delMissingTotal > 0 {
+		fmt.Printf(M.RestoreDelMissing, delMissingTotal)
+	}
+	// compact 把腾空的包换成只含占位文件的包，占位文件不该出现在恢复结果里
+	if n, perr := removePlaceholder(target); perr == nil && n > 0 {
+		fmt.Printf(M.PlaceholderRemoved, n, placeholderName)
 	}
 	fmt.Printf(M.RestoreDone, target)
 	logf("restore %s -> %s (%d packs, %d deleted, %d failed, overwrite=%v, wrap=%v)",
@@ -466,9 +477,10 @@ func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, onl
 	}
 	for _, pack := range targets {
 		fmt.Printf(M.Extracting, pack)
-		args := []string{"x", "-y", ao, "-sccUTF-8", "-p" + password, filepath.Join(repo.Output, pack), "-o" + dest}
+		args := []string{"x", "-y", ao, "-sccUTF-8", "-p" + password, filepath.Join(repo.Output, pack), "-o" + dest,
+			"-x!" + placeholderName}
 		args = append(args, patterns...)
-		cmd := exec.Command(sevenZip, args...)
+		cmd := hiddenCmd(sevenZip, args...)
 		out, xerr := cmd.CombinedOutput()
 		if xerr != nil {
 			fmt.Print(M.RestorePartial)

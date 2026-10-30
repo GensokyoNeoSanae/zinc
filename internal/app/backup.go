@@ -465,7 +465,7 @@ func packOne(repo *Repo, set *Settings, plan packPlan, name, password string, no
 	if sz == "" {
 		return packResult{}, fmt.Errorf("%s", M.SevenZipMissing)
 	}
-	cmd := exec.Command(sz, args...)
+	cmd := hiddenCmd(sz, args...)
 	cmd.Dir = repo.Source // listfile 里的相对路径按源目录解析
 	out, err := cmd.CombinedOutput()
 	var skipped []string
@@ -834,7 +834,7 @@ func exitCodeOf(err error) int {
 // 只读头不解压；加密包的头部要密码。用归档本身当裁判，而不是解析 7-Zip 的
 // 告警文案 —— 文案随界面语言变，中文文件名里还可能有冒号、等号之类。
 func archivePaths(sevenZip, archive, password string) (map[string]struct{}, error) {
-	cmd := exec.Command(sevenZip, "l", "-slt", "-p"+password, "-sccUTF-8", archive)
+	cmd := hiddenCmd(sevenZip, "l", "-slt", "-p"+password, "-sccUTF-8", archive)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("7za l: %v\n%s", err, string(out))
@@ -891,7 +891,7 @@ func syncFile(p string) error {
 
 // verifyArchive 用 7za t 校验包内所有数据块（CRC32）
 func verifyArchive(sevenZip, pack, password string) error {
-	cmd := exec.Command(sevenZip, "t", "-t7z", "-sccUTF-8", "-p"+password, pack)
+	cmd := hiddenCmd(sevenZip, "t", "-t7z", "-sccUTF-8", "-p"+password, pack)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("7za t: %v\n%s", err, string(out))
@@ -938,6 +938,7 @@ type Manifest struct {
 
 type ManifestBatch struct {
 	Time    string   `json:"time"`
+	Op      string   `json:"op,omitempty"` // 空=备份；compact=重写包
 	Hash    string   `json:"batch_hash"`
 	Files   []string `json:"files"`
 	Hashes  []string `json:"hashes"`
@@ -958,6 +959,7 @@ type batchMeta struct {
 	Rm      string
 	RmHash  string
 	Deleted int
+	Op      string // 空=备份；compact=重写包
 }
 
 func manifestPath(output string) string {
@@ -987,7 +989,9 @@ func writeManifest(output, repo, tag string, batch batchMeta) error {
 	}
 	// 同一次备份（tag 相同）的多个包合并进同一批：逐包提交不该把「一批 = 一次备份」
 	// 变成「一批 = 一个包」，否则 status 会显示成备份了几十次。
-	if n := len(m.Batches); n > 0 && tag != "" && m.Batches[n-1].Time == tag {
+	// compact 的重写批次永远自成一档（Op 非空），不参与合并：它改的是已有包，
+	// 跟「这一批新压了几个包」是两件事。
+	if n := len(m.Batches); n > 0 && tag != "" && batch.Op == "" && m.Batches[n-1].Time == tag && m.Batches[n-1].Op == "" {
 		b := &m.Batches[n-1]
 		b.Files = append(b.Files, baseNames(batch.Packs)...)
 		b.Hashes = append(b.Hashes, batch.Hashes...)
@@ -1006,6 +1010,7 @@ func writeManifest(output, repo, tag string, batch batchMeta) error {
 	} else {
 		m.Batches = append(m.Batches, ManifestBatch{
 			Time:    tag,
+			Op:      batch.Op,
 			Hash:    batch.Hash,
 			Files:   baseNames(batch.Packs),
 			Hashes:  batch.Hashes,

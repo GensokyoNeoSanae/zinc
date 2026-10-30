@@ -173,3 +173,45 @@ func TestRenderSchedules(t *testing.T) {
 		t.Errorf("render = %q, want %q", buf.String(), want)
 	}
 }
+
+// 计划任务密码只从配置里取，绝不再交互询问（2026-10-29 的 ndmm 事故）
+func TestSchedulePassword(t *testing.T) {
+	set := &Settings{DefaultPassword: "DEF"}
+	cfg := &Config{Repos: map[string]*Repo{"a": {}, "b": {}}}
+
+	pw, from := schedulePassword(cfg, set, []string{"a", "b"})
+	if pw != "DEF" || from != "settings" {
+		t.Fatalf("settings 回落 = %q/%q, want DEF/settings", pw, from)
+	}
+
+	cfg.Repos["a"] = &Repo{Password: "OWN"}
+	pw, from = schedulePassword(cfg, set, []string{"a", "b"})
+	if pw != "" || from != "mixed" {
+		t.Fatalf("混合密码 = %q/%q, want empty/mixed", pw, from)
+	}
+
+	pw, from = schedulePassword(cfg, set, []string{"a"})
+	if pw != "OWN" || from != "repo" {
+		t.Fatalf("仓库密码 = %q/%q, want OWN/repo", pw, from)
+	}
+
+	empty := &Config{Repos: map[string]*Repo{"x": {}}}
+	if pw, from := schedulePassword(empty, &Settings{}, []string{"x"}); pw != "" || from != "" {
+		t.Fatalf("无密码 = %q/%q, want empty/empty", pw, from)
+	}
+}
+
+func TestPasswordMismatch(t *testing.T) {
+	set := &Settings{DefaultPassword: "DEF"}
+	cfg := &Config{Repos: map[string]*Repo{"a": {}, "b": {}}}
+	if rn, ok := passwordMismatch(cfg, set, []string{"a", "b"}, "DEF"); ok {
+		t.Fatalf("配置密码相同却报冲突: %s", rn)
+	}
+	if rn, ok := passwordMismatch(cfg, set, []string{"a", "b"}, "OTHER"); !ok || rn != "a" {
+		t.Fatalf("密码不同应报冲突, got %q/%v", rn, ok)
+	}
+	// 配置里根本没密码时，--password 是唯一来源，不算冲突
+	if _, ok := passwordMismatch(&Config{Repos: map[string]*Repo{"c": {}}}, &Settings{}, []string{"c"}, "X"); ok {
+		t.Fatal("没有配置密码时不该拦截")
+	}
+}

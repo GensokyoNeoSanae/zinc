@@ -22,6 +22,7 @@ zinc 把一个或多个源目录（称为“仓库”）备份到同一个输出
 - [命令](#命令)
 - [配置](#配置)
 - [恢复](#恢复)
+- [压缩（compact）](#压缩compact)
 - [定时任务与通知](#定时任务与通知)
 - [文件位置](#文件位置)
 - [卸载](#卸载)
@@ -205,6 +206,7 @@ zinc restore pictures --check-list
 | `zinc backup <name\|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]` | 备份 |
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <路径>] [--from <包>]` | 恢复全量或单个路径 |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | 从包重建索引 |
+| `zinc compact <name> [--pack <包>] [--min-gain <5%\|8M>] [--yes]` | 重写已有包，丢掉被新版取代的旧副本 |
 | `zinc verify <name\|--all> [--sample <pct>]` | 校验包与删除记录的 SHA-256 |
 | `zinc status [--all] [<name>]` | 查看状态；`--all` 一次展开所有仓库的详情 |
 | `zinc schedule <name\|--all> --daily --at HH:MM` | 每天定时 |
@@ -230,7 +232,7 @@ zinc restore pictures --check-list
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `default_password` | 空 | 空 = 每次询问 |
+| `default_password` | 空 | 空 = backup/restore 每次询问（schedule 直接报错） |
 | `restore_overwrite` | `true` | 恢复时覆盖同名文件 |
 | `restore_wrap_folder` | `true` | 整仓恢复时在外层包一个 `restore-<仓库>-<时间>` 文件夹 |
 | `max_pack_byte` | `4G` | 单包上限，支持 `4G`、`50M` 或纯字节 |
@@ -265,7 +267,7 @@ zinc config set lang zh
 
 ### 密码
 
-四种来源，优先级：`--password` > 仓库的 `password` > `settings.json` 的 `default_password` > 交互输入。
+四种来源，优先级：`--password` > 仓库的 `password` > `settings.json` 的 `default_password` > 交互输入。`schedule` 不交互：它按前三种取，取不到直接报错；`--all` 下各仓库密码不一致也会拒绝（一条任务只能带一个密码）。
 
 ```powershell
 # 设一次，以后无人值守；值写 - 表示交互输入，不进 shell 历史
@@ -276,7 +278,7 @@ zinc config set default_password -
 
 密码以明文存在 `settings.json` 和计划任务命令里（`C:\Windows\System32\Tasks\zinc-*`）。这套加密防的是网盘自动内容扫描，不是已经拿到本机权限的定向攻击者。
 
-**换密码后必须重新 `schedule`**，否则任务里还是旧密码。
+**换密码后必须重新 `schedule`**，否则任务里还是旧密码。`verify` 除了 SHA-256 还会用配置里的密码试开每个包，密码不对会明确报「密码不符」——只算哈希查不出这件事。
 
 ## 恢复
 
@@ -342,23 +344,58 @@ zinc restore docs --only 'notes/chapter1.md' --from 20261020_070012_334.7z --des
 
 `--only --check-list` 需要密码，因为列包内文件要读加密的归档头。
 
-## 定时任务与通知
+## 压缩（compact）
+
+备份只往新包里写，所以一个文件改过几次，它的旧副本就一直躺在老包里。`compact` 把这些被新版取代的副本删掉，重打之后**包名不变**。
 
 ```powershell
-# 每天 20:00 备份全部仓库，完成后弹通知
-zinc schedule --all --daily --at 20:00 --password yourpassword
+# 先看会动哪些包、能省多少（默认不动手）
+zinc compact docs
 
-# pictures 每天 10:00 和 20:00 各一次
-zinc schedule pictures --daily --at 10:00,20:00 --password yourpassword
+# 真的做
+zinc compact docs --yes
 
-# 每周一、三 20:00
-zinc schedule pictures --weekly 1,3 --at 20:00 --password yourpassword
+# 只处理一个包
+zinc compact docs --pack 20261028_174343_907.7z --yes
 
-# 每月 1 号、15 号 20:00（写 29–31 号要加 --yes，否则直接拒绝创建）
-zinc schedule pictures --monthly 1,15 --at 20:00 --password yourpassword
+# 阈值调到 10%（默认 5%，且不低于 8 MiB）
+zinc compact docs --min-gain 10% --yes
 ```
 
-计划任务通过任务计划程序创建，指向 `zincw.exe`（GUI 子系统），执行时不会闪控制台窗口。通知规则：
+判定规则很简单：索引里指向某个包的文件就是这个包的当前版本，留下；指向别的包（已被新版取代）或根本没有条目（已从源目录删除）的，丢掉。
+
+几条不肯让步的约定：
+
+- **默认只报告，加 `--yes` 才动手。** 重写一个包要读一遍、写一遍，网盘还要重传一遍，值不值得先看清楚。
+- **收益低于阈值就跳过。** 默认 5%，且不低于 8 MiB——为省 2 MB 重传 1 GB 不划算。`--min-gain 0` 表示不看阈值。
+- **包名不变。** 夸克网盘这类支持「同名覆盖 + 历史版本」的网盘，重写的包会原地替换，旧包自动进历史版本，云端不会多留一份。
+- **包被腾空也不删包。** 删包会打乱「按名字顺序解压」这条恢复依据，所以空包里只留一个 0 字节的 `placeholder-Please_Delete_This`。恢复时 zinc 会把它排除掉（`-x!` 直接不解），手工 `7z x` 打开也一眼看得出该删。
+- **原包在最后一步之前一直不动。** 解压 → 重打 → `7za t` 自检 → 归档头对账，全部通过才原子替换（同卷 rename）；任何一步失败就跳过这个包，报错但不碰原包。
+- **索引和包目录必须对得上。** 对不上说明索引不完整（比如只重建过一段），这时 compact 会把别的包的内容误判成「已删除」，所以直接拒绝，让你先跑 `zinc reindex`。
+- **只认「当前版本」，旧版本真的会消失。** `restore --only <路径> --check-list` 之后能看到的版本会变少；想留几版历史，就别对这个仓库跑 compact。
+
+重写完成后要让网盘重新上传这些包——同名覆盖会让旧包进历史版本，这正是「本地裁掉的东西云端也裁掉」的关键。
+
+
+
+```powershell
+# 密码按「仓库 > settings」自动取，取不到会报错；任务里会存明文
+# 每天 20:00 备份全部仓库，完成后弹通知
+zinc schedule --all --daily --at 20:00
+
+# pictures 每天 10:00 和 20:00 各一次
+zinc schedule pictures --daily --at 10:00,20:00
+
+# 每周一、三 20:00
+zinc schedule pictures --weekly 1,3 --at 20:00
+
+# 每月 1 号、15 号 20:00（写 29–31 号要加 --yes，否则直接拒绝创建）
+zinc schedule pictures --monthly 1,15 --at 20:00
+```
+
+建完任务后再改密码，要删掉重建（`zinc unschedule <name>` 再 `zinc schedule ...`）。
+
+计划任务通过任务计划程序创建，指向 `zincw.exe`（GUI 子系统）。它是 GUI 进程、没有控制台，所以拉起的 7-Zip、schtasks、PowerShell 全部以 `CREATE_NO_WINDOW` 启动——不设这个标志，Windows 会给每个子进程新建一个控制台，一次备份能闪几十个黑窗。通知规则：
 
 - `zinc backup` 在 `complete_notify` 开着（默认）时会弹窗；手动跑想安静就加 `--notify=false`
 - `zinc schedule` 创建的任务命令行里固定带 `--notify`（建任务时用了 `--no-notify` 除外），`complete_notify` 对它无效

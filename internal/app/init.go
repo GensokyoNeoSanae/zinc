@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -62,7 +61,7 @@ func addUserPath(dir string) (bool, error) {
 	if strings.ContainsAny(dir, `;"`) {
 		return false, fmt.Errorf("路径里含 ; 或双引号，无法安全写入 PATH: %s", dir)
 	}
-	cmd := exec.Command(powershellPath(), "-NoProfile", "-Command", initPathScript)
+	cmd := hiddenCmd(powershellPath(), "-NoProfile", "-Command", initPathScript)
 	cmd.Env = append(os.Environ(), "ZINC_INIT_DIR="+dir)
 	out, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(out))

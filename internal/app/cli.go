@@ -17,7 +17,7 @@ var flagNeedsValue = map[string]bool{
 	"sample": true, "at": true, "weekly": true, "monthly": true,
 	"max-pack-byte": true, "compress": true, "solid": true, "exclude": true,
 	"pack-start": true, "pack-end": true, "only": true, "from": true,
-	"7zip": true,
+	"7zip": true, "pack": true, "min-gain": true,
 }
 
 // multiFlag 是可重复的字符串 flag（--exclude a --exclude b）
@@ -87,6 +87,50 @@ func pickPassword(flagVal, prompted string, repo *Repo, set *Settings) (string, 
 		return set.DefaultPassword, "settings"
 	}
 	return prompted, "prompt"
+}
+
+// passwordMismatch 返回第一个「配置里已有密码、且与 flagPw 不同」的仓库名。
+// 只看配置非空的仓库：配置里根本没密码时，--password 是唯一来源，不算冲突。
+func passwordMismatch(cfg *Config, set *Settings, names []string, flagPw string) (string, bool) {
+	for _, n := range names {
+		r, err := cfg.repo(n)
+		if err != nil {
+			continue
+		}
+		if v := r.password(set); v != "" && v != flagPw {
+			return n, true
+		}
+	}
+	return "", false
+}
+
+// schedulePassword 解析计划任务要嵌入的密码：仓库 > settings。
+// 返回来源（repo/settings）；没有可用密码返回空串；目标仓库密码不一致返回 "mixed"。
+// 一条任务只能带一个密码，所以 --all 下必须所有仓库解析出同一个值。
+func schedulePassword(cfg *Config, set *Settings, names []string) (string, string) {
+	pw, from := "", ""
+	for _, n := range names {
+		r, err := cfg.repo(n)
+		if err != nil {
+			continue
+		}
+		v := r.password(set)
+		if v == "" {
+			continue
+		}
+		if pw == "" {
+			pw = v
+			from = "settings"
+			if r.Password != "" {
+				from = "repo"
+			}
+			continue
+		}
+		if v != pw {
+			return "", "mixed"
+		}
+	}
+	return pw, from
 }
 
 func promptPassword(twice bool) string {
@@ -332,6 +376,28 @@ func cmdBackup(args []string) {
 		die(M.NoReposBackup)
 	}
 
+	// --all + 显式 --password：与某个仓库配置的密码不一致时先拦一下。
+	// 计划任务没有控制台（isConsole 为假），读不到回答就按取消处理——宁可响亮失败，也不要静默用错密码加密。
+	if *all && *password != "" {
+		if rn, ok := passwordMismatch(cfg, set, names, *password); ok {
+			fmt.Printf(M.BackupPwMismatch, rn)
+			ans := ""
+			if isConsole() {
+				fmt.Print(M.ConfirmPwMismatch)
+				ans = strings.ToLower(strings.TrimSpace(readLine()))
+			}
+			if ans != "y" && ans != "yes" {
+				logf("backup --all: cancelled, --password differs from repo/default password")
+				if *notify {
+					if err := sendToast(M.ToastTitle, M.BackupPwAborted); err != nil {
+						fmt.Printf(M.NotifyFailed, err)
+					}
+				}
+				die(M.BackupPwAborted)
+			}
+		}
+	}
+
 	// 先扫描，全部无变化时不需要密码
 	scans := make(map[string]ScanResult)
 	var scanErrs []string
@@ -560,6 +626,7 @@ func cmdVerify(args []string) {
 		die(M.SampleInvalid, *sample)
 	}
 	cfg := mustConfig()
+	set := mustSettings()
 	var names []string
 	if *all {
 		names = cfg.sortedNames()
@@ -572,7 +639,7 @@ func cmdVerify(args []string) {
 
 	failed := false
 	for _, n := range names {
-		if err := runVerify(n, cfg, *sample); err != nil {
+		if err := runVerify(n, cfg, set, *sample); err != nil {
 			fmt.Printf("%s: %v\n", n, err)
 			failed = true
 		}
@@ -684,6 +751,36 @@ func cmdConfig(args []string) {
 	}
 }
 
+// cmdCompact 重写已有包、丢掉被新版取代的旧副本。包名不变，云端同名覆盖。
+func cmdCompact(args []string) {
+	cfg := mustConfig()
+	set := mustSettings()
+	fs := flag.NewFlagSet("compact", flag.ExitOnError)
+	password := fs.String("password", "", M.FlagPassword)
+	packSpec := fs.String("pack", "", M.FlagCompactPack)
+	minGain := fs.String("min-gain", "5%", M.FlagCompactMinGain)
+	yes := fs.Bool("yes", false, M.FlagYesCompact)
+	noVerify := fs.Bool("no-verify", false, M.FlagNoVerify)
+	notify := fs.Bool("notify", set.completeNotify(), M.FlagNotifyCompact)
+	fs.Parse(reorderArgs(args))
+	if fs.NArg() < 1 {
+		die(M.UsageCompact)
+	}
+	name := fs.Arg(0)
+	repo, err := cfg.repo(name)
+	if err != nil {
+		die("%v", err)
+	}
+	pw, _ := pickPassword(*password, "", repo, set)
+	if pw == "" {
+		pw = promptPassword(false)
+	}
+	if err := runCompact(name, cfg, set, pw, *packSpec, *minGain, *yes, *noVerify, *notify); err != nil {
+		logf("compact %s: failed: %v", name, err)
+		die("%v", err)
+	}
+}
+
 func cmdReindex(args []string) {
 	fs := flag.NewFlagSet("reindex", flag.ExitOnError)
 	password := fs.String("password", "", M.FlagPassword)
@@ -748,8 +845,15 @@ func cmdSchedule(args []string) {
 	}
 
 	cfg := mustConfig()
+	set := mustSettings()
 	name := ""
-	if !*all {
+	var targets []string
+	if *all {
+		targets = cfg.sortedNames()
+		if len(targets) == 0 {
+			die(M.NoReposBackup)
+		}
+	} else {
 		if fs.NArg() < 1 {
 			die(M.UsageSchedule)
 		}
@@ -757,11 +861,28 @@ func cmdSchedule(args []string) {
 		if _, err := cfg.repo(name); err != nil {
 			die("%v", err)
 		}
+		targets = []string{name}
 	}
 
-	pw := *password
+	// 密码按「命令行 > 仓库 > settings」取。计划任务会把密码明文存进任务的 /TR，
+	// 所以这里绝不能再无条件交互询问——一次手滑就会把测试密码永久固化进任务。
+	pw, pwFrom := *password, "cli"
 	if pw == "" {
-		pw = promptPassword(false)
+		pw, pwFrom = schedulePassword(cfg, set, targets)
+	}
+	if pwFrom == "mixed" {
+		die(M.SchedulePwMixed)
+	}
+	if pw == "" {
+		die(M.SchedulePwMissing)
+	}
+	switch pwFrom {
+	case "repo":
+		fmt.Print(M.SchedulePwFromRepo)
+	case "settings":
+		fmt.Print(M.SchedulePwFromSettings)
+	default:
+		fmt.Print(M.SchedulePwFromCLI)
 	}
 
 	if err := runSchedule(name, *all, kind, days, *at, pw, *noNotify, *yes); err != nil {

@@ -97,3 +97,33 @@ func TestShortcutScriptCarriesIcon(t *testing.T) {
 		t.Error("script still has to build the shortcut")
 	}
 }
+
+// 计划任务弹通知时不能闪控制台窗口：参数要带 -WindowStyle Hidden，
+// 进程还要带 CREATE_NO_WINDOW——GUI 子系统里只靠参数仍可能先闪一下。
+func TestHiddenPowerShell(t *testing.T) {
+	cmd := hiddenPowerShellCmd("Write-Output 1")
+	joined := strings.Join(cmd.Args, " ")
+	for _, want := range []string{"-NoProfile", "-WindowStyle", "Hidden"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("缺少 %q: %q", want, joined)
+		}
+	}
+	if cmd.SysProcAttr == nil {
+		t.Fatal("SysProcAttr 为空：没有 CREATE_NO_WINDOW，计划任务里会闪窗")
+	}
+	if cmd.SysProcAttr.CreationFlags&createNoWindow == 0 {
+		t.Errorf("CreationFlags=%#x 不含 CREATE_NO_WINDOW", cmd.SysProcAttr.CreationFlags)
+	}
+	if !cmd.SysProcAttr.HideWindow {
+		t.Error("HideWindow 没设")
+	}
+
+	// 真的跑一次：CREATE_NO_WINDOW 不该影响 stdout 捕获，否则通知脚本会静默失败
+	out, err := hiddenPowerShellCmd("Write-Output hidden-ok").CombinedOutput()
+	if err != nil {
+		t.Fatalf("隐藏窗口的 PowerShell 执行失败: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "hidden-ok") {
+		t.Fatalf("输出没拿到: %q", string(out))
+	}
+}

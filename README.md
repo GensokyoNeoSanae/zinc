@@ -22,6 +22,7 @@ zinc backs up one or more source folders ("repos") into a single output root. Ev
 - [Commands](#commands)
 - [Configuration](#configuration)
 - [Restore](#restore)
+- [Compact](#compact)
 - [Scheduling and notifications](#scheduling-and-notifications)
 - [What lives where](#what-lives-where)
 - [Uninstall](#uninstall)
@@ -205,6 +206,7 @@ zinc restore pictures --check-list
 | `zinc backup <name\|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]` | back up |
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <path>] [--from <pack>]` | restore everything or one path |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | rebuild the index from the packs |
+| `zinc compact <name> [--pack <pack>] [--min-gain <5%\|8M>] [--yes]` | rewrite existing packs, dropping copies a newer version superseded |
 | `zinc verify <name\|--all> [--sample <pct>]` | SHA-256 check of the packs and of the deletion records |
 | `zinc status [--all] [<name>]` | show status; `--all` expands every repo |
 | `zinc schedule <name\|--all> --daily --at HH:MM` | daily schedule |
@@ -230,7 +232,7 @@ Global settings live in `<program dir>\settings.json`. They are **not** part of 
 
 | Key | Default | Meaning |
 |---|---|---|
-| `default_password` | empty | empty = prompt every time |
+| `default_password` | empty | empty = prompt for backup/restore (schedule fails) |
 | `restore_overwrite` | `true` | overwrite same-name files during restore |
 | `restore_wrap_folder` | `true` | wrap a full restore in `restore-<repo>-<time>` |
 | `max_pack_byte` | `4G` | pack size limit; accepts `4G`, `50M` or plain bytes |
@@ -265,7 +267,7 @@ zinc config set lang zh
 
 ### Password
 
-Four sources, in order: `--password`, the repo's `password`, `settings.json` `default_password`, interactive prompt.
+Four sources, in order: `--password`, the repo's `password`, `settings.json` `default_password`, interactive prompt. `schedule` never prompts: it uses the first three and fails if none exists; under `--all` it also refuses when the repos disagree (one task can carry only one password).
 
 ```powershell
 # set it once for unattended runs; `-` reads the value interactively so it stays out of shell history
@@ -276,7 +278,7 @@ Interactive input is visible (so you can spot typos), and `backup` asks twice. O
 
 Passwords are stored in plain text in `settings.json` and in the scheduled task commands (`C:\Windows\System32\Tasks\zinc-*`). The encryption is meant to defeat automated cloud-drive content scanning, not a targeted attacker who already has access to your machine.
 
-**Changing the password requires re-running `schedule`**, otherwise the tasks still carry the old one.
+**Changing the password requires re-running `schedule`**, otherwise the tasks still carry the old one. `verify` also tries to open every pack with the configured password, so a mismatch is reported as "wrong password" — a SHA-256 check alone cannot catch that.
 
 ## Restore
 
@@ -342,23 +344,58 @@ Wildcards follow 7-Zip's matching rules, where `*` does **not** reliably cross d
 
 `--only --check-list` needs the password, because listing an archive means decrypting its header.
 
+## Compact
+
+Backups only ever write into new packs, so every time a file changes its old copy stays in an older pack forever. `compact` drops those superseded copies and repacks — under the **same pack name**.
+
+```powershell
+# what would it touch, and how much would it reclaim? (nothing is changed by default)
+zinc compact docs
+
+# do it
+zinc compact docs --yes
+
+# just one pack
+zinc compact docs --pack 20261028_174343_907.7z --yes
+
+# raise the threshold to 10% (default is 5%, never below 8 MiB)
+zinc compact docs --min-gain 10% --yes
+```
+
+The rule is simple: a file whose index entry points at this pack is that pack's current version and stays; anything pointing at a newer pack (superseded) or absent from the index (deleted from the source) is dropped.
+
+Non-negotiables:
+
+- **Report first, act only with `--yes`.** Rewriting a pack means reading it, writing it, and re-uploading it — look before you leap.
+- **Below the threshold, skip.** Default 5% and never less than 8 MiB: re-uploading 1 GB to save 2 MB is a loss. `--min-gain 0` disables the threshold.
+- **The pack name never changes.** On cloud drives that overwrite same-name files and keep version history (Quark, for one), the rewritten pack replaces the old one in place and the old one moves into history — nothing extra is stored in the cloud.
+- **An emptied pack is not deleted.** Deleting a pack would break "extract in name order", which is the one thing restore relies on, so the pack keeps a single 0-byte `placeholder-Please_Delete_This`. Restore excludes it outright (`-x!`); a manual `7z x` makes it obvious what to delete.
+- **The original stays untouched until the last step.** Extract → repack → `7za t` self-check → archive-header reconciliation; only when all of that passes is it replaced atomically (same-volume rename). Any failure skips that pack and leaves it alone.
+- **The index must match the pack directory.** If it doesn't, the index is incomplete (a partial `reindex`, say) and compact would mistake other packs' contents for deletions — so it refuses and tells you to run `zinc reindex` first.
+- **Only the current version survives.** Older versions really do go away, so `restore --only <path> --check-list` will show fewer of them afterwards. If you want history depth, don't compact that repo.
+
+Afterwards, let the cloud drive re-upload those packs — the same-name overwrite pushes the old ones into version history, which is exactly how the cloud ends up no larger than the local folder.
+
 ## Scheduling and notifications
 
 ```powershell
+# the password comes from repo > settings; the task stores it in plain text
 # every day at 20:00, back up all repos, notify when done
-zinc schedule --all --daily --at 20:00 --password yourpassword
+zinc schedule --all --daily --at 20:00
 
 # pictures at 10:00 and 20:00 every day
-zinc schedule pictures --daily --at 10:00,20:00 --password yourpassword
+zinc schedule pictures --daily --at 10:00,20:00
 
 # every Monday and Wednesday at 20:00
-zinc schedule pictures --weekly 1,3 --at 20:00 --password yourpassword
+zinc schedule pictures --weekly 1,3 --at 20:00
 
 # 1st and 15th of every month at 20:00 (days 29-31 need --yes, otherwise the task is refused)
-zinc schedule pictures --monthly 1,15 --at 20:00 --password yourpassword
+zinc schedule pictures --monthly 1,15 --at 20:00
 ```
 
-Tasks are created through Task Scheduler and point at `zincw.exe` (GUI subsystem), so no console window flashes up. Notification rules:
+If you change the password afterwards, delete and recreate the task (`zinc unschedule <name>`, then `zinc schedule ...`).
+
+Tasks are created through Task Scheduler and point at `zincw.exe` (GUI subsystem). Being a GUI process it has no console, so every child it spawns (7-Zip, schtasks, PowerShell) runs with `CREATE_NO_WINDOW`; without that flag Windows gives each child its own console window, and one backup can flash dozens of them. Notification rules:
 
 - `zinc backup` pops a toast when it finishes while `complete_notify` is on (the default). For a quiet manual run, pass `--notify=false`.
 - Tasks created by `zinc schedule` always pass `--notify` unless the task was created with `--no-notify`; `complete_notify` has no effect on them.

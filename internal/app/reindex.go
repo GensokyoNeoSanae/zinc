@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -22,7 +21,7 @@ type packEntry struct {
 
 // listPackContents 只读归档头（不解压内容），列出包内文件
 func listPackContents(sevenZip, pack, password string) ([]packEntry, error) {
-	cmd := exec.Command(sevenZip, "l", "-slt", "-sccUTF-8", "-p"+password, pack)
+	cmd := hiddenCmd(sevenZip, "l", "-slt", "-sccUTF-8", "-p"+password, pack)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("%v", err)
@@ -189,7 +188,7 @@ func runReindex(name string, cfg *Config, set *Settings, password, packStart, pa
 		from, to := "", ""
 		var minT, maxT time.Time
 		for _, e := range entries {
-			if e.IsDir || e.Path == "" {
+			if e.IsDir || e.Path == "" || isPlaceholder(e.Path) {
 				continue
 			}
 			if minT.IsZero() || e.MTime.Before(minT) {
@@ -207,7 +206,8 @@ func runReindex(name string, cfg *Config, set *Settings, password, packStart, pa
 		id := idx.addPack(pk, from, to)
 		n := 0
 		for _, e := range entries {
-			if e.IsDir || e.Path == "" {
+			// 占位文件是 compact 留给空包的记号，不是备份内容，不进索引
+			if e.IsDir || e.Path == "" || isPlaceholder(e.Path) {
 				continue
 			}
 			idx.Files[filepath.ToSlash(e.Path)] = &FileEntry{Size: e.Size, MTime: e.MTime, Pack: id}

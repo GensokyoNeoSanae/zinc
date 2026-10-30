@@ -40,24 +40,32 @@ func runStatus(name string, cfg *Config, set *Settings) error {
 		batches, packs, last, from, to := 0, 0, "", "", ""
 		var total int64
 		if mErr == nil {
-			batches = len(m.Batches)
+			// 包名去重：compact 会把同一个包再登记一次，别把它算成两个包、两份大小。
+			// compact 批次也不算「备份了几次」——它没有新增内容。
+			seen := make(map[string]struct{}, len(m.Batches))
 			for _, b := range m.Batches {
-				packs += len(b.Files)
 				for _, f := range b.Files {
+					if _, ok := seen[f]; ok {
+						continue
+					}
+					seen[f] = struct{}{}
 					if st, e := os.Stat(filepath.Join(repo.Output, f)); e == nil {
 						total += st.Size()
 					}
 				}
+				if b.Op != "" {
+					continue
+				}
+				batches++
 				if b.From != "" && (from == "" || b.From < from) {
 					from = b.From
 				}
 				if b.To > to {
 					to = b.To
 				}
+				last = b.Time
 			}
-			if batches > 0 {
-				last = m.Batches[batches-1].Time
-			}
+			packs = len(seen)
 		}
 
 		if name == "" {

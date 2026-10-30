@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -21,6 +22,19 @@ func init() {
 	// 控制台按 UTF-8 显示中文
 	procSetConsoleOutputCP.Call(65001)
 	procSetConsoleCP.Call(65001)
+}
+
+// CREATE_NO_WINDOW：建进程时不给它分配控制台。
+// zincw.exe 是 GUI 子系统，从它拉起的 7z.exe / schtasks / powershell 默认各自开一个
+// 控制台窗口；一次备份要跑几十次 7z，桌面上就不停闪黑窗、抢焦点。加上这个标志从
+// 进程创建起就没有窗口，输出仍走管道，CombinedOutput 照常可读。
+const createNoWindow = 0x08000000
+
+// hiddenCmd 构造一个不弹控制台的子进程。所有会拉起外部控制台程序的地方都走它。
+func hiddenCmd(name string, args ...string) *exec.Cmd {
+	cmd := exec.Command(name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow}
+	return cmd
 }
 
 // appDir 返回 zinc.exe 所在目录（repos.json、manifests、日志都放这里）。

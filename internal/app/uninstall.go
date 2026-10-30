@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -206,7 +205,7 @@ Write-Output 'REMOVED'
 
 // runPS 固定用 -NoProfile -Command，参数走环境变量，不依赖执行策略。
 func runPS(script string, env ...string) (string, error) {
-	cmd := exec.Command(powershellPath(), "-NoProfile", "-Command", script)
+	cmd := hiddenCmd(powershellPath(), "-NoProfile", "-Command", script)
 	cmd.Env = append(os.Environ(), env...)
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
@@ -267,7 +266,7 @@ func ownsShortcut(owner, dir string) bool {
 // removeAumidKey 删掉 AppUserModelId 注册表项。用 reg.exe 避免再拼一段 PowerShell。
 func removeAumidKey() error {
 	key := `HKCU\Software\Classes\AppUserModelId\` + appID
-	out, err := exec.Command("reg", "delete", key, "/f").CombinedOutput()
+	out, err := hiddenCmd("reg", "delete", key, "/f").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
 	}

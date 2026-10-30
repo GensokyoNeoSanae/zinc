@@ -84,6 +84,11 @@ type Messages struct {
 	CompressFailed      string
 	NoVolumes           string
 
+	// --all + 显式密码与配置不一致时的拦截
+	BackupPwMismatch  string
+	ConfirmPwMismatch string
+	BackupPwAborted   string
+
 	// restore
 	FlagDest            string
 	UsageRestore        string
@@ -108,6 +113,9 @@ type Messages struct {
 	CorruptFile     string
 	VerifySummary   string
 	VerifyFailedMsg string
+	VerifyPwBad     string
+	VerifyPwSummary string
+	VerifyPwNo7zip  string
 
 	// schedule
 	FlagAllSchedule   string
@@ -132,6 +140,13 @@ type Messages struct {
 	NoMatch           string
 	FlagAllUnschedule string
 	UsageUnschedule   string
+
+	// schedule 取密码（命令行 > 仓库 > settings）
+	SchedulePwFromCLI      string
+	SchedulePwFromRepo     string
+	SchedulePwFromSettings string
+	SchedulePwMissing      string
+	SchedulePwMixed        string
 
 	// schedule --list
 	FlagListSchedule   string
@@ -257,6 +272,7 @@ type Messages struct {
 	DeletedLine          string
 	DeletingBatch        string
 	RestoreDelSummary    string
+	RestoreDelMissing    string
 	FlagNoDelete         string
 	FlagNotifyWarn       string
 	ToastRestoreTitle    string
@@ -323,6 +339,43 @@ type Messages struct {
 	ReindexBakFailed  string
 	ReindexDeleted    string
 
+	// compact
+	FlagCompactPack        string
+	FlagCompactMinGain     string
+	FlagYesCompact         string
+	UsageCompact           string
+	CompactStart           string
+	CompactDryRunHead      string
+	CompactDryRunTail      string
+	CompactPlanPack        string
+	CompactSkipNone        string
+	CompactSkipSmall       string
+	CompactPlanSummary     string
+	CompactNothing         string
+	CompactDoing           string
+	CompactEmptyDoing      string
+	CompactPackDone        string
+	CompactDoneLine        string
+	CompactUploadHint      string
+	CompactFailedMsg       string
+	CompactNoPacks         string
+	CompactPackFailed      string
+	CompactPackNotFound    string
+	CompactIndexStale      string
+	CompactPackListFailed  string
+	CompactExtractFailed   string
+	CompactExtractMismatch string
+	CompactRebuildFailed   string
+	CompactVerifyFailed    string
+	CompactCountMismatch   string
+	CompactNoSpace         string
+	CompactBadGain         string
+	PlaceholderRemoved     string
+	FlagNotifyCompact      string
+	ToastCompactTitle      string
+	ToastCompactBody       string
+	ToastCompactFailBody   string
+
 	// set flags
 	FlagMaxPackByte string
 	FlagCompress    string
@@ -357,6 +410,8 @@ var zhMessages = &Messages{
   zinc restore <name> --only <相对路径> [--dest <path>] [--from <包名|序号>]
                        只恢复这一个文件/目录；配 --check-list 可列出它有哪些版本
   zinc reindex <name> [--password <pw>] [--pack-start <名>] [--pack-end <名>] [--yes]
+  zinc compact <name> [--password <pw>] [--pack <名|序号>] [--min-gain <5%|8M>] [--yes] [--notify]
+                       丢掉包里被新版取代的旧副本；包名不变，云端同名覆盖进历史版本
   zinc verify <name|--all> [--sample <pct>]
   zinc status [--all] [<name>]
   zinc schedule <name|--all> --daily --at HH:MM[,HH:MM...]
@@ -368,13 +423,16 @@ var zhMessages = &Messages{
 说明:
   - 每个包都是独立完整的加密 7z，文件名就是打包时刻，恢复按名字升序
   - 固实块默认 64M：块里坏一个字节，该块后续文件就解不出来；--solid off 改成每文件独立块
-  - 不给 --password 时交互输入；settings.json 里设了 default_password 就不再询问
+  - 不给 --password 时按「仓库 > settings」取；backup/restore 取不到才交互输入，schedule 取不到直接报错
+  - schedule 会把解析到的密码明文写进计划任务，之后改了密码要重建任务（zinc unschedule <name> 再 schedule）
   - 恢复默认覆盖同名文件（--no-overwrite 则保留两份），--check-list 只列顺序不动手
   - 恢复会执行之后备份记下的删除（--no-delete 保留这些文件）；删除记录是输出目录里的 .rm 旁注
+  - compact 删掉的是「已被新版取代 / 已从源目录删除」的副本，那些旧版本随之消失；包被腾空后只留一个占位文件
   - 索引只是缓存，丢了用 zinc reindex 从包本身重建
   - 输出默认落在 <root>\<name>，用 zinc root 设置
   - 解压后先跑一次 zinc init，之后在任意终端直接敲 zinc
   - 安装/卸载用 tools\ 下的 zinc-register.exe / zinc-unregister.exe；zinc init 是轻量版，不强制 7-Zip
+  - unschedule <name> 删该仓库的任务；unschedule --all 删所有 zinc 任务；unschedule all 只删 --all 建的那个总任务
 `,
 
 	ErrPrefix:         "[错误] ",
@@ -450,6 +508,10 @@ var zhMessages = &Messages{
 	CompressFailed:      "7za 压缩失败: %v\n%s",
 	NoVolumes:           "7za 执行成功但未生成任何包",
 
+	BackupPwMismatch:  "[警告] --password 与仓库 %s 的配置密码不一致\n",
+	ConfirmPwMismatch: "密码与仓库默认密码不一致！确定要执行吗？[y/n]: ",
+	BackupPwAborted:   "已取消：密码与配置不一致",
+
 	FlagDest:            "恢复目标目录",
 	UsageRestore:        "用法: zinc restore <name> --dest <path>",
 	MissingDest:         "缺少 --dest",
@@ -472,6 +534,9 @@ var zhMessages = &Messages{
 	CorruptFile:     "[损坏] %s\n",
 	VerifySummary:   "%s: 通过 %d, 损坏 %d, 缺失 %d\n",
 	VerifyFailedMsg: "校验未通过",
+	VerifyPwBad:     "[密码不符] %s\n",
+	VerifyPwSummary: "[密码] %d 个包无法用当前配置的密码打开（包本身可能没坏，是密码不对）\n",
+	VerifyPwNo7zip:  "[提示] 找不到 7-Zip，跳过密码校验\n",
 
 	FlagAllSchedule:   "为全部仓库建总任务",
 	FlagDaily:         "每天",
@@ -495,6 +560,12 @@ var zhMessages = &Messages{
 	NoMatch:           "没有匹配的任务",
 	FlagAllUnschedule: "删除全部 zinc 任务",
 	UsageUnschedule:   "用法: zinc unschedule <name> 或 zinc unschedule --all",
+
+	SchedulePwFromCLI:      "[密码] 取自命令行\n",
+	SchedulePwFromRepo:     "[密码] 取自仓库配置\n",
+	SchedulePwFromSettings: "[密码] 取自 settings.json 的默认密码\n",
+	SchedulePwMissing:      "找不到可用密码：用 --password 指定，或先 zinc config set default_password <密码>",
+	SchedulePwMixed:        "--all 的目标仓库密码不一致，一条任务没法统一；请分开建任务，或先统一各仓库密码",
 
 	FlagListSchedule:   "列出当前所有计划任务",
 	ScheduleHeader:     "[计划] %d 个任务\n\n",
@@ -611,6 +682,7 @@ var zhMessages = &Messages{
 	DeletedLine:          "[删除] %s · %d 个文件已从源目录消失（记录 %s）\n",
 	DeletingBatch:        "[删除] %s · 移除 %d 个文件\n",
 	RestoreDelSummary:    "[完成] 按删除记录移除了 %d 个文件\n",
+	RestoreDelMissing:    "  删除记录里另有 %d 项在恢复结果中已不存在（跳过；compact 清掉旧副本后属正常）\n",
 	FlagNoDelete:         "恢复时不执行备份之后记录的删除",
 	FlagNotifyWarn:       "恢复不完整时发 Windows 通知",
 	ToastRestoreTitle:    "zinc 恢复不完整",
@@ -675,6 +747,42 @@ var zhMessages = &Messages{
 	ReindexBakFailed:  "备份旧索引失败，已中止: %w",
 	ReindexDeleted:    "  按删除记录划掉 %d 个文件\n",
 
+	FlagCompactPack:        "只处理指定的包（包名或序号）",
+	FlagCompactMinGain:     "收益低于这个值就跳过重打：5% 或 8M",
+	FlagYesCompact:         "真正执行（不给时只报告）",
+	UsageCompact:           "用法: zinc compact <name> [--pack <名|序号>] [--min-gain <5%%|8M>] [--yes] [--notify] [--password <pw>]",
+	CompactStart:           "[压缩] %s：检查 %d 个包（只读归档头）\n",
+	CompactDryRunHead:      "[预演] 没有 --yes，这一步只看不改\n",
+	CompactDryRunTail:      "确认无误后加 --yes 执行。\n",
+	CompactPlanPack:        "  %s · 可删 %d 个 / %s（%.1f%%）→ 待重写\n",
+	CompactSkipNone:        "  %s · 没有可删的文件\n",
+	CompactSkipSmall:       "  %s · 可删 %d 个 / %s（%.1f%%），未达阈值 %s → 跳过\n",
+	CompactPlanSummary:     "[计划] %d 个包待重写，预计释放 %s\n",
+	CompactNothing:         "[完成] 没有需要重写的包（%d 个没有死副本，%d 个低于阈值）\n",
+	CompactDoing:           "[重写] %s：删 %d 个文件 / %s\n",
+	CompactEmptyDoing:      "[重写] %s：文件全被新版取代，包内只留占位 %s\n",
+	CompactPackDone:        "  %s · %s → %s\n",
+	CompactDoneLine:        "[完成] 重写 %d 个包，失败 %d 个，%s → %s，释放 %s\n",
+	CompactUploadHint:      "提醒：网盘那边要重新上传这些包；同名覆盖会让旧包进「历史版本」。\n",
+	CompactFailedMsg:       "%d 个包重写失败，原包未改动",
+	CompactNoPacks:         "没有找到任何包: %s",
+	CompactPackFailed:      "处理包 %s 失败: %v\n",
+	CompactPackNotFound:    "找不到这个包: %s",
+	CompactIndexStale:      "索引与包目录对不上（索引 %d 个包，目录 %d 个）：%s\n先跑 zinc reindex %s 把索引重建完整，再来压缩",
+	CompactPackListFailed:  "读取包 %s 的目录失败: %v",
+	CompactExtractFailed:   "解出包 %s 失败（原包未改动）: %v\n%s",
+	CompactExtractMismatch: "包 %s 里的 %s 没能原样解出来（大小不符），跳过这个包（原包未改动）",
+	CompactRebuildFailed:   "重打包 %s 失败（原包未改动）: %v",
+	CompactVerifyFailed:    "重打的包 %s 自检失败，已丢弃（原包未改动）: %v",
+	CompactCountMismatch:   "重打的包 %s 内容不符：应有 %d 个文件，实际 %d 个，已丢弃（原包未改动）",
+	CompactNoSpace:         "剩余空间 %s 不够处理 %s（约需 %s），跳过",
+	CompactBadGain:         "收益阈值无效: %s（写 5%% 或 8M）",
+	PlaceholderRemoved:     "  清掉 %d 个占位文件（%s）\n",
+	FlagNotifyCompact:      "完成后发 Windows 通知",
+	ToastCompactTitle:      "zinc 压缩完成",
+	ToastCompactBody:       "%s · 重写 %d 个包 · 释放 %s",
+	ToastCompactFailBody:   "%s · %d 个包重写失败，其余已完成，细节看终端",
+
 	FlagMaxPackByte: "单包上限，如 4G / 50M / 纯字节",
 	FlagCompress:    "压缩等级 0-9",
 	FlagSolid:       "固实块上限，如 64M / off（off = 每文件独立块，最抗损）",
@@ -705,6 +813,8 @@ Usage:
   zinc restore <name> --only <relative-path> [--dest <path>] [--from <pack|index>]
                        restore just that file/dir; add --check-list to list its versions
   zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]
+  zinc compact <name> [--password <pw>] [--pack <name|index>] [--min-gain <5%|8M>] [--yes] [--notify]
+                       drop copies a newer version has superseded; same name, cloud overwrite
   zinc verify <name|--all> [--sample <pct>]
   zinc status [--all] [<name>]
   zinc schedule <name|--all> --daily --at HH:MM[,HH:MM...]
@@ -716,7 +826,8 @@ Usage:
 Notes:
   - every pack is a complete encrypted 7z; its name is the packing time, restore goes by name
   - solid blocks default to 64M: one bad byte can cost the rest of that block; --solid off makes one block per file
-  - without --password it prompts; a default_password in settings.json skips the prompt
+  - without --password the password comes from repo > settings; backup/restore prompt only if none exists, schedule fails instead
+  - schedule stores the resolved password in plain text inside the task; recreate the task after changing the password (zinc unschedule <name>, then schedule again)
   - restore overwrites same-name files by default; --no-overwrite keeps both
   - restore also applies deletions recorded by later backups; --no-delete keeps those files
   - --check-list only prints the order, --dest may be omitted
@@ -724,6 +835,7 @@ Notes:
   - output defaults to <root>\<name>; set it with zinc root
   - run zinc init once after unzipping; then just type zinc in any terminal
   - use zinc-register.exe / zinc-unregister.exe from the tools folder for install and removal; zinc init is the light version that does not require 7-Zip
+  - unschedule <name> removes that repo's tasks; unschedule --all removes every zinc task; unschedule all removes only the --all summary task
 `,
 
 	ErrPrefix:         "[error] ",
@@ -799,6 +911,10 @@ Notes:
 	CompressFailed:      "7za compression failed: %v\n%s",
 	NoVolumes:           "7za succeeded but produced no packs",
 
+	BackupPwMismatch:  "[warning] --password differs from the configured password of repo %s\n",
+	ConfirmPwMismatch: "password differs from the repo/default password! continue? [y/n]: ",
+	BackupPwAborted:   "cancelled: password differs from config",
+
 	FlagDest:            "restore destination",
 	UsageRestore:        "usage: zinc restore <name> --dest <path>",
 	MissingDest:         "missing --dest",
@@ -821,6 +937,9 @@ Notes:
 	CorruptFile:     "[corrupt] %s\n",
 	VerifySummary:   "%s: passed %d, corrupt %d, missing %d\n",
 	VerifyFailedMsg: "verification failed",
+	VerifyPwBad:     "[wrong password] %s\n",
+	VerifyPwSummary: "[password] %d pack(s) cannot be opened with the configured password (the pack may be fine; the password is wrong)\n",
+	VerifyPwNo7zip:  "[note] 7-Zip not found, skipping the password check\n",
 
 	FlagAllSchedule:   "create one task for all repos",
 	FlagDaily:         "daily",
@@ -844,6 +963,12 @@ Notes:
 	NoMatch:           "no matching tasks",
 	FlagAllUnschedule: "delete all zinc tasks",
 	UsageUnschedule:   "usage: zinc unschedule <name> or zinc unschedule --all",
+
+	SchedulePwFromCLI:      "[password] from the command line\n",
+	SchedulePwFromRepo:     "[password] from the repo config\n",
+	SchedulePwFromSettings: "[password] from settings.json (default_password)\n",
+	SchedulePwMissing:      "no usable password: pass --password, or set one with zinc config set default_password <pw>",
+	SchedulePwMixed:        "the target repos do not share one password, so a single task cannot cover them; create separate tasks or unify the passwords",
 
 	FlagListSchedule:   "list all scheduled tasks",
 	ScheduleHeader:     "[schedule] %d task(s)\n\n",
@@ -960,6 +1085,7 @@ Notes:
 	DeletedLine:          "[deleted] %s · %d file(s) disappeared from the source (recorded in %s)\n",
 	DeletingBatch:        "[deleted] %s · %d file(s) removed\n",
 	RestoreDelSummary:    "[done] %d file(s) removed according to the deletion records\n",
+	RestoreDelMissing:    "  %d more path(s) in the deletion records were already absent (skipped; normal after compact drops old copies)\n",
 	FlagNoDelete:         "restore without applying deletions recorded after the backup",
 	FlagNotifyWarn:       "send a Windows notification when a restore is incomplete",
 	ToastRestoreTitle:    "zinc restore incomplete",
@@ -1023,6 +1149,42 @@ Notes:
 	ReindexNoPacks:    "no packs found: %s",
 	ReindexBakFailed:  "failed to back up the old index; aborted: %w",
 	ReindexDeleted:    "  %d file(s) dropped by the deletion records\n",
+
+	FlagCompactPack:        "rewrite only this pack (name or index)",
+	FlagCompactMinGain:     "skip rewrites that save less than this: 5% or 8M",
+	FlagYesCompact:         "actually rewrite (without it, only report)",
+	UsageCompact:           "usage: zinc compact <name> [--pack <name|index>] [--min-gain <5%%|8M>] [--yes] [--notify] [--password <pw>]",
+	CompactStart:           "[compact] %s: checking %d packs (headers only)\n",
+	CompactDryRunHead:      "[dry-run] no --yes, nothing will be changed\n",
+	CompactDryRunTail:      "add --yes to do it.\n",
+	CompactPlanPack:        "  %s · %d dead file(s) / %s (%.1f%%) → will rewrite\n",
+	CompactSkipNone:        "  %s · nothing to drop\n",
+	CompactSkipSmall:       "  %s · %d dead file(s) / %s (%.1f%%), below the %s threshold → skipped\n",
+	CompactPlanSummary:     "[plan] %d pack(s) to rewrite, about %s to reclaim\n",
+	CompactNothing:         "[done] nothing to rewrite (%d pack(s) with no dead copies, %d below threshold)\n",
+	CompactDoing:           "[rewrite] %s: dropping %d file(s) / %s\n",
+	CompactEmptyDoing:      "[rewrite] %s: every file was superseded, the pack will only hold %s\n",
+	CompactPackDone:        "  %s · %s → %s\n",
+	CompactDoneLine:        "[done] %d pack(s) rewritten, %d failed, %s → %s, %s reclaimed\n",
+	CompactUploadHint:      "note: re-upload these packs to the cloud drive; same-name overwrite moves the old pack into version history.\n",
+	CompactFailedMsg:       "%d pack(s) failed to rewrite; the originals were left untouched",
+	CompactNoPacks:         "no packs found: %s",
+	CompactPackFailed:      "failed to process pack %s: %v\n",
+	CompactPackNotFound:    "no such pack: %s",
+	CompactIndexStale:      "the index does not match the pack directory (index %d packs, directory %d packs): %s\nrun zinc reindex %s to rebuild it completely first",
+	CompactPackListFailed:  "failed to list pack %s: %v",
+	CompactExtractFailed:   "failed to extract pack %s (original untouched): %v\n%s",
+	CompactExtractMismatch: "%s from pack %s did not extract intact (size mismatch); pack skipped (original untouched)",
+	CompactRebuildFailed:   "failed to rebuild %s (original untouched): %v",
+	CompactVerifyFailed:    "the rebuilt pack %s failed its self-check and was discarded (original untouched): %v",
+	CompactCountMismatch:   "the rebuilt pack %s does not match: %d file(s) expected, %d found; discarded (original untouched)",
+	CompactNoSpace:         "not enough free space %s to process %s (about %s needed); skipped",
+	CompactBadGain:         "bad gain threshold: %s (use 5%% or 8M)",
+	PlaceholderRemoved:     "  removed %d placeholder file(s) (%s)\n",
+	FlagNotifyCompact:      "send a Windows notification when done",
+	ToastCompactTitle:      "zinc compact complete",
+	ToastCompactBody:       "%s · %d pack(s) rewritten · %s reclaimed",
+	ToastCompactFailBody:   "%s · %d pack(s) failed to rewrite, the rest went through; see the terminal",
 
 	FlagMaxPackByte: "pack size limit, e.g. 4G / 50M / bytes",
 	FlagCompress:    "compression level 0-9",
