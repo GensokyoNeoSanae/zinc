@@ -285,9 +285,7 @@ func cmdCompletion(args []string) {
 	fs := flag.NewFlagSet("completion", flag.ExitOnError)
 	install := fs.Bool("install", false, M.FlagCompletionInstall)
 	fs.Parse(reorderArgs(args))
-	if fs.NArg() < 1 {
-		die(M.UsageCompletion)
-	}
+	requireArgs(fs, 1, 1, M.UsageCompletion)
 	shell := strings.ToLower(fs.Arg(0))
 	script, ok := completionScript(shell)
 	if !ok {

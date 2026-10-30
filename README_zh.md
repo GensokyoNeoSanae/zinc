@@ -221,6 +221,8 @@ zinc restore pictures --check-list
 
 `--lang zh|en` 放在子命令前后都行。`zinc verify --sample 20` 只随机抽查 20% 的包文件，而不是全部。
 
+参数位置随意：`zinc schedule 图片 --daily --at 20:00` 和 `zinc schedule --daily --at 20:00 图片` 等价。开关参数要写成 `--notify=false`——写成 `--notify false` 时 `false` 是多余参数，zinc 会直接报错，不会静默忽略。仓库名和 `--all` 也不能同时给。
+
 ### 安全校验
 
 - `add` 和 `set` 统一存绝对路径，并拒绝源目录与输出目录互相包含的配置。

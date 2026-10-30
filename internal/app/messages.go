@@ -12,6 +12,14 @@ type Messages struct {
 	ParseConfigFailed string
 	RepoNotFound      string
 
+	// 参数校验
+	TooManyArgs          string
+	AllWithName          string
+	ListWithArgs         string
+	ConfirmUnscheduleAll string
+	UnscheduleAllAborted string
+	LangInvalid          string
+
 	// index
 	LoadIndexFailed  string
 	ParseIndexFailed string
@@ -453,6 +461,13 @@ var zhMessages = &Messages{
 	ParseConfigFailed: "解析 %s 失败: %w",
 	RepoNotFound:      "仓库不存在: %s",
 
+	TooManyArgs:          "多余的参数: %s（用 zinc --help 看用法）",
+	AllWithName:          "--all 不能和名字一起用: %s",
+	ListWithArgs:         "--list 只查询任务，不能同时带周期/时间参数",
+	ConfirmUnscheduleAll: "这会删除所有 zinc 计划任务，确定吗？[y/n]: ",
+	UnscheduleAllAborted: "已取消",
+	LangInvalid:          "[警告] 未知语言 %q，已回退到 %s",
+
 	LoadIndexFailed:  "读取索引失败: %w",
 	ParseIndexFailed: "解析索引失败: %w",
 
@@ -866,6 +881,13 @@ Notes:
 	LoadConfigFailed:  "failed to read %s: %w",
 	ParseConfigFailed: "failed to parse %s: %w",
 	RepoNotFound:      "repo not found: %s",
+
+	TooManyArgs:          "unexpected argument: %s (see zinc --help)",
+	AllWithName:          "--all cannot be combined with a name: %s",
+	ListWithArgs:         "--list only queries tasks; drop the schedule flags",
+	ConfirmUnscheduleAll: "this deletes every zinc task, continue? [y/n]: ",
+	UnscheduleAllAborted: "cancelled",
+	LangInvalid:          "[warn] unknown language %q, fell back to %s",
 
 	LoadIndexFailed:  "failed to read index: %w",
 	ParseIndexFailed: "failed to parse index: %w",

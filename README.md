@@ -221,6 +221,8 @@ zinc restore pictures --check-list
 
 `--lang zh|en` is accepted before or after the subcommand. `zinc verify --sample 20` hashes a random 20% of the pack files instead of all of them.
 
+Flags can go before or after the repo name: `zinc schedule pictures --daily --at 20:00` and `zinc schedule --daily --at 20:00 pictures` are equivalent. Boolean flags must be written `--notify=false`; `--notify false` leaves `false` as an unexpected argument, and zinc now reports that instead of ignoring it. A repo name and `--all` cannot be combined.
+
 ### Safety guards
 
 - `add` and `set` store absolute paths and refuse a source/output pair where one directory contains the other.

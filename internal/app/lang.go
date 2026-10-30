@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"syscall"
@@ -18,13 +19,17 @@ func initLang(args []string) []string {
 	var rest []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
-		if a == "--lang" && i+1 < len(args) {
+		if (a == "--lang" || a == "-lang") && i+1 < len(args) {
 			lang = args[i+1]
 			i++
 			continue
 		}
 		if strings.HasPrefix(a, "--lang=") {
 			lang = strings.TrimPrefix(a, "--lang=")
+			continue
+		}
+		if strings.HasPrefix(a, "-lang=") {
+			lang = strings.TrimPrefix(a, "-lang=")
 			continue
 		}
 		rest = append(rest, a)
@@ -43,10 +48,13 @@ func initLang(args []string) []string {
 		lang = systemLang()
 	}
 	if !setLang(lang) {
-		// 非法语言码回落到系统语言，而不是直接写死 en
-		if !setLang(systemLang()) {
-			setLang("en")
+		// 非法语言码回落到系统语言，但要把它说出来——静默改语言是歧义
+		sys := systemLang()
+		if !setLang(sys) {
+			sys = "en"
+			setLang(sys)
 		}
+		fmt.Fprintf(os.Stderr, M.LangInvalid+"\n", lang, sys)
 	}
 	return rest
 }

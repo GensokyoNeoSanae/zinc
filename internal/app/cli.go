@@ -53,6 +53,18 @@ func reorderArgs(args []string) []string {
 	return append(flags, pos...)
 }
 
+// requireArgs 校验位置参数个数：少了给用法，多了明确报错。
+// 静默忽略多余参数是歧义之源——`--notify false` 里的 false 就是这么被吞掉的。
+func requireArgs(fs *flag.FlagSet, minN, maxN int, usageMsg string) {
+	n := fs.NArg()
+	if n < minN {
+		die(usageMsg)
+	}
+	if maxN >= 0 && n > maxN {
+		die(M.TooManyArgs, fs.Arg(maxN))
+	}
+}
+
 func die(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, M.ErrPrefix+format+"\n", args...)
 	os.Exit(1)
@@ -167,6 +179,14 @@ func cmdRoot(args []string) {
 		return
 	}
 	p := args[0]
+	// root 不用 FlagSet，但 -h 的语义要和其它命令一致：打印用法、退出码 0
+	if p == "-h" || p == "--help" {
+		fmt.Print(M.UsageRoot)
+		return
+	}
+	if len(args) > 1 {
+		die(M.TooManyArgs, args[1])
+	}
 	if strings.HasPrefix(p, "-") && !strings.ContainsAny(p, `\/`) {
 		die(M.UsageRoot)
 	}
@@ -188,9 +208,7 @@ func cmdList(args []string) {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 	names := fs.Bool("names", false, M.FlagListNames)
 	fs.Parse(reorderArgs(args))
-	if fs.NArg() > 0 {
-		die(M.UsageList)
-	}
+	requireArgs(fs, 0, 0, M.UsageList)
 	cfg := mustConfig()
 	if *names {
 		// 机器可读：一行一个名字，不缩进、不带路径，补全脚本直接拿
@@ -214,9 +232,7 @@ func cmdAdd(args []string) {
 	source := fs.String("source", "", "source directory")
 	output := fs.String("output", "", "output directory")
 	fs.Parse(reorderArgs(args))
-	if fs.NArg() < 1 {
-		die(M.UsageAdd)
-	}
+	requireArgs(fs, 1, 1, M.UsageAdd)
 	name := fs.Arg(0)
 	if *source == "" {
 		die(M.MissingSource)
@@ -263,6 +279,9 @@ func cmdRemove(args []string) {
 	if len(args) < 1 {
 		die(M.UsageRemove)
 	}
+	if len(args) > 1 {
+		die(M.TooManyArgs, args[1])
+	}
 	name := args[0]
 	cfg := mustConfig()
 	if _, exists := cfg.Repos[name]; !exists {
@@ -289,9 +308,7 @@ func cmdSet(args []string) {
 	var excludes multiFlag
 	fs.Var(&excludes, "exclude", M.FlagExclude)
 	fs.Parse(reorderArgs(args))
-	if fs.NArg() < 1 {
-		die(M.UsageSet)
-	}
+	requireArgs(fs, 1, 1, M.UsageSet)
 	name := fs.Arg(0)
 	cfg := mustConfig()
 	repo, err := cfg.repo(name)
@@ -375,11 +392,12 @@ func cmdBackup(args []string) {
 
 	var names []string
 	if *all {
+		if fs.NArg() > 0 {
+			die(M.AllWithName, fs.Arg(0))
+		}
 		names = cfg.sortedNames()
 	} else {
-		if fs.NArg() < 1 {
-			die(M.UsageBackup)
-		}
+		requireArgs(fs, 1, 1, M.UsageBackup)
 		names = []string{fs.Arg(0)}
 	}
 	if len(names) == 0 {
@@ -550,9 +568,7 @@ func cmdRestore(args []string) {
 	only := fs.String("only", "", M.FlagOnly)
 	from := fs.String("from", "", M.FlagFrom)
 	fs.Parse(reorderArgs(args))
-	if fs.NArg() < 1 {
-		die(M.UsageRestore)
-	}
+	requireArgs(fs, 1, 1, M.UsageRestore)
 	name := fs.Arg(0)
 	if *overwrite && *noOverwrite {
 		die(M.FlagConflict)
@@ -639,11 +655,12 @@ func cmdVerify(args []string) {
 	set := mustSettings()
 	var names []string
 	if *all {
+		if fs.NArg() > 0 {
+			die(M.AllWithName, fs.Arg(0))
+		}
 		names = cfg.sortedNames()
 	} else {
-		if fs.NArg() < 1 {
-			die(M.UsageVerify)
-		}
+		requireArgs(fs, 1, 1, M.UsageVerify)
 		names = []string{fs.Arg(0)}
 	}
 
@@ -670,7 +687,7 @@ func cmdStatus(args []string) {
 	// --all：每个仓库都展开成详情，仓库之间空一行。
 	if *all {
 		if fs.NArg() > 0 {
-			die(M.UsageStatus)
+			die(M.AllWithName, fs.Arg(0))
 		}
 		names := cfg.sortedNames()
 		if len(names) == 0 {
@@ -692,6 +709,7 @@ func cmdStatus(args []string) {
 		return
 	}
 
+	requireArgs(fs, 0, 1, M.UsageStatus)
 	name := ""
 	if fs.NArg() > 0 {
 		name = fs.Arg(0)
@@ -702,6 +720,11 @@ func cmdStatus(args []string) {
 }
 
 func cmdConfig(args []string) {
+	// 与其它命令一致：-h 打印用法、退出码 0；不先读 settings，免得配置坏了连帮助都看不了
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Print(M.UsageConfig)
+		return
+	}
 	set, err := loadSettings()
 	if err != nil {
 		die("%v", err)
@@ -712,15 +735,24 @@ func cmdConfig(args []string) {
 	}
 	switch sub {
 	case "", "list", "show":
+		if len(args) > 1 {
+			die(M.TooManyArgs, args[1])
+		}
 		fmt.Printf(M.ConfigHeader, settingsPath())
 		for _, k := range cfgKeys {
 			fmt.Printf(M.ConfigItem, k.name, cfgValueString(set, k.name))
 		}
 	case "path":
+		if len(args) > 1 {
+			die(M.TooManyArgs, args[1])
+		}
 		fmt.Printf(M.ConfigPath, settingsPath())
 	case "get":
 		if len(args) < 2 {
 			die(M.UsageConfig)
+		}
+		if len(args) > 2 {
+			die(M.TooManyArgs, args[2])
 		}
 		if _, ok := findCfgKey(args[1]); !ok {
 			die(M.ConfigUnknownKey, args[1])
@@ -729,6 +761,9 @@ func cmdConfig(args []string) {
 	case "set":
 		if len(args) < 3 {
 			die(M.UsageConfig)
+		}
+		if len(args) > 3 {
+			die(M.TooManyArgs, args[3])
 		}
 		key, val := args[1], args[2]
 		if _, ok := findCfgKey(key); !ok {
@@ -748,6 +783,9 @@ func cmdConfig(args []string) {
 	case "unset":
 		if len(args) < 2 {
 			die(M.UsageConfig)
+		}
+		if len(args) > 2 {
+			die(M.TooManyArgs, args[2])
 		}
 		if err := cfgUnset(set, args[1]); err != nil {
 			die("%v", err)
@@ -773,9 +811,7 @@ func cmdCompact(args []string) {
 	noVerify := fs.Bool("no-verify", false, M.FlagNoVerify)
 	notify := fs.Bool("notify", set.completeNotify(), M.FlagNotifyCompact)
 	fs.Parse(reorderArgs(args))
-	if fs.NArg() < 1 {
-		die(M.UsageCompact)
-	}
+	requireArgs(fs, 1, 1, M.UsageCompact)
 	name := fs.Arg(0)
 	repo, err := cfg.repo(name)
 	if err != nil {
@@ -798,9 +834,7 @@ func cmdReindex(args []string) {
 	packEnd := fs.String("pack-end", "", M.FlagPackEnd)
 	yes := fs.Bool("yes", false, M.FlagYesReindex)
 	fs.Parse(reorderArgs(args))
-	if fs.NArg() < 1 {
-		die(M.UsageReindex)
-	}
+	requireArgs(fs, 1, 1, M.UsageReindex)
 	name := fs.Arg(0)
 
 	cfg := mustConfig()
@@ -833,6 +867,12 @@ func cmdSchedule(args []string) {
 
 	// --list 是只读查询，不需要仓库名、周期、时间，也不需要密码。
 	if *list {
+		if fs.NArg() > 0 {
+			die(M.TooManyArgs, fs.Arg(0))
+		}
+		if *daily || *weekly != "" || *monthly != "" || *at != "" || *password != "" || *noNotify || *yes {
+			die(M.ListWithArgs)
+		}
 		if err := runListSchedules(); err != nil {
 			die("%v", err)
 		}
@@ -859,14 +899,15 @@ func cmdSchedule(args []string) {
 	name := ""
 	var targets []string
 	if *all {
+		if fs.NArg() > 0 {
+			die(M.AllWithName, fs.Arg(0))
+		}
 		targets = cfg.sortedNames()
 		if len(targets) == 0 {
 			die(M.NoReposBackup)
 		}
 	} else {
-		if fs.NArg() < 1 {
-			die(M.UsageSchedule)
-		}
+		requireArgs(fs, 1, 1, M.UsageSchedule)
 		name = fs.Arg(0)
 		if _, err := cfg.repo(name); err != nil {
 			die("%v", err)
@@ -907,10 +948,17 @@ func cmdUnschedule(args []string) {
 	fs.Parse(reorderArgs(args))
 	name := ""
 	if !*all {
-		if fs.NArg() < 1 {
-			die(M.UsageUnschedule)
-		}
+		requireArgs(fs, 1, 1, M.UsageUnschedule)
 		name = fs.Arg(0)
+	} else {
+		if fs.NArg() > 0 {
+			die(M.AllWithName, fs.Arg(0))
+		}
+		// 删掉全部 zinc 任务是破坏性操作，给一次确认
+		fmt.Print(M.ConfirmUnscheduleAll)
+		if ans := strings.ToLower(strings.TrimSpace(readLine())); ans != "y" && ans != "yes" {
+			die(M.UnscheduleAllAborted)
+		}
 	}
 	if err := runUnschedule(name, *all); err != nil {
 		die("%v", err)
