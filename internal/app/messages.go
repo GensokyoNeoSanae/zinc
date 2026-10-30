@@ -148,6 +148,17 @@ type Messages struct {
 	SchedulePwMissing      string
 	SchedulePwMixed        string
 
+	// completion
+	UsageCompletion           string
+	FlagCompletionInstall     string
+	FlagListNames             string
+	CompletionUnknownShell    string
+	CompletionInstallOnlyPwsh string
+	CompletionScriptWritten   string
+	CompletionProfileUpdated  string
+	CompletionProfileHasLine  string
+	CompletionInstallFailed   string
+
 	// schedule --list
 	FlagListSchedule   string
 	ScheduleHeader     string
@@ -414,6 +425,7 @@ var zhMessages = &Messages{
                        丢掉包里被新版取代的旧副本；包名不变，云端同名覆盖进历史版本
   zinc verify <name|--all> [--sample <pct>]
   zinc status [--all] [<name>]
+  zinc completion <powershell|bash|zsh|fish> [--install]   生成 Tab 补全脚本
   zinc schedule <name|--all> --daily --at HH:MM[,HH:MM...]
   zinc schedule <name|--all> --weekly 1,3 --at HH:MM
   zinc schedule <name|--all> --monthly 1,15 --at HH:MM [--yes]
@@ -455,7 +467,7 @@ var zhMessages = &Messages{
 	PasswordTooMany:     "密码确认失败次数过多",
 
 	RootUnset:          "(未设置)",
-	UsageList:          "用法: zinc list",
+	UsageList:          "用法: zinc list [--names]",
 	UsageStatus:        "用法: zinc status [--all] [<name>]（--all 不能和仓库名一起用）",
 	UsageRoot:          "用法: zinc root [<path>]",
 	RootNotDir:         "root 路径已存在且不是目录: %s",
@@ -566,6 +578,16 @@ var zhMessages = &Messages{
 	SchedulePwFromSettings: "[密码] 取自 settings.json 的默认密码\n",
 	SchedulePwMissing:      "找不到可用密码：用 --password 指定，或先 zinc config set default_password <密码>",
 	SchedulePwMixed:        "--all 的目标仓库密码不一致，一条任务没法统一；请分开建任务，或先统一各仓库密码",
+
+	UsageCompletion:           "用法: zinc completion <powershell|bash|zsh|fish> [--install]",
+	FlagCompletionInstall:     "只为 powershell：写好脚本并往 $PROFILE 追加加载行",
+	FlagListNames:             "每行一个仓库名（给脚本/补全用）",
+	CompletionUnknownShell:    "不支持的 shell: %s（可选: powershell, bash, zsh, fish）",
+	CompletionInstallOnlyPwsh: "--install 只支持 powershell；其它 shell 请用 zinc completion <shell> > 文件",
+	CompletionScriptWritten:   "[完成] 补全脚本: %s\n",
+	CompletionProfileUpdated:  "[完成] 加载行已写入: %s\n",
+	CompletionProfileHasLine:  "[跳过] %s 里已经有加载行\n",
+	CompletionInstallFailed:   "安装补全失败: %v",
 
 	FlagListSchedule:   "列出当前所有计划任务",
 	ScheduleHeader:     "[计划] %d 个任务\n\n",
@@ -817,6 +839,7 @@ Usage:
                        drop copies a newer version has superseded; same name, cloud overwrite
   zinc verify <name|--all> [--sample <pct>]
   zinc status [--all] [<name>]
+  zinc completion <powershell|bash|zsh|fish> [--install]   generate a tab-completion script
   zinc schedule <name|--all> --daily --at HH:MM[,HH:MM...]
   zinc schedule <name|--all> --weekly 1,3 --at HH:MM
   zinc schedule <name|--all> --monthly 1,15 --at HH:MM [--yes]
@@ -858,7 +881,7 @@ Notes:
 	PasswordTooMany:     "too many failed password confirmations",
 
 	RootUnset:          "(not set)",
-	UsageList:          "usage: zinc list",
+	UsageList:          "usage: zinc list [--names]",
 	UsageStatus:        "usage: zinc status [--all] [<name>] (--all cannot be combined with a repo name)",
 	UsageRoot:          "usage: zinc root [<path>]",
 	RootNotDir:         "root path exists and is not a directory: %s",
@@ -969,6 +992,16 @@ Notes:
 	SchedulePwFromSettings: "[password] from settings.json (default_password)\n",
 	SchedulePwMissing:      "no usable password: pass --password, or set one with zinc config set default_password <pw>",
 	SchedulePwMixed:        "the target repos do not share one password, so a single task cannot cover them; create separate tasks or unify the passwords",
+
+	UsageCompletion:           "usage: zinc completion <powershell|bash|zsh|fish> [--install]",
+	FlagCompletionInstall:     "PowerShell only: write the script and add a loader line to $PROFILE",
+	FlagListNames:             "one repo name per line (for scripts and completion)",
+	CompletionUnknownShell:    "unsupported shell: %s (choose powershell, bash, zsh or fish)",
+	CompletionInstallOnlyPwsh: "--install only supports powershell; for other shells redirect zinc completion <shell> to a file",
+	CompletionScriptWritten:   "[done] completion script: %s\n",
+	CompletionProfileUpdated:  "[done] loader line written to: %s\n",
+	CompletionProfileHasLine:  "[skip] %s already loads the script\n",
+	CompletionInstallFailed:   "failed to install completion: %v",
 
 	FlagListSchedule:   "list all scheduled tasks",
 	ScheduleHeader:     "[schedule] %d task(s)\n\n",

@@ -185,10 +185,20 @@ func cmdRoot(args []string) {
 }
 
 func cmdList(args []string) {
-	if len(args) > 0 {
+	fs := flag.NewFlagSet("list", flag.ExitOnError)
+	names := fs.Bool("names", false, M.FlagListNames)
+	fs.Parse(reorderArgs(args))
+	if fs.NArg() > 0 {
 		die(M.UsageList)
 	}
 	cfg := mustConfig()
+	if *names {
+		// 机器可读：一行一个名字，不缩进、不带路径，补全脚本直接拿
+		for _, n := range cfg.sortedNames() {
+			fmt.Println(n)
+		}
+		return
+	}
 	if len(cfg.Repos) == 0 {
 		fmt.Println(M.NoRepos)
 		return

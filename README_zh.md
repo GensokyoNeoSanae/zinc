@@ -21,6 +21,7 @@ zinc 把一个或多个源目录（称为“仓库”）备份到同一个输出
 - [快速开始](#快速开始)
 - [命令](#命令)
 - [配置](#配置)
+- [补全](#补全)
 - [恢复](#恢复)
 - [压缩（compact）](#压缩compact)
 - [定时任务与通知](#定时任务与通知)
@@ -198,7 +199,7 @@ zinc restore pictures --check-list
 |---|---|
 | `zinc init [--force]` | 重新注册通知、把程序目录写进用户 `PATH`。安装包已经做过，只在通知失效、或 `zinc` 命令找不到时用；绿色版也靠它 |
 | `zinc root [<path>]` | 查看或设置全局输出根目录 |
-| `zinc list` | 列出仓库 |
+| `zinc list [--names]` | 列出仓库；`--names` 每行一个名字，给脚本/补全用 |
 | `zinc add <name> --source <path> [--output <path>]` | 新建仓库 |
 | `zinc remove <name>` | 移除仓库（不删包） |
 | `zinc set <name> [--source <path>] [--output <path>] [--password <pw>] [--max-pack-byte <n>] [--compress <0-9>] [--exclude <glob>]` | 修改仓库 |
@@ -207,7 +208,7 @@ zinc restore pictures --check-list
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <路径>] [--from <包>]` | 恢复全量或单个路径 |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | 从包重建索引 |
 | `zinc compact <name> [--pack <包>] [--min-gain <5%\|8M>] [--yes]` | 重写已有包，丢掉被新版取代的旧副本 |
-| `zinc verify <name\|--all> [--sample <pct>]` | 校验包与删除记录的 SHA-256 |
+| `zinc verify <name\|--all> [--sample <pct>]` | 校验包与删除记录的 SHA-256，并用配置密码试开每个包 |
 | `zinc status [--all] [<name>]` | 查看状态；`--all` 一次展开所有仓库的详情 |
 | `zinc schedule <name\|--all> --daily --at HH:MM` | 每天定时 |
 | `zinc schedule <name\|--all> --weekly 1,3 --at HH:MM` | 每周定时（1 = 周一） |
@@ -216,6 +217,7 @@ zinc restore pictures --check-list
 | `zinc unschedule <name>` | 删除该仓库的定时任务 |
 | `zinc unschedule all` | 删除“备份全部”的汇总任务（`zinc-all-*`） |
 | `zinc unschedule --all` | 删除所有 zinc 任务（**慎用**） |
+| `zinc completion <powershell\|bash\|zsh\|fish> [--install]` | 生成 Tab 补全脚本 |
 
 `--lang zh|en` 放在子命令前后都行。`zinc verify --sample 20` 只随机抽查 20% 的包文件，而不是全部。
 
@@ -264,6 +266,24 @@ zinc --lang en list
 zinc list --lang zh
 zinc config set lang zh
 ```
+
+### 补全
+
+PowerShell 7.2+ 一条命令装好（写脚本 + 往 `$PROFILE` 追加加载行，幂等）：
+
+```powershell
+zinc completion powershell --install
+```
+
+其它 shell 输出到文件自己 source：
+
+```bash
+zinc completion bash > ~/.zinc-completion.bash
+zinc completion zsh  > ~/.zinc-completion.zsh
+zinc completion fish > ~/.config/fish/completions/zinc.fish
+```
+
+覆盖子命令、各子命令的参数、`config` 的动作词、`--lang` 取值和仓库名。仓库名走 `zinc list --names`，脚本里缓存 30 秒，不会每次按 Tab 都起进程。Windows PowerShell 5.1 不支持原生命令补全，脚本会自动跳过（不报错）。
 
 ### 密码
 

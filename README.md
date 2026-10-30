@@ -21,6 +21,7 @@ zinc backs up one or more source folders ("repos") into a single output root. Ev
 - [Quick start](#quick-start)
 - [Commands](#commands)
 - [Configuration](#configuration)
+- [Completion](#completion)
 - [Restore](#restore)
 - [Compact](#compact)
 - [Scheduling and notifications](#scheduling-and-notifications)
@@ -198,7 +199,7 @@ zinc restore pictures --check-list
 |---|---|
 | `zinc init [--force]` | re-register notifications and the user `PATH` entry. The setup already did this: use it when notifications stop working or `zinc` is not found, and with the portable zip |
 | `zinc root [<path>]` | show or set the global output root |
-| `zinc list` | list repos |
+| `zinc list [--names]` | list repos; `--names` prints one name per line for scripts and completion |
 | `zinc add <name> --source <path> [--output <path>]` | create a repo |
 | `zinc remove <name>` | remove a repo (keeps the packs) |
 | `zinc set <name> [--source <path>] [--output <path>] [--password <pw>] [--max-pack-byte <n>] [--compress <0-9>] [--exclude <glob>]` | modify a repo |
@@ -207,7 +208,7 @@ zinc restore pictures --check-list
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <path>] [--from <pack>]` | restore everything or one path |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | rebuild the index from the packs |
 | `zinc compact <name> [--pack <pack>] [--min-gain <5%\|8M>] [--yes]` | rewrite existing packs, dropping copies a newer version superseded |
-| `zinc verify <name\|--all> [--sample <pct>]` | SHA-256 check of the packs and of the deletion records |
+| `zinc verify <name\|--all> [--sample <pct>]` | SHA-256 check of the packs and deletion records, and opens every pack with the configured password |
 | `zinc status [--all] [<name>]` | show status; `--all` expands every repo |
 | `zinc schedule <name\|--all> --daily --at HH:MM` | daily schedule |
 | `zinc schedule <name\|--all> --weekly 1,3 --at HH:MM` | weekly (1 = Monday) |
@@ -216,6 +217,7 @@ zinc restore pictures --check-list
 | `zinc unschedule <name>` | delete that repo's tasks |
 | `zinc unschedule all` | delete the "back up all" summary task (`zinc-all-*`) |
 | `zinc unschedule --all` | delete **all** zinc tasks (careful) |
+| `zinc completion <powershell\|bash\|zsh\|fish> [--install]` | generate a tab-completion script |
 
 `--lang zh|en` is accepted before or after the subcommand. `zinc verify --sample 20` hashes a random 20% of the pack files instead of all of them.
 
@@ -264,6 +266,24 @@ zinc --lang en list
 zinc list --lang zh
 zinc config set lang zh
 ```
+
+### Completion
+
+On PowerShell 7.2+ one command installs it (writes the script and appends a loader line to `$PROFILE`, idempotently):
+
+```powershell
+zinc completion powershell --install
+```
+
+For other shells, write the script somewhere and source it:
+
+```bash
+zinc completion bash > ~/.zinc-completion.bash
+zinc completion zsh  > ~/.zinc-completion.zsh
+zinc completion fish > ~/.config/fish/completions/zinc.fish
+```
+
+It covers subcommands, per-command flags, `config` action words, `--lang` values and repo names. Repo names come from `zinc list --names`, cached for 30 seconds in the script so pressing Tab does not spawn a process every time. Windows PowerShell 5.1 has no native-completion support, so the script returns quietly there.
 
 ### Password
 

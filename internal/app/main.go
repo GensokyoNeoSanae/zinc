@@ -41,6 +41,8 @@ func Main() {
 		cmdSchedule(rest)
 	case "unschedule":
 		cmdUnschedule(rest)
+	case "completion":
+		cmdCompletion(rest)
 	case "help", "--help", "-h":
 		usage()
 	default:
