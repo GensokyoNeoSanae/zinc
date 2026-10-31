@@ -119,3 +119,28 @@ func TestCompletionMatchesHelp(t *testing.T) {
 		}
 	}
 }
+
+// --install 的收尾必须明确说「重启终端才生效」：注册行是写进 $PROFILE 的，
+// 当前终端的补全表在启动时就定了，不重启读不到新行（实测就是不生效）。
+func TestCLICompletionInstallTellsUserToRestart(t *testing.T) {
+	bin := buildZincCLI(t)
+	fakeHome := t.TempDir()
+	cmd := exec.Command(bin, "completion", "powershell", "--install")
+	cmd.Env = append(os.Environ(),
+		"ZINC_LANG=zh",
+		"USERPROFILE="+fakeHome,
+		"HOME="+fakeHome,
+	)
+	raw, err := cmd.CombinedOutput()
+	out := string(raw)
+	if err != nil {
+		t.Fatalf("completion --install 失败: %v\n%s", err, out)
+	}
+	// 安装路径必须落在假 HOME 里：这条测试绝不能碰用户真实的 $PROFILE
+	if !strings.Contains(out, fakeHome) {
+		t.Errorf("输出里没有假 HOME 路径 %q，可能写到真实 profile 了:\n%s", fakeHome, out)
+	}
+	if !strings.Contains(out, "重启终端") {
+		t.Errorf("收尾少了「重启终端」提示:\n%s", out)
+	}
+}

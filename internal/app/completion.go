@@ -310,6 +310,9 @@ func cmdCompletion(args []string) {
 	if err := installPwshCompletion(script); err != nil {
 		die(M.CompletionInstallFailed, err)
 	}
+	// 补全命令是在 profile 里注册的，只有新开的终端才会 dot-source 它；当前终端
+	// 的补全表在启动时就定死了，不说这一句用户会以为装失败（实测就是没反应）。
+	fmt.Print(M.CompletionRestartHint)
 }
 
 // installPwshCompletion 把脚本写到 Documents\PowerShell\zinc-completion.ps1，

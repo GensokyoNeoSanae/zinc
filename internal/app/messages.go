@@ -171,6 +171,7 @@ type Messages struct {
 	CompletionScriptWritten   string
 	CompletionProfileUpdated  string
 	CompletionProfileHasLine  string
+	CompletionRestartHint     string
 	CompletionInstallFailed   string
 
 	// schedule --list
@@ -649,6 +650,7 @@ var zhMessages = &Messages{
 	CompletionScriptWritten:   "[完成] 补全脚本: %s\n",
 	CompletionProfileUpdated:  "[完成] 加载行已写入: %s\n",
 	CompletionProfileHasLine:  "[跳过] %s 里已经有加载行\n",
+	CompletionRestartHint:     "[提示] 当前终端不会立即生效：重启终端（或新开一个窗口）后再试 Tab 补全\n",
 	CompletionInstallFailed:   "安装补全失败: %v",
 
 	FlagListSchedule:   "列出当前所有计划任务",
@@ -1109,6 +1111,7 @@ Notes:
 	CompletionScriptWritten:   "[done] completion script: %s\n",
 	CompletionProfileUpdated:  "[done] loader line written to: %s\n",
 	CompletionProfileHasLine:  "[skip] %s already loads the script\n",
+	CompletionRestartHint:     "[note] this won't take effect in the current terminal: restart it (or open a new window), then try Tab completion\n",
 	CompletionInstallFailed:   "failed to install completion: %v",
 
 	FlagListSchedule:   "list all scheduled tasks",
