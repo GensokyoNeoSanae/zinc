@@ -10,12 +10,14 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unsafe"
 )
 
 var (
-	kernel32               = syscall.NewLazyDLL("kernel32.dll")
-	procSetConsoleOutputCP = kernel32.NewProc("SetConsoleOutputCP")
-	procSetConsoleCP       = kernel32.NewProc("SetConsoleCP")
+	kernel32                  = syscall.NewLazyDLL("kernel32.dll")
+	procSetConsoleOutputCP    = kernel32.NewProc("SetConsoleOutputCP")
+	procSetConsoleCP          = kernel32.NewProc("SetConsoleCP")
+	procGetConsoleProcessList = kernel32.NewProc("GetConsoleProcessList")
 )
 
 func init() {
@@ -35,6 +37,16 @@ func hiddenCmd(name string, args ...string) *exec.Cmd {
 	cmd := exec.Command(name, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow}
 	return cmd
+}
+
+// startedFromExplorer 判断当前进程是不是独自占着一个新控制台。
+// 双击开始菜单快捷方式时 Windows 会新建一个只有 zinc 的 console；从 cmd/pwsh 里跑，
+// 控制台里至少还挂着 shell，进程数 ≥2。用它决定打完用法后要不要停住——双击的窗口
+// 会随进程退出立刻消失，不停一下等于没显示。
+func startedFromExplorer() bool {
+	var pids [4]uint32
+	n, _, _ := procGetConsoleProcessList.Call(uintptr(unsafe.Pointer(&pids[0])), uintptr(len(pids)))
+	return n == 1
 }
 
 // appDir 返回 zinc.exe 所在目录（repos.json、manifests、日志都放这里）。

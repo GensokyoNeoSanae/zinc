@@ -11,6 +11,8 @@
 
 zinc backs up one or more source folders ("repos") into a single output root. Every run packs only the files that changed since the last run, and every batch becomes one or more self-contained `.7z` archives with encrypted headers. There is no proprietary repository format, no chain of deltas, and no dependency on zinc when the day comes to restore.
 
+> **zinc is a command-line tool (CLI); it has no graphical interface.** A GUI is planned for the future; the current release ships the `zinc` command only.
+
 ## Contents
 
 - [Why](#why)

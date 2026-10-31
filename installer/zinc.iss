@@ -77,6 +77,9 @@ english.Download7zipHint=Downloads the official installer from www.7-zip.org. Wi
 english.Download7zipBusy=Downloading and installing 7-Zip...
 english.Download7zipFail=Could not download or install 7-Zip. Setup will roll back; install 7-Zip from https://www.7-zip.org/ and run the setup again.
 english.Download7zipDone=Installed 7-Zip at %1
+english.WelcomeCLI=zinc is a command-line tool (CLI). There is no graphical window; a GUI is planned for a future release.
+english.FinishedCLI=Setup is complete. zinc is a command-line tool: open a terminal and run zinc --help to see the commands.
+english.ViewHelp=Open a terminal and show zinc usage
 chinesesimplified.SevenZipCaption=选择 7-Zip
 chinesesimplified.SevenZipDescription=zinc 需要一个可用的 7-Zip
 chinesesimplified.SevenZipSubCaption=zinc 调用 7z.exe 或 7za.exe 完成打包与恢复。请选择 7-Zip 的命令行程序。
@@ -98,6 +101,9 @@ chinesesimplified.Download7zipHint=从官网 www.7-zip.org 下载官方安装包
 chinesesimplified.Download7zipBusy=正在下载并安装 7-Zip...
 chinesesimplified.Download7zipFail=下载或安装 7-Zip 失败，安装将回滚。请到 https://www.7-zip.org/ 手动装好 7-Zip 后重跑安装包。
 chinesesimplified.Download7zipDone=已安装 7-Zip：%1
+chinesesimplified.WelcomeCLI=zinc 是命令行工具（CLI），没有图形界面；图形界面在计划中。
+chinesesimplified.FinishedCLI=安装完成。zinc 是命令行工具：打开终端运行 zinc --help 查看命令。
+chinesesimplified.ViewHelp=打开终端并查看 zinc 用法
 
 [Files]
 Source: "..\zinc.exe";           DestDir: "{app}"; Flags: ignoreversion
@@ -117,6 +123,11 @@ Type: files; Name: "{app}\.aumid_ok"
 Type: dirifempty; Name: "{app}\logs"
 Type: dirifempty; Name: "{app}\manifests"
 Type: dirifempty; Name: "{app}\tools"
+
+; 完成页的勾选项：zinc 是 CLI，装完直接给一条能看到用法的终端。
+; {cmd} 是 cmd.exe；/k 让窗口停住，不然 --help 打完就关。
+[Run]
+Filename: "{cmd}"; Parameters: "/k ""{app}\zinc.exe"" --help"; Description: "{cm:ViewHelp}"; Flags: postinstall nowait skipifsilent
 [UninstallRun]
 ; 先让 zinc 自己把计划任务、通知注册、PATH 项清掉，再由 Inno 删文件。
 Filename: "{app}\tools\zinc-unregister.exe"; Parameters: "--yes --no-pause"; Flags: runhidden waituntilterminated; RunOnceId: "ZincUnregister"
@@ -308,6 +319,17 @@ begin
 
   DownloadCheck.Checked := False;
   UpdateDownloadUi();
+
+  // 第一页就说清楚这是 CLI，免得装完到处找图形界面
+  WizardForm.WelcomeLabel2.Caption :=
+    CustomMessage('WelcomeCLI') + #13#10#13#10 + WizardForm.WelcomeLabel2.Caption;
+end;
+
+// 完成页也再强调一次，并指向 --help
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = wpFinished then
+    WizardForm.FinishedLabel.Caption := CustomMessage('FinishedCLI');
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;

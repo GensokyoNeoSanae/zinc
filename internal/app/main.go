@@ -7,6 +7,10 @@ func Main() {
 	args := initLang(os.Args[1:])
 	if len(args) < 1 {
 		usage()
+		// 双击快捷方式时这是唯一一次能看到用法的机会；从终端里跑则不停
+		if startedFromExplorer() {
+			pauseUnless(false)
+		}
 		return
 	}
 	cmd, rest := args[0], args[1:]
