@@ -144,3 +144,65 @@ func TestCLIStillAcceptsLegitimateForms(t *testing.T) {
 		t.Errorf("unschedule --all: code=%d, out=%s", code, out)
 	}
 }
+
+// reorderArgs 的“吃值”表必须覆盖命令表里所有带值 flag。
+// 这张表以前是手写的，hash-compare 的 source1/source2/hash-value 漏登记，
+// 导致 `--source1 "E:\Documents\伟大之作"` 里的路径被当成多余位置参数。
+func TestFlagNeedsValueMatchesSpec(t *testing.T) {
+	for _, f := range globalFlags {
+		if f.HasValue && !flagNeedsValue[f.Name] {
+			t.Errorf("全局参数 --%s 需要值，但没进 flagNeedsValue", f.Name)
+		}
+	}
+	for _, c := range completionCommands {
+		for _, f := range c.Flags {
+			if f.HasValue && !flagNeedsValue[f.Name] {
+				t.Errorf("%s --%s 需要值，但没进 flagNeedsValue", c.Name, f.Name)
+			}
+		}
+	}
+	for name := range flagNeedsValue {
+		if extraValueFlags[name] {
+			continue
+		}
+		found := false
+		for _, f := range globalFlags {
+			if f.Name == name && f.HasValue {
+				found = true
+			}
+		}
+		for _, c := range completionCommands {
+			for _, f := range c.Flags {
+				if f.Name == name && f.HasValue {
+					found = true
+				}
+			}
+		}
+		if !found {
+			t.Errorf("flagNeedsValue 里的 %q 已经不是带值 flag 了", name)
+		}
+	}
+}
+
+// 端到端回归：flag 和值按 `--source1 <路径>` 这种正常写法传，不能被当成多余参数。
+func TestCLIHashCompareFlagOrder(t *testing.T) {
+	bin := buildZincCLI(t)
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a.txt")
+	b := filepath.Join(dir, "b.txt")
+	for _, p := range []string{a, b} {
+		if err := os.WriteFile(p, []byte("same content"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out, code := runZinc(t, bin, "hash-compare", "--source1", a, "--source2", b); code != 0 {
+		t.Fatalf("--source1/--source2: code=%d\n%s", code, out)
+	}
+	h, err := fileSHA256(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, code := runZinc(t, bin, "hash-compare", "--source", a, "--hash-value", h); code != 0 {
+		t.Fatalf("--source/--hash-value: code=%d\n%s", code, out)
+	}
+}

@@ -12,12 +12,36 @@ func usage() {
 	fmt.Print(M.Usage)
 }
 
-var flagNeedsValue = map[string]bool{
-	"source": true, "output": true, "dest": true, "password": true,
-	"sample": true, "at": true, "weekly": true, "monthly": true,
-	"max-pack-byte": true, "compress": true, "solid": true, "exclude": true,
-	"pack-start": true, "pack-end": true, "only": true, "from": true,
-	"7zip": true, "pack": true, "min-gain": true,
+// flagNeedsValue 是 reorderArgs 用的「这个 flag 吃不吃值」表。
+// 不再手写：直接从 completion_spec.go 的命令表派生——那张表本来就是
+// 「命令有哪些 flag、哪些要值」的唯一事实来源，手抄一份迟早漏（
+// hash-compare 的 source1/source2/hash-value 就是这么漏掉的）。
+var flagNeedsValue = buildFlagNeedsValue()
+
+// extraValueFlags 是独立可执行文件（zinc-register / zinc-unregister）的参数：
+// 它们不在 zinc 的命令表里，但同样走 reorderArgs。
+var extraValueFlags = map[string]bool{
+	"7zip": true,
+}
+
+func buildFlagNeedsValue() map[string]bool {
+	m := make(map[string]bool)
+	for k := range extraValueFlags {
+		m[k] = true
+	}
+	for _, f := range globalFlags {
+		if f.HasValue {
+			m[f.Name] = true
+		}
+	}
+	for _, c := range completionCommands {
+		for _, f := range c.Flags {
+			if f.HasValue {
+				m[f.Name] = true
+			}
+		}
+	}
+	return m
 }
 
 // multiFlag 是可重复的字符串 flag（--exclude a --exclude b）
