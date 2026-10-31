@@ -465,6 +465,29 @@ func TestCompactEndToEnd(t *testing.T) {
 		t.Fatalf("manifest 里 %s 的哈希没跟上重写: got %q want %q", oldPack, gotHash, wantHash)
 	}
 
+	// settings 里的 compact_min_gain 可调：默认 5%，能改成 8M / 0，非法值拒绝
+	s := defaultSettings()
+	if got := s.compactMinGain(); got != defaultCompactMinGain {
+		t.Errorf("默认阈值 = %q, want %q", got, defaultCompactMinGain)
+	}
+	for _, v := range []string{"8M", "10%", "0"} {
+		if err := cfgSet(s, "compact_min_gain", v); err != nil {
+			t.Fatalf("cfgSet compact_min_gain=%q: %v", v, err)
+		}
+		if got := cfgValueRaw(s, "compact_min_gain"); got != v {
+			t.Errorf("cfgValueRaw = %q, want %q", got, v)
+		}
+	}
+	if err := cfgSet(s, "compact_min_gain", "abc"); err == nil {
+		t.Error("非法阈值应该被拒绝")
+	}
+	if err := cfgUnset(s, "compact_min_gain"); err != nil {
+		t.Fatalf("cfgUnset: %v", err)
+	}
+	if got := s.compactMinGain(); got != defaultCompactMinGain {
+		t.Errorf("unset 后应回落到 %q, got %q", defaultCompactMinGain, got)
+	}
+
 	// 校验必须通过：同一个包出现两次时以最后一次的哈希为准
 	if err := runVerify("t", cfg, set, 100, true, true); err != nil {
 		t.Fatalf("verify 失败: %v", err)

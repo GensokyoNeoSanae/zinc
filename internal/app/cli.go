@@ -853,7 +853,7 @@ func cmdCompact(args []string) {
 	fs := flag.NewFlagSet("compact", flag.ExitOnError)
 	password := fs.String("password", "", M.FlagPassword)
 	packSpec := fs.String("pack", "", M.FlagCompactPack)
-	minGain := fs.String("min-gain", "5%", M.FlagCompactMinGain)
+	minGain := fs.String("min-gain", set.compactMinGain(), M.FlagCompactMinGain)
 	yes := fs.Bool("yes", false, M.FlagYesCompact)
 	noVerify := fs.Bool("no-verify", false, M.FlagNoVerify)
 	notify := fs.Bool("notify", set.completeNotify(), M.FlagNotifyCompact)

@@ -829,7 +829,7 @@ var zhMessages = &Messages{
 	RemanifestListFailed:      "读取包 %s 的目录失败: %v",
 
 	FlagCompactPack:        "只处理指定的包（包名或序号）",
-	FlagCompactMinGain:     "收益低于这个值就跳过重打：5% 或 8M",
+	FlagCompactMinGain:     "收益低于这个值就跳过重打：5% / 8M / 0（默认取 settings.compact_min_gain）",
 	FlagYesCompact:         "真正执行（不给时只报告）",
 	UsageCompact:           "用法: zinc compact <name> [--pack <名|序号>] [--min-gain <5%%|8M>] [--yes] [--notify] [--password <pw>]",
 	CompactStart:           "[压缩] %s：检查 %d 个包（只读归档头）\n",
@@ -1272,7 +1272,7 @@ Notes:
 	RemanifestListFailed:      "failed to list pack %s: %v",
 
 	FlagCompactPack:        "rewrite only this pack (name or index)",
-	FlagCompactMinGain:     "skip rewrites that save less than this: 5% or 8M",
+	FlagCompactMinGain:     "skip rewrites that save less than this: 5% / 8M / 0 (default from settings.compact_min_gain)",
 	FlagYesCompact:         "actually rewrite (without it, only report)",
 	UsageCompact:           "usage: zinc compact <name> [--pack <name|index>] [--min-gain <5%%|8M>] [--yes] [--notify] [--password <pw>]",
 	CompactStart:           "[compact] %s: checking %d packs (headers only)\n",

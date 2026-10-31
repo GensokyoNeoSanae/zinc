@@ -25,6 +25,7 @@ type Settings struct {
 	LockTimeoutMinutes int      `json:"lock_timeout_minutes,omitempty"`
 	Exclude            []string `json:"exclude,omitempty"`
 	CompleteNotify     *bool    `json:"complete_notify,omitempty"`
+	CompactMinGain     string   `json:"compact_min_gain,omitempty"` // compact 收益阈值：5% / 8M / 0
 }
 
 func settingsPath() string { return filepath.Join(appDir(), "settings.json") }
@@ -150,6 +151,17 @@ func (s *Settings) completeNotify() bool {
 	return *s.CompleteNotify
 }
 
+// defaultCompactMinGain 是 compact 收益阈值的内置默认值（与 --min-gain 一致）。
+const defaultCompactMinGain = "5%"
+
+// compactMinGain 返回 compact 收益阈值：settings 显式设了就用它，否则 5%。
+func (s *Settings) compactMinGain() string {
+	if s.CompactMinGain == "" {
+		return defaultCompactMinGain
+	}
+	return s.CompactMinGain
+}
+
 // ---------- zinc config ----------
 
 type cfgKind int
@@ -181,6 +193,7 @@ var cfgKeys = []cfgKey{
 	{"lock_timeout_minutes", kInt, "仓库锁最长等待分钟数"},
 	{"exclude", kList, "排除名单，glob，可多次 set 追加"},
 	{"complete_notify", kBool, "备份完成发 Windows 通知"},
+	{"compact_min_gain", kString, "compact 收益阈值：5% / 8M / 0（0=不看阈值）"},
 }
 
 func findCfgKey(name string) (cfgKey, bool) {
@@ -237,6 +250,8 @@ func cfgValueString(s *Settings, key string) string {
 		return strings.Join(s.Exclude, ", ")
 	case "complete_notify":
 		return strconv.FormatBool(s.completeNotify())
+	case "compact_min_gain":
+		return s.compactMinGain()
 	}
 	return ""
 }
@@ -282,6 +297,8 @@ func cfgIsSet(s *Settings, key string) bool {
 		return len(s.Exclude) > 0
 	case "complete_notify":
 		return s.CompleteNotify != nil
+	case "compact_min_gain":
+		return s.CompactMinGain != ""
 	}
 	return false
 }
@@ -306,6 +323,12 @@ func cfgSet(s *Settings, key, val string) error {
 				}
 			}
 			s.Lang = val
+		case "compact_min_gain":
+			// 只校验语法；百分比真正按包大小换算是在 compact 时做的
+			if _, err := parseMinGain(val, 1<<30); err != nil {
+				return fmt.Errorf(M.ConfigBadValue, key, val)
+			}
+			s.CompactMinGain = val
 		}
 	case kBool:
 		b, err := strconv.ParseBool(strings.ToLower(val))
@@ -384,6 +407,8 @@ func cfgUnset(s *Settings, key string) error {
 		s.Exclude = nil
 	case "complete_notify":
 		s.CompleteNotify = nil
+	case "compact_min_gain":
+		s.CompactMinGain = ""
 	}
 	return nil
 }

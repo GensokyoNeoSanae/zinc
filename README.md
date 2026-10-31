@@ -252,6 +252,7 @@ Global settings live in `<program dir>\settings.json`. They are **not** part of 
 | `lock_timeout_minutes` | `30` | longest wait for the repo lock |
 | `exclude` | `[]` | glob list; `set` appends to it |
 | `complete_notify` | `true` | send a toast when a backup finishes |
+| `compact_min_gain` | `5%` | gain threshold for `compact`: `5%` / `8M` / `0` (0 disables it); `--min-gain` overrides it |
 
 ```powershell
 zinc config                       # print everything (password masked)

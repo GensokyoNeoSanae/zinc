@@ -252,6 +252,7 @@ zinc restore pictures --check-list
 | `lock_timeout_minutes` | `30` | 仓库锁最长等待分钟数 |
 | `exclude` | `[]` | 排除名单，glob；`set` 追加 |
 | `complete_notify` | `true` | 备份完成发通知 |
+| `compact_min_gain` | `5%` | `compact` 的收益阈值：`5%` / `8M` / `0`（0 = 不看阈值）；命令行 `--min-gain` 优先 |
 
 ```powershell
 zinc config                       # 全部打印（密码打码）
