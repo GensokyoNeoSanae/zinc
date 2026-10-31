@@ -111,7 +111,16 @@ $script:ZincNameCache = @{ At = [datetime]::MinValue; Names = @() }
 function Get-ZincRepoNames {
     if (((Get-Date) - $script:ZincNameCache.At).TotalSeconds -lt 30) { return $script:ZincNameCache.Names }
     $names = @()
-    try { $names = @(& zinc list --names 2>$null) } catch { }
+    # 原生命令的 stdout 是 UTF-8 字节，PowerShell 却按 [Console]::OutputEncoding 解码；
+    # 中文系统上那个默认是 GBK，仓库名会变成「鏂囨。」。取名字时临时切 UTF-8，用完还原。
+    $oldEnc = [Console]::OutputEncoding
+    try {
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $names = @(& zinc list --names 2>$null)
+    } catch {
+    } finally {
+        [Console]::OutputEncoding = $oldEnc
+    }
     $script:ZincNameCache = @{ At = Get-Date; Names = @($names) }
     return @($names)
 }

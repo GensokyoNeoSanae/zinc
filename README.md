@@ -290,7 +290,7 @@ zinc completion zsh  > ~/.zinc-completion.zsh
 zinc completion fish > ~/.config/fish/completions/zinc.fish
 ```
 
-It covers subcommands, per-command flags, `config` action words, `--lang` values and repo names. Repo names come from `zinc list --names`, cached for 30 seconds in the script so pressing Tab does not spawn a process every time. Windows PowerShell 5.1 has no native-completion support, so the script returns quietly there.
+It covers subcommands, per-command flags, `config` action words, `--lang` values and repo names. Repo names come from `zinc list --names`, cached for 30 seconds in the script so pressing Tab does not spawn a process every time; while fetching them the script flips the console output encoding to UTF-8 and restores it, so non-ASCII repo names do not turn into mojibake. Windows PowerShell 5.1 has no native-completion support, so the script returns quietly there.
 
 ### Password
 

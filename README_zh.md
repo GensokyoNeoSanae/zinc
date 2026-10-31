@@ -290,7 +290,7 @@ zinc completion zsh  > ~/.zinc-completion.zsh
 zinc completion fish > ~/.config/fish/completions/zinc.fish
 ```
 
-覆盖子命令、各子命令的参数、`config` 的动作词、`--lang` 取值和仓库名。仓库名走 `zinc list --names`，脚本里缓存 30 秒，不会每次按 Tab 都起进程。Windows PowerShell 5.1 不支持原生命令补全，脚本会自动跳过（不报错）。
+覆盖子命令、各子命令的参数、`config` 的动作词、`--lang` 取值和仓库名。仓库名走 `zinc list --names`，脚本里缓存 30 秒，不会每次按 Tab 都起进程；取名字时会临时把控制台输出编码切到 UTF-8 再还原，所以中文仓库名不会变成「鏂囨。」。Windows PowerShell 5.1 不支持原生命令补全，脚本会自动跳过（不报错）。
 
 ### 密码
 

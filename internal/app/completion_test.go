@@ -55,6 +55,9 @@ func TestCompletionScripts(t *testing.T) {
 		if !strings.Contains(s, "schedule") {
 			t.Errorf("%s: 命令表没进脚本", shell)
 		}
+		if shell == "powershell" && !strings.Contains(s, "OutputEncoding") {
+			t.Errorf("powershell: 取仓库名时没临时切 UTF-8，中文仓库名会变「鏂囨。」")
+		}
 	}
 	if _, ok := completionScript("nu"); ok {
 		t.Error("不支持的 shell 应该返回 false")
