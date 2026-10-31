@@ -49,6 +49,8 @@ func Main() {
 		cmdUnschedule(rest)
 	case "completion":
 		cmdCompletion(rest)
+	case "hash-compare":
+		cmdHashCompare(rest)
 	case "help", "--help", "-h":
 		usage()
 	default:

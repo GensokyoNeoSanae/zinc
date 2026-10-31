@@ -210,6 +210,8 @@ zinc restore pictures --check-list
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <path>] [--from <pack>]` | restore everything or one path |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | rebuild the index from the packs |
 | `zinc remanifest <name> [--password <pw>] [--yes]` | reconcile the manifest with the disk: drop entries whose packs are gone, add orphan packs; dry-run by default |
+| `zinc hash-compare --source1 <path> --source2 <path>` | compare two trees/files file by file with SHA-256 |
+| `zinc hash-compare --source <file> --hash-value <SHA-256>` | compare one file against an expected hash |
 | `zinc compact <name> [--pack <pack>] [--min-gain <5%\|8M>] [--yes]` | rewrite existing packs, dropping copies a newer version superseded |
 | `zinc verify <name\|--all> [--sample <pct>] [--password-only\|--hash-only]` | SHA-256 check of the packs and deletion records, and opens every pack with the configured password; `--password-only` checks the password only, `--hash-only` checks hashes only |
 | `zinc status [--all] [<name>]` | show status; `--all` expands every repo |
@@ -320,7 +322,7 @@ One rule: all packs are extracted in name (time) ascending order, so the last ba
 | `--no-delete` | restore files only; skip the deletions recorded by later backups |
 | `--notify=false` | do not send the "restore incomplete" toast |
 | `--check-list` | only print the order and sizes (packs and deletion records), change nothing; `--dest` may be omitted |
-| `--only <path>` | restore just that one file or directory, leave everything else alone; deletion records are not applied |
+| `--only <path>` | restore just that one file or directory, leave everything else alone; deletions under that subtree are applied on the timeline (not with `--from`) |
 | `--from <pack>` | with `--only`, take it from a specific pack: full name, unique prefix, or 1-based position in the repo's complete pack list — not the numbering printed by `--check-list` |
 
 Overwrite mode prints a warning when it starts. Restore works through the packs strictly in name order, so a renamed or hand-copied pack changes which version wins — keep the names zinc assigned.
@@ -364,11 +366,23 @@ zinc restore docs --only 'notes/chapter1.md' --from 20261020_070012_334.7z --des
 
 How the pack is chosen:
 
-- exact file path → looked up in `index.tsv`, which points straight at the newest pack holding it
-- directory or wildcard → every pack containing a match is extracted oldest to newest, so the result matches a full restore
-- a missing index is fine: it falls back to scanning pack headers (`7za l`, no extraction)
+- the starting point is the **oldest pack containing the path**; from there a timeline of `pack → deletion record` runs: packs extract that subtree, deletion records only touch paths under it
+- this is sound because a path cannot be deleted before it appeared, so nothing before the starting point can delete it
+- `--from <pack>` is the exception: that one pack is extracted and no deletions are applied — you asked for "that version"
+- `--check-list` also lists the deletion records on the timeline
+- directories and wildcards use the same timeline, so the result matches the same subtree of a full restore
 
 Wildcards follow 7-Zip's matching rules, where `*` does **not** reliably cross directories: `--only '*.md'` only hits files at the top level. To restore a whole subtree, pass the directory itself (`--only 'notes/archive'`) instead of guessing with a wildcard.
+
+A partial restore cannot be checked with `zinc verify` (its files are scattered across packs); use `zinc hash-compare` when you want to compare:
+
+```powershell
+# compare two trees file by file (SHA-256): changed, missing and extra are listed
+zinc hash-compare --source1 D:\notes\archive --source2 D:\recovered\notes\archive
+
+# one file against an expected hash (case-insensitive, optional sha256: prefix)
+zinc hash-compare --source D:\recovered\notes\chapter1.md --hash-value 9f86d0…
+```
 
 `--only --check-list` needs the password, because listing an archive means decrypting its header.
 

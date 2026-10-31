@@ -426,6 +426,22 @@ type Messages struct {
 	// status
 	StatusPacks   string
 	StatusContent string
+
+	// hash-compare
+	UsageHashCompare    string
+	FlagHashSource1     string
+	FlagHashSource2     string
+	FlagHashSource      string
+	FlagHashValue       string
+	HashCompareMode     string
+	HashCompareType     string
+	HashCompareNeedFile string
+	HashCompareSame     string
+	HashCompareSummary  string
+	HashCompareFileSame string
+	HashCompareFileDiff string
+	HashCompareDiff     string
+	HashCompareExtra    string
 }
 
 var M *Messages
@@ -457,6 +473,8 @@ var zhMessages = &Messages{
   zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]
   zinc status [--all] [<name>]
   zinc completion <powershell|bash|zsh|fish> [--install]   生成 Tab 补全脚本
+  zinc hash-compare --source1 <路径> --source2 <路径>
+  zinc hash-compare --source <文件> --hash-value <SHA-256>   手动比对哈希/目录
   zinc schedule <name|--all> --daily --at HH:MM[,HH:MM...]
   zinc schedule <name|--all> --weekly 1,3 --at HH:MM
   zinc schedule <name|--all> --monthly 1,15 --at HH:MM [--yes]
@@ -871,6 +889,21 @@ var zhMessages = &Messages{
 
 	StatusPacks:   "  包: %d 批次 / %d 个包 / %s\n",
 	StatusContent: "  内容日期: %s ~ %s\n",
+
+	UsageHashCompare:    "用法: zinc hash-compare --source1 <路径> --source2 <路径>\n       zinc hash-compare --source <文件> --hash-value <SHA-256>",
+	FlagHashSource1:     "比较的左边：文件或目录",
+	FlagHashSource2:     "比较的右边：文件或目录",
+	FlagHashSource:      "要计算 SHA-256 的文件",
+	FlagHashValue:       "期望的 SHA-256（十六进制，大小写不敏感）",
+	HashCompareMode:     "要么给 --source1 + --source2，要么给 --source + --hash-value（两套不能混用）",
+	HashCompareType:     "--source1 和 --source2 必须同为文件或同为目录",
+	HashCompareNeedFile: "--hash-value 只能配单个文件，不能配目录",
+	HashCompareSame:     "一致：%d 个文件（SHA-256）\n",
+	HashCompareSummary:  "不一致：%d 个不同, %d 个缺失, %d 个多出\n",
+	HashCompareFileSame: "%s: SHA-256 一致\n",
+	HashCompareFileDiff: "%s: SHA-256 不一致\n  期望 %s\n  实际 %s\n",
+	HashCompareDiff:     "[不同] %s\n",
+	HashCompareExtra:    "[多出] %s\n",
 }
 
 var enMessages = &Messages{
@@ -900,6 +933,8 @@ Usage:
   zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]
   zinc status [--all] [<name>]
   zinc completion <powershell|bash|zsh|fish> [--install]   generate a tab-completion script
+  zinc hash-compare --source1 <path> --source2 <path>
+  zinc hash-compare --source <file> --hash-value <SHA-256>   compare hashes or trees by hand
   zinc schedule <name|--all> --daily --at HH:MM[,HH:MM...]
   zinc schedule <name|--all> --weekly 1,3 --at HH:MM
   zinc schedule <name|--all> --monthly 1,15 --at HH:MM [--yes]
@@ -1314,4 +1349,19 @@ Notes:
 
 	StatusPacks:   "  packs: %d batches / %d packs / %s\n",
 	StatusContent: "  content dates: %s ~ %s\n",
+
+	UsageHashCompare:    "usage: zinc hash-compare --source1 <path> --source2 <path>\n       zinc hash-compare --source <file> --hash-value <SHA-256>",
+	FlagHashSource1:     "left side: a file or a directory",
+	FlagHashSource2:     "right side: a file or a directory",
+	FlagHashSource:      "file whose SHA-256 is computed",
+	FlagHashValue:       "expected SHA-256 (hex, case-insensitive)",
+	HashCompareMode:     "pass either --source1 + --source2, or --source + --hash-value (do not mix)",
+	HashCompareType:     "--source1 and --source2 must both be files or both be directories",
+	HashCompareNeedFile: "--hash-value only works with a single file, not a directory",
+	HashCompareSame:     "identical: %d file(s) (SHA-256)\n",
+	HashCompareSummary:  "different: %d changed, %d missing, %d extra\n",
+	HashCompareFileSame: "%s: SHA-256 matches\n",
+	HashCompareFileDiff: "%s: SHA-256 differs\n  expected %s\n  actual   %s\n",
+	HashCompareDiff:     "[different] %s\n",
+	HashCompareExtra:    "[extra] %s\n",
 }

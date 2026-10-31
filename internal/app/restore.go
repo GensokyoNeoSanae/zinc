@@ -389,33 +389,35 @@ func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, onl
 	if spec == "" {
 		return errors.New(M.MissingOnly)
 	}
-	sevenZip := repo.sevenZip(set)
-
 	if checkList {
-		packs, perr := sortedPacks(repo.Output)
+		timeline, perr := onlyTimeline(repo, set, spec, password)
 		if perr != nil {
 			return perr
 		}
-		var hits []string
-		for _, p := range packs {
-			ok, e := packHasPath(sevenZip, filepath.Join(repo.Output, p), password, spec)
-			if e != nil {
-				continue
-			}
-			if ok {
-				hits = append(hits, p)
-			}
-		}
-		if len(hits) == 0 {
+		if len(timeline) == 0 {
 			return fmt.Errorf(M.OnlyNoVersions, spec)
 		}
-		fmt.Printf(M.OnlyVersions, spec, len(hits))
-		for i, p := range hits {
-			var sz int64
-			if st, e := os.Stat(filepath.Join(repo.Output, p)); e == nil {
-				sz = st.Size()
+		packs := 0
+		for _, e := range timeline {
+			if e.Pack != "" {
+				packs++
 			}
-			fmt.Printf(M.CheckListItem, i+1, p, humanSize(sz))
+		}
+		fmt.Printf(M.OnlyVersions, spec, packs)
+		for i, e := range timeline {
+			if e.Pack != "" {
+				var sz int64
+				if st, serr := os.Stat(filepath.Join(repo.Output, e.Pack)); serr == nil {
+					sz = st.Size()
+				}
+				fmt.Printf(M.CheckListItem, i+1, e.Pack, humanSize(sz))
+				continue
+			}
+			n := 0
+			if rec, derr := readDeletions(repo.Output, e.Del); derr == nil {
+				n = len(rec.Paths)
+			}
+			fmt.Printf(M.CheckListDelItem, i+1, e.Del, n)
 		}
 		return nil
 	}
@@ -427,46 +429,115 @@ func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, onl
 		return err
 	}
 
-	var targets []string
+	// --from：只要那一个包，按原样解，不套删除记录（用户要的是「那一版」）
 	if from != "" {
 		pack := resolvePackSpec(repo.Output, from)
 		if pack == "" {
 			return fmt.Errorf(M.PackNotSpecified, from)
 		}
-		targets = []string{pack}
-	} else {
-		// 精确文件路径：索引直接给出最新版本所在包
-		if idx, idxErr := loadIndex(repo.Output); idxErr == nil {
-			if fe := idx.Files[spec]; fe != nil {
-				if name := idx.packName(fe.Pack); name != "" {
-					targets = []string{name}
-				}
-			}
+		if err := os.MkdirAll(dest, 0755); err != nil {
+			return fmt.Errorf(M.CreateDestFailed, err)
 		}
-		if len(targets) == 0 {
-			// 目录或索引缺失：收集所有包含它的包，按时间升序全部解压，后压的赢
-			packs, perr := sortedPacks(repo.Output)
-			if perr != nil {
-				return perr
-			}
-			for _, p := range packs {
-				ok, e := packHasPath(sevenZip, filepath.Join(repo.Output, p), password, spec)
-				if e != nil {
-					continue
-				}
-				if ok {
-					targets = append(targets, p)
-				}
-			}
+		if err := extractOnlyPack(repo, set, pack, spec, dest, password, overwrite); err != nil {
+			return err
 		}
-		if len(targets) == 0 {
-			return fmt.Errorf(M.PathNotBackedUp, spec)
-		}
+		fmt.Printf(M.OnlyDone, spec, filepath.Join(dest, filepath.FromSlash(spec)))
+		logf("restore-only %s: %s from pack %s -> %s", name, spec, pack, dest)
+		return nil
 	}
 
+	// 局部恢复也走时间线：命中的包按时间升序解压，命中的删除记录在对应时刻执行。
+	// 起点是「第一个包含该路径的包」——在此之前不可能有命中 spec 的删除记录，
+	// 因为文件/目录还没在那个位置出现过。
+	timeline, err := onlyTimeline(repo, set, spec, password)
+	if err != nil {
+		return err
+	}
+	if len(timeline) == 0 {
+		return fmt.Errorf(M.PathNotBackedUp, spec)
+	}
 	if err := os.MkdirAll(dest, 0755); err != nil {
 		return fmt.Errorf(M.CreateDestFailed, err)
 	}
+	if err := applyOnlyTimeline(repo, set, timeline, spec, dest, password, overwrite); err != nil {
+		return err
+	}
+	fmt.Printf(M.OnlyDone, spec, filepath.Join(dest, filepath.FromSlash(spec)))
+	logf("restore-only %s: %s from %d entries -> %s", name, spec, len(timeline), dest)
+	return nil
+}
+
+// delSortKey 与 buildTimeline 的排序键一致：定宽时间前缀 + 冲突序号。
+func delSortKey(d string) (string, int) {
+	stem := strings.TrimSuffix(d, delExt)
+	if len(stem) > packStemLen && stem[packStemLen] == '_' {
+		if n, e := strconv.Atoi(stem[packStemLen+1:]); e == nil {
+			return stem[:packStemLen], n
+		}
+	}
+	return stem, maxSeq
+}
+
+// onlyTimeline 为局部恢复构造执行序列：命中 spec 的包 + 起点之后命中 spec 的删除记录。
+func onlyTimeline(repo *Repo, set *Settings, spec, password string) ([]timeEntry, error) {
+	packs, err := sortedPacks(repo.Output)
+	if err != nil {
+		return nil, err
+	}
+	sz := repo.sevenZip(set)
+	var hits []timeEntry
+	for _, p := range packs {
+		ok, e := packHasPath(sz, filepath.Join(repo.Output, p), password, spec)
+		if e != nil {
+			continue
+		}
+		if ok {
+			stem, seq := packSortKey(p)
+			hits = append(hits, timeEntry{Pack: p, Stem: stem, Seq: seq})
+		}
+	}
+	if len(hits) == 0 {
+		return nil, nil
+	}
+	start := hits[0]
+
+	dels, err := listDelFiles(repo.Output)
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range dels {
+		stem, seq := delSortKey(d)
+		if stem < start.Stem || (stem == start.Stem && seq < start.Seq) {
+			continue
+		}
+		rec, rerr := readDeletions(repo.Output, d)
+		if rerr != nil {
+			return nil, rerr
+		}
+		for _, rel := range rec.Paths {
+			if matchPath(rel, spec) {
+				hits = append(hits, timeEntry{Del: d, Stem: stem, Seq: seq})
+				break
+			}
+		}
+	}
+
+	sort.SliceStable(hits, func(i, j int) bool {
+		a, b := hits[i], hits[j]
+		if a.Stem != b.Stem {
+			return a.Stem < b.Stem
+		}
+		if a.Seq != b.Seq {
+			return a.Seq < b.Seq
+		}
+		// 同一时刻：包先解压，删除记录后执行
+		return a.Pack != "" && b.Pack == ""
+	})
+	return hits, nil
+}
+
+// extractOnlyPack 解压一个包里的 spec 子树（--from 用，不套删除记录）。
+func extractOnlyPack(repo *Repo, set *Settings, pack, spec, dest, password string, overwrite bool) error {
 	ao := "-aou"
 	if overwrite {
 		ao = "-aoa"
@@ -475,23 +546,68 @@ func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, onl
 	if !strings.ContainsAny(spec, "*?") {
 		patterns = append(patterns, spec+"/*")
 	}
-	for _, pack := range targets {
-		fmt.Printf(M.Extracting, pack)
-		args := []string{"x", "-y", ao, "-sccUTF-8", "-p" + password, filepath.Join(repo.Output, pack), "-o" + dest,
-			"-x!" + placeholderName}
-		args = append(args, patterns...)
-		cmd := hiddenCmd(sevenZip, args...)
-		out, xerr := cmd.CombinedOutput()
-		if xerr != nil {
+	fmt.Printf(M.Extracting, pack)
+	args := []string{"x", "-y", ao, "-sccUTF-8", "-p" + password, filepath.Join(repo.Output, pack), "-o" + dest,
+		"-x!" + placeholderName}
+	args = append(args, patterns...)
+	out, xerr := hiddenCmd(repo.sevenZip(set), args...).CombinedOutput()
+	if xerr != nil {
+		fmt.Print(M.RestorePartial)
+		return fmt.Errorf(M.ExtractFailed, pack, xerr, string(out))
+	}
+	return nil
+}
+
+// applyOnlyTimeline 按时间线执行局部恢复：包解压 spec 子树，删除记录只处理 spec 下的路径。
+func applyOnlyTimeline(repo *Repo, set *Settings, timeline []timeEntry, spec, dest, password string, overwrite bool) error {
+	sz := repo.sevenZip(set)
+	ao := "-aou"
+	if overwrite {
+		ao = "-aoa"
+	}
+	patterns := []string{spec}
+	if !strings.ContainsAny(spec, "*?") {
+		patterns = append(patterns, spec+"/*")
+	}
+	deletedTotal := 0
+	for _, e := range timeline {
+		if e.Pack != "" {
+			fmt.Printf(M.Extracting, e.Pack)
+			args := []string{"x", "-y", ao, "-sccUTF-8", "-p" + password, filepath.Join(repo.Output, e.Pack), "-o" + dest,
+				"-x!" + placeholderName}
+			args = append(args, patterns...)
+			out, xerr := hiddenCmd(sz, args...).CombinedOutput()
+			if xerr != nil {
+				fmt.Print(M.RestorePartial)
+				return fmt.Errorf(M.ExtractFailed, e.Pack, xerr, string(out))
+			}
+			continue
+		}
+		rec, rerr := readDeletions(repo.Output, e.Del)
+		if rerr != nil {
+			return rerr
+		}
+		var rels []string
+		for _, rel := range rec.Paths {
+			if matchPath(rel, spec) {
+				rels = append(rels, rel)
+			}
+		}
+		if len(rels) == 0 {
+			continue
+		}
+		removed, _, derr := applyDeletions(dest, rels)
+		if derr != nil {
 			fmt.Print(M.RestorePartial)
-			return fmt.Errorf(M.ExtractFailed, pack, xerr, string(out))
+			return derr
+		}
+		if removed > 0 {
+			fmt.Printf(M.DeletingBatch, e.Del, removed)
+			deletedTotal += removed
 		}
 	}
-	if strings.ContainsAny(spec, "*?") {
-		fmt.Printf(M.OnlyDone, spec, dest)
-	} else {
-		fmt.Printf(M.OnlyDone, spec, filepath.Join(dest, filepath.FromSlash(spec)))
+	if deletedTotal > 0 {
+		fmt.Printf(M.RestoreDelSummary, deletedTotal)
 	}
-	logf("restore-only %s: %s from %d pack(s) -> %s", name, spec, len(targets), dest)
 	return nil
 }

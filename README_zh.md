@@ -210,6 +210,8 @@ zinc restore pictures --check-list
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <路径>] [--from <包>]` | 恢复全量或单个路径 |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | 从包重建索引 |
 | `zinc remanifest <name> [--password <pw>] [--yes]` | 对账 manifest：删掉盘上已消失的条目、补登孤儿包；默认预演 |
+| `zinc hash-compare --source1 <路径> --source2 <路径>` | 逐文件比对两棵树/两个文件的 SHA-256 |
+| `zinc hash-compare --source <文件> --hash-value <SHA-256>` | 单个文件对期望哈希 |
 | `zinc compact <name> [--pack <包>] [--min-gain <5%\|8M>] [--yes]` | 重写已有包，丢掉被新版取代的旧副本 |
 | `zinc verify <name\|--all> [--sample <pct>] [--password-only\|--hash-only]` | 校验包与删除记录的 SHA-256，并用配置密码试开每个包；`--password-only` 只验密码，`--hash-only` 只算哈希 |
 | `zinc status [--all] [<name>]` | 查看状态；`--all` 一次展开所有仓库的详情 |
@@ -320,7 +322,7 @@ zinc config set default_password -
 | `--no-delete` | 只恢复文件，不执行后续备份记下的删除 |
 | `--notify=false` | 不发“恢复不完整”的通知 |
 | `--check-list` | 只打印执行顺序和体积（包与删除记录），不动文件；此时可以不写 `--dest` |
-| `--only <路径>` | 只恢复这一个文件或目录，其他文件不动；不套用删除记录 |
+| `--only <路径>` | 只恢复这一个文件或目录，其他文件不动；按时间线执行该子树下的删除记录（`--from` 时不执行） |
 | `--from <包>` | 配合 `--only`，从指定的包恢复：完整包名、唯一前缀，或该仓库**全部包**里的 1 起序号；不是 `--check-list` 打印的那套编号 |
 
 覆盖模式启动时会打印警告。恢复严格按包名顺序逐个解压，所以改名或手工拷入的包会改变最后胜出的版本——请保留 zinc 生成的包名。
@@ -364,11 +366,23 @@ zinc restore docs --only 'notes/chapter1.md' --from 20261020_070012_334.7z --des
 
 定位规则：
 
-- 精确文件路径：直接查 `index.tsv`，一次命中最新版本所在包
-- 目录或通配符：从旧到新遍历所有包含匹配项的包逐个解压，后压的覆盖先压的，结果与全量恢复一致
-- 索引缺失也不影响：自动退回翻包目录（`7za l`，不解压）
+- 起点是**最早包含该路径的包**，然后按「包 → 删除记录」的时间线依次执行：包解压该子树，删除记录只处理这个子树下的路径；
+- 之所以能这么算，是因为一个路径不可能在它出现之前就被删除；起点之前的删除记录一定不涉及它；
+- `--from <包>` 是例外：只解那一个包，不套删除记录——你要的就是“那一版”；
+- `--check-list` 会把时间线里的删除记录也列出来；
+- 目录或通配符也一样走时间线，结果与整仓恢复后的对应子树一致。
 
 通配符按 7-Zip 的匹配语义，`*` 不保证跨目录：`--only '*.md'` 只命中根层文件。要恢复整棵子树就直接给目录路径（`--only 'notes/archive'`），别用通配符猜。
+
+局部恢复没法用 `zinc verify` 校验（内容散落在各个包里），需要自己比对时用 `zinc hash-compare`：
+
+```powershell
+# 两棵树逐文件比 SHA-256：多出、缺失、内容不同都会列出来
+zinc hash-compare --source1 D:\notes\archive --source2 D:\recovered\notes\archive
+
+# 单个文件对期望哈希（大小写不敏感，可以带 sha256: 前缀）
+zinc hash-compare --source D:\recovered\notes\chapter1.md --hash-value 9f86d0…
+```
 
 `--only --check-list` 需要密码，因为列包内文件要读加密的归档头。
 

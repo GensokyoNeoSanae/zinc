@@ -95,6 +95,12 @@ var completionCommands = []CmdSpec{
 	}, PositionalKind: "repo"},
 	{Name: "unschedule", Flags: []FlagSpec{{Name: "all"}}, PositionalKind: "repo"},
 	{Name: "completion", Flags: []FlagSpec{{Name: "install"}}, PositionalWords: []string{"powershell", "bash", "zsh", "fish"}},
+	{Name: "hash-compare", Flags: []FlagSpec{
+		{Name: "source1", HasValue: true},
+		{Name: "source2", HasValue: true},
+		{Name: "source", HasValue: true},
+		{Name: "hash-value", HasValue: true},
+	}},
 	{Name: "help"},
 }
 
