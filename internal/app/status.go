@@ -37,14 +37,14 @@ func runStatus(name string, cfg *Config, set *Settings) error {
 		}
 		m, mErr := loadManifest(repo.Output)
 
-		batches, packs, last, from, to := 0, 0, "", "", ""
+		batches, packs, last := 0, 0, ""
 		var total int64
 		if mErr == nil {
-			// 包名去重：compact 会把同一个包再登记一次，别把它算成两个包、两份大小。
-			// compact 批次也不算「备份了几次」——它没有新增内容。
+			// 包名去重：旧账本里 compact 会把同一个包再登记一次，别算成两个包。
 			seen := make(map[string]struct{}, len(m.Batches))
 			for _, b := range m.Batches {
-				for _, f := range b.Files {
+				batches++
+				for f := range b.Packs {
 					if _, ok := seen[f]; ok {
 						continue
 					}
@@ -53,19 +53,22 @@ func runStatus(name string, cfg *Config, set *Settings) error {
 						total += st.Size()
 					}
 				}
-				if b.Op != "" {
-					continue
+				if b.Time > last {
+					last = b.Time
 				}
-				batches++
-				if b.From != "" && (from == "" || b.From < from) {
-					from = b.From
-				}
-				if b.To > to {
-					to = b.To
-				}
-				last = b.Time
 			}
 			packs = len(seen)
+		}
+
+		// 内容日期范围从索引的 P 行取（manifest 只存哈希，不再存 from/to）
+		from, to := "", ""
+		for _, p := range idx.Packs {
+			if p.From != "" && (from == "" || p.From < from) {
+				from = p.From
+			}
+			if p.To > to {
+				to = p.To
+			}
 		}
 
 		if name == "" {

@@ -209,6 +209,7 @@ zinc restore pictures --check-list
 | `zinc backup <name\|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]` | 备份 |
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <路径>] [--from <包>]` | 恢复全量或单个路径 |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | 从包重建索引 |
+| `zinc remanifest <name> [--password <pw>] [--yes]` | 对账 manifest：删掉盘上已消失的条目、补登孤儿包；默认预演 |
 | `zinc compact <name> [--pack <包>] [--min-gain <5%\|8M>] [--yes]` | 重写已有包，丢掉被新版取代的旧副本 |
 | `zinc verify <name\|--all> [--sample <pct>] [--password-only\|--hash-only]` | 校验包与删除记录的 SHA-256，并用配置密码试开每个包；`--password-only` 只验密码，`--hash-only` 只算哈希 |
 | `zinc status [--all] [<name>]` | 查看状态；`--all` 一次展开所有仓库的详情 |
@@ -478,7 +479,10 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 | `*.7z` | `<output>/` | 是 | 数据本身，每个都是完整归档 |
 | `*.rm` | `<output>/` | 是 | 这一批的删除记录及其校验和；恢复要靠它删掉文件，必须跟包一起上传 |
 | `index.tsv` | `<output>/` | 是 | 增量检测缓存，丢了用 `zinc reindex` 重建 |
-| `manifest.json` | `<output>/` | 是 | 每批的 SHA-256 记录，`verify` 用；必须随包上传，否则换机后没法校验旧包 |
+| `manifest.json` | `<output>/` | 是 | 每个包的 SHA-256 账本（按批次分组），`verify` 用；必须随包上传，否则换机后没法校验旧包 |
+| `manifest.json.bak` | `<output>/` | 否 | `remanifest --yes` 写回前留的上一份账本 |
+
+`manifest.json` 是**校验账本，不是数据本体**：备份和恢复都不读它，只有 `verify` 拿它比对包/删除记录的哈希。账本和磁盘对不上时（比如手动删过包），用 `zinc remanifest <仓库>` 对账——删掉已消失的条目、补登孤儿包，默认只预演，`--yes` 才写回。
 
 运行时文件（程序目录，不同步）：
 
@@ -545,7 +549,7 @@ zinc 回答的是“这个目录每次备份时长什么样”，恢复能把它
 - **不导入旧的分卷布局。** `vol-*.7z.001` 这类归档不读取。请新建仓库，或把旧目录整体当归档留着。
 - **计划任务需要真实终端。** `schtasks` 在受限环境（如沙箱）里跑不了。
 - **任务里密码是明文。** 无人值守的必然代价；威胁模型是网盘内容扫描，不是定向攻击者。
-- **`manifest.json` 必须随包上传。** 它记录备份时算出的哈希，`verify` 靠它在换机后识别传输损坏；丢了就没法校验历史批次。
+- **`manifest.json` 必须随包上传。** 它记录备份时算出的哈希，`verify` 靠它在换机后识别传输损坏；丢了可以用 `zinc remanifest <仓库> --yes` 从盘上重算，但会失去「哪个包曾经在、现在没了」这条记录。
 - **`reindex` 依赖本地时区。** `7za l` 打印的是本地时间且不带偏移，重建时按当前时区解释。
 - **`reindex --pack-start` / `--pack-end` 会用子集覆盖整份索引。** 范围外的包下次备份会被当成新增重压一遍。这两个参数是灾难恢复用的，日常直接跑 `zinc reindex <仓库>`。
 - **符号链接和 junction 不会被扫描。** 源目录本身是 junction 时扫描结果为空（表现为永远“无新增”），源目录内部的 junction 子树也不进索引。请把 `--source` 配成真实路径。

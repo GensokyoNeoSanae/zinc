@@ -29,7 +29,6 @@ func TestVerifyModes(t *testing.T) {
 	if err := writeManifest(out, "t", "2026-01-01_00-00-00", batchMeta{
 		Packs:  []string{pack},
 		Hashes: []string{res.Hash},
-		Hash:   res.Hash,
 	}); err != nil {
 		t.Fatalf("writeManifest: %v", err)
 	}

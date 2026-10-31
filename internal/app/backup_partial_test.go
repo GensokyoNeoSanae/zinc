@@ -200,8 +200,8 @@ func TestCommitPackRegistersOnlyKeptFiles(t *testing.T) {
 	if len(m.Batches) != 1 {
 		t.Fatalf("manifest 批次数 = %d, want 1", len(m.Batches))
 	}
-	if len(m.Batches[0].Files) != 1 || m.Batches[0].Files[0] != packName {
-		t.Fatalf("manifest 里的包 = %v, want [%s]", m.Batches[0].Files, packName)
+	if _, ok := m.Batches[0].Packs[packName]; !ok {
+		t.Fatalf("manifest 里的包 = %v, want [%s]", m.Batches[0].Packs, packName)
 	}
 }
 
@@ -278,7 +278,6 @@ func TestManifestMergesSameRunBatches(t *testing.T) {
 		if err := writeManifest(out, "t", tag, batchMeta{
 			Packs:  []string{name},
 			Hashes: []string{name},
-			Hash:   name,
 		}); err != nil {
 			t.Fatalf("writeManifest %s: %v", name, err)
 		}
@@ -290,10 +289,10 @@ func TestManifestMergesSameRunBatches(t *testing.T) {
 	if len(m.Batches) != 1 {
 		t.Fatalf("同一次备份应该合并成 1 批，实际 %d", len(m.Batches))
 	}
-	if len(m.Batches[0].Files) != 2 {
-		t.Fatalf("批内包数 = %d, want 2", len(m.Batches[0].Files))
+	if len(m.Batches[0].Packs) != 2 {
+		t.Fatalf("批内包数 = %d, want 2", len(m.Batches[0].Packs))
 	}
-	if m.Batches[0].Hash != batchHashOf([]string{"20260101_000000_000.7z", "20260101_000001_000.7z"}, "") {
-		t.Error("合并后的 batch_hash 应该是所有包哈希拼接的 sha256")
+	if m.Batches[0].Packs["20260101_000001_000.7z"] != "20260101_000001_000.7z" {
+		t.Error("合并后两个包的哈希都该保留")
 	}
 }

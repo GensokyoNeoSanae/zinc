@@ -1,25 +1,20 @@
 package app
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 func loadManifest(output string) (*Manifest, error) {
-	p := manifestPath(output)
-	b, err := os.ReadFile(p)
+	b, err := os.ReadFile(manifestPath(output))
 	if err != nil {
 		return nil, err
 	}
-	var m Manifest
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, err
-	}
-	return &m, nil
+	return decodeManifest(b)
 }
 
 // runVerify 校验本地包：doHash 时比对 SHA-256，doPw 时用配置密码试开每个包。
@@ -64,44 +59,45 @@ func runVerify(name string, cfg *Config, set *Settings, samplePct int, doHash, d
 	}
 	// 删除记录也要校验：它坏了，恢复时不是少删就是删错
 	rmOK, rmBad, rmMissing := 0, 0, 0
-	// 同一个包可能出现两次：备份批次登记一次，compact 重写后再登记一次。
-	// 以最后一条为准——账本是追加写的，后写的才是这个包现在的内容。
+	// 同一个包可能在多个批次里出现（旧账本里 compact 会再登记一次）：
+	// 以最后一条为准，后写的才是这个包现在的内容。
 	var order []string
 	latest := make(map[string]string)
-	checked := make(map[string]struct{})
+	seenRm := make(map[string]bool)
 	for _, b := range m.Batches {
-		if doHash && b.Rm != "" {
-			// 同一条删除记录也可能被后面的批次重提一次，别重复计数
-			if _, done := checked[b.Rm]; !done {
-				checked[b.Rm] = struct{}{}
-				h, herr := sha256File(filepath.Join(repo.Output, b.Rm))
+		if doHash {
+			for rm, want := range b.Rms {
+				if _, done := seenRm[rm]; done {
+					continue
+				}
+				seenRm[rm] = true
+				h, herr := sha256File(filepath.Join(repo.Output, rm))
 				switch {
 				case os.IsNotExist(herr):
 					rmMissing++
-					fmt.Printf(M.VerifyRmMissing, b.Rm)
+					fmt.Printf(M.VerifyRmMissing, rm)
 				case herr != nil:
 					rmBad++
-					fmt.Printf(M.VerifyRmCorrupt, b.Rm)
-				case b.RmHash == "":
+					fmt.Printf(M.VerifyRmCorrupt, rm)
+				case want == "":
 					rmOK++ // 旧账本没记哈希，只能确认文件还在
-				case h != b.RmHash:
+				case h != want:
 					rmBad++
-					fmt.Printf(M.VerifyRmCorrupt, b.Rm)
+					fmt.Printf(M.VerifyRmCorrupt, rm)
 				default:
 					rmOK++
 				}
 			}
 		}
-		for i, f := range b.Files {
-			if i >= len(b.Hashes) {
-				continue
-			}
+		for f, h := range b.Packs {
 			if _, seen := latest[f]; !seen {
 				order = append(order, f)
 			}
-			latest[f] = b.Hashes[i]
+			latest[f] = h
 		}
 	}
+	// 映射没有顺序，排一下让 missing/corrupt 的输出稳定
+	sort.Strings(order)
 	all := make([]packCheck, 0, len(order))
 	for _, f := range order {
 		all = append(all, packCheck{name: f, hash: latest[f]})

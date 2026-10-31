@@ -209,6 +209,7 @@ zinc restore pictures --check-list
 | `zinc backup <name\|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]` | back up |
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <path>] [--from <pack>]` | restore everything or one path |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | rebuild the index from the packs |
+| `zinc remanifest <name> [--password <pw>] [--yes]` | reconcile the manifest with the disk: drop entries whose packs are gone, add orphan packs; dry-run by default |
 | `zinc compact <name> [--pack <pack>] [--min-gain <5%\|8M>] [--yes]` | rewrite existing packs, dropping copies a newer version superseded |
 | `zinc verify <name\|--all> [--sample <pct>] [--password-only\|--hash-only]` | SHA-256 check of the packs and deletion records, and opens every pack with the configured password; `--password-only` checks the password only, `--hash-only` checks hashes only |
 | `zinc status [--all] [<name>]` | show status; `--all` expands every repo |
@@ -478,7 +479,10 @@ Output root (sync this folder to your cloud drive):
 | `*.7z` | `<output>/` | yes | the data; every pack is a complete archive |
 | `*.rm` | `<output>/` | yes | deletions of that batch with their checksum; restore needs them to remove files, so upload them with the packs |
 | `index.tsv` | `<output>/` | yes | incremental detection cache; rebuild with `zinc reindex` if lost |
-| `manifest.json` | `<output>/` | yes | per-batch SHA-256 records for `verify`; must be uploaded, otherwise a new machine cannot verify old packs |
+| `manifest.json` | `<output>/` | yes | per-pack SHA-256 ledger (grouped by batch) for `verify`; must be uploaded, otherwise a new machine cannot verify old packs |
+| `manifest.json.bak` | `<output>/` | no | previous ledger kept by `remanifest --yes` before writing |
+
+`manifest.json` is a **verification ledger, not the data itself**: backup and restore never read it, only `verify` compares pack/deletion-record hashes against it. When the ledger and the disk disagree (say you deleted packs by hand), run `zinc remanifest <repo>`: it drops entries whose files are gone and registers orphan packs. It only reports by default; `--yes` writes.
 
 Runtime files (program directory, never synced):
 
@@ -545,7 +549,7 @@ zinc answers "what did this folder look like at each backup", and a restore repr
 - **No import from older volume layouts.** `vol-*.7z.001` archives are not read. Start a fresh repo, or keep the old tree as an archive.
 - **Scheduling needs a real terminal.** `schtasks` cannot run in restricted environments such as sandboxes.
 - **Plain-text password in tasks.** Unavoidable for unattended runs; the threat model is content scanning, not a targeted attacker.
-- **`manifest.json` must be uploaded with the packs.** It records hashes computed at backup time, so `verify` can detect transfer corruption on a new machine. Without it, old batches cannot be verified.
+- **`manifest.json` must be uploaded with the packs.** It records hashes computed at backup time, so `verify` can detect transfer corruption on a new machine. If it is lost, `zinc remanifest <repo> --yes` can recompute it from the packs, but the memory of "which pack used to be here and is now gone" is lost.
 - **`reindex` trusts the local time zone.** `7za l` prints local time without an offset, so a rebuild interprets mtimes in the current zone.
 - **`reindex --pack-start` / `--pack-end` replace the whole index with a slice.** Packs outside that range are then treated as new on the next backup and re-packed. Those flags exist for disaster recovery only; day to day, run a plain `zinc reindex <repo>`.
 - **Symlinks and junctions are never scanned.** A `--source` that is itself a junction yields an empty scan (it will look like "nothing new" forever), and junction subtrees inside the source are not indexed. Point `--source` at the real path.

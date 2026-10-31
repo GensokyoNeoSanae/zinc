@@ -386,6 +386,12 @@ func TestCompactEndToEnd(t *testing.T) {
 	}
 	newPack := r2.Packs[0]
 
+	// compact 之前先记下批次数：重写包不该新增批次
+	pre, err := loadManifest(out)
+	if err != nil {
+		t.Fatalf("loadManifest before compact: %v", err)
+	}
+
 	// compact：min-gain 0 → 不看阈值，有死副本就重写
 	if err := runCompact("t", cfg, set, "TESTPW", "", "0", true, false, false); err != nil {
 		t.Fatalf("runCompact: %v", err)
@@ -437,22 +443,26 @@ func TestCompactEndToEnd(t *testing.T) {
 		t.Fatalf("f0 应指向新包 %s, 实际 %s", newPack, idx.packName(fe.Pack))
 	}
 
-	// manifest 里新增了一条 compact 批次，哈希是新包的
+	// compact 不再追加「重写批次」：原地更新该包的哈希，批次数不变
 	m, err := loadManifest(out)
 	if err != nil {
 		t.Fatalf("loadManifest: %v", err)
 	}
-	compacted := 0
+	if len(m.Batches) != len(pre.Batches) {
+		t.Fatalf("compact 不该新增批次：%d -> %d", len(pre.Batches), len(m.Batches))
+	}
+	gotHash := ""
 	for _, b := range m.Batches {
-		if b.Op == "compact" {
-			compacted++
-			if len(b.Files) != 1 || b.Files[0] != oldPack {
-				t.Fatalf("compact 批次记的是 %v", b.Files)
-			}
+		if h, ok := b.Packs[oldPack]; ok {
+			gotHash = h
 		}
 	}
-	if compacted != 1 {
-		t.Fatalf("compact 批次 %d 条, want 1", compacted)
+	wantHash, herr := sha256File(filepath.Join(out, oldPack))
+	if herr != nil {
+		t.Fatalf("sha256File: %v", herr)
+	}
+	if gotHash != wantHash {
+		t.Fatalf("manifest 里 %s 的哈希没跟上重写: got %q want %q", oldPack, gotHash, wantHash)
 	}
 
 	// 校验必须通过：同一个包出现两次时以最后一次的哈希为准

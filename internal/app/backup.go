@@ -592,9 +592,6 @@ func commitPack(repo *Repo, repoName, tag string, idx *Index, r packResult) erro
 	if err := writeManifest(repo.Output, repoName, tag, batchMeta{
 		Packs:  []string{r.Name},
 		Hashes: []string{r.Hash},
-		Hash:   r.Hash,
-		From:   r.Start,
-		To:     r.End,
 	}); err != nil {
 		return err
 	}
@@ -783,10 +780,8 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 			return res
 		}
 		if err := writeManifest(repo.Output, name, tag, batchMeta{
-			Hash:    batchHashOf(nil, rmHash),
-			Rm:      rmName,
-			RmHash:  rmHash,
-			Deleted: len(del),
+			Rm:     rmName,
+			RmHash: rmHash,
 		}); err != nil {
 			res.Err = err
 			return res
@@ -920,8 +915,9 @@ func baseNames(paths []string) []string {
 	return out
 }
 
-// batchHashOf 是 batch_hash 的算法：包哈希按顺序拼接再取 sha256；
+// batchHashOf 是汇总行/日志里用的批次哈希：包哈希按顺序拼接再取 sha256；
 // 一个包都没有（只有删除记录）时退化成删除记录自己的哈希。
+// 注意：它只用于展示，不写进 manifest —— 逐包 SHA-256 已经足够 verify 用。
 func batchHashOf(hashes []string, rmHash string) string {
 	if len(hashes) == 0 {
 		return rmHash
@@ -930,103 +926,121 @@ func batchHashOf(hashes []string, rmHash string) string {
 	return fmt.Sprintf("%x", sum)
 }
 
-// Manifest 记录每批次的包哈希，供事后 verify
+// manifestVersion 2：批次里只留「名字 → SHA-256」两张映射，不再有批次级哈希、
+// 内容日期范围和 compact 标记——那些要么能推出来，要么根本没人读。
+const manifestVersion = 2
+
+// Manifest 是「校验账本」：记录每个包/删除记录在写完那一刻的 SHA-256，供 verify 事后比对。
 type Manifest struct {
+	Version int             `json:"version"`
 	Repo    string          `json:"repo"`
 	Batches []ManifestBatch `json:"batches"`
 }
 
+// ManifestBatch 是一次备份产生的东西。Time 同时是「同一次备份」的合并键。
 type ManifestBatch struct {
-	Time    string   `json:"time"`
-	Op      string   `json:"op,omitempty"` // 空=备份；compact=重写包
-	Hash    string   `json:"batch_hash"`
-	Files   []string `json:"files"`
-	Hashes  []string `json:"hashes"`
-	From    string   `json:"from,omitempty"`
-	To      string   `json:"to,omitempty"`
-	Deleted int      `json:"deleted,omitempty"`
-	Rm      string   `json:"rm,omitempty"`
-	RmHash  string   `json:"rm_hash,omitempty"`
+	Time  string            `json:"time"`
+	Packs map[string]string `json:"packs,omitempty"` // 包文件名 → SHA-256
+	Rms   map[string]string `json:"rms,omitempty"`   // 删除记录名 → 文件 SHA-256
 }
 
 // batchMeta 是写 manifest 时要登记的这批信息
 type batchMeta struct {
-	Packs   []string
-	Hashes  []string
-	Hash    string
-	From    string
-	To      string
-	Rm      string
-	RmHash  string
-	Deleted int
-	Op      string // 空=备份；compact=重写包
+	Packs  []string
+	Hashes []string
+	Rm     string
+	RmHash string
 }
 
 func manifestPath(output string) string {
 	return filepath.Join(output, "manifest.json")
 }
 
-// writeManifest 追加一个批次到 manifest.json。
-// 先写临时文件再改名；读到损坏的旧 manifest 时把它改名保留并报错，
-// 绝不把损坏内容当成空账本继续追加。
-func writeManifest(output, repo, tag string, batch batchMeta) error {
-	if err := os.MkdirAll(output, 0755); err != nil {
-		return fmt.Errorf(M.ManifestWriteFailed, err)
+// manifestWire 兼容两代格式：v1 是 files/hashes 平行数组 + rm/rm_hash，
+// v2 是 packs/rms 映射。读 v1 时在内存里升级成 v2，下一次写入就落成 v2。
+type manifestWire struct {
+	Version int    `json:"version"`
+	Repo    string `json:"repo"`
+	Batches []struct {
+		Time   string            `json:"time"`
+		Packs  map[string]string `json:"packs"`
+		Rms    map[string]string `json:"rms"`
+		Files  []string          `json:"files"`
+		Hashes []string          `json:"hashes"`
+		Rm     string            `json:"rm"`
+		RmHash string            `json:"rm_hash"`
+	} `json:"batches"`
+}
+
+func decodeManifest(b []byte) (*Manifest, error) {
+	var w manifestWire
+	if err := json.Unmarshal(b, &w); err != nil {
+		return nil, err
 	}
-	p := manifestPath(output)
-	m := Manifest{Repo: repo}
-	if b, err := os.ReadFile(p); err == nil {
-		if err := json.Unmarshal(b, &m); err != nil {
-			bad := p + ".corrupt-" + time.Now().Format("20060102-150405.000")
-			if rerr := os.Rename(p, bad); rerr != nil {
-				return fmt.Errorf(M.ManifestCorruptLocked, p, err)
+	m := &Manifest{Version: manifestVersion, Repo: w.Repo}
+	for _, wb := range w.Batches {
+		mb := ManifestBatch{Time: wb.Time}
+		if len(wb.Packs) > 0 {
+			mb.Packs = wb.Packs
+		}
+		if len(wb.Rms) > 0 {
+			mb.Rms = wb.Rms
+		}
+		// v1 迁移：files 第 i 个包对应 hashes 第 i 个
+		for i, f := range wb.Files {
+			if i >= len(wb.Hashes) {
+				break
 			}
-			return fmt.Errorf(M.ManifestCorrupt, p, bad, err)
+			if mb.Packs == nil {
+				mb.Packs = map[string]string{}
+			}
+			mb.Packs[filepath.Base(f)] = wb.Hashes[i]
 		}
-		m.Repo = repo
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf(M.ManifestReadFailed, err)
+		if wb.Rm != "" {
+			if mb.Rms == nil {
+				mb.Rms = map[string]string{}
+			}
+			mb.Rms[wb.Rm] = wb.RmHash
+		}
+		m.Batches = append(m.Batches, mb)
 	}
-	// 同一次备份（tag 相同）的多个包合并进同一批：逐包提交不该把「一批 = 一次备份」
-	// 变成「一批 = 一个包」，否则 status 会显示成备份了几十次。
-	// compact 的重写批次永远自成一档（Op 非空），不参与合并：它改的是已有包，
-	// 跟「这一批新压了几个包」是两件事。
-	if n := len(m.Batches); n > 0 && tag != "" && batch.Op == "" && m.Batches[n-1].Time == tag && m.Batches[n-1].Op == "" {
-		b := &m.Batches[n-1]
-		b.Files = append(b.Files, baseNames(batch.Packs)...)
-		b.Hashes = append(b.Hashes, batch.Hashes...)
-		if batch.From != "" && (b.From == "" || batch.From < b.From) {
-			b.From = batch.From
-		}
-		if batch.To > b.To {
-			b.To = batch.To
-		}
-		if batch.Rm != "" {
-			b.Rm = batch.Rm
-			b.RmHash = batch.RmHash
-			b.Deleted += batch.Deleted
-		}
-		b.Hash = batchHashOf(b.Hashes, b.RmHash)
-	} else {
-		m.Batches = append(m.Batches, ManifestBatch{
-			Time:    tag,
-			Op:      batch.Op,
-			Hash:    batch.Hash,
-			Files:   baseNames(batch.Packs),
-			Hashes:  batch.Hashes,
-			From:    batch.From,
-			To:      batch.To,
-			Deleted: batch.Deleted,
-			Rm:      batch.Rm,
-			RmHash:  batch.RmHash,
-		})
+	return m, nil
+}
+
+// readManifestForWrite 读旧账本准备追加。损坏时改名保留并报错，
+// 绝不把损坏内容当成空账本继续写。
+func readManifestForWrite(output, repo string) (*Manifest, error) {
+	p := manifestPath(output)
+	b, err := os.ReadFile(p)
+	if os.IsNotExist(err) {
+		return &Manifest{Version: manifestVersion, Repo: repo}, nil
 	}
+	if err != nil {
+		return nil, fmt.Errorf(M.ManifestReadFailed, err)
+	}
+	m, derr := decodeManifest(b)
+	if derr != nil {
+		bad := p + ".corrupt-" + time.Now().Format("20060102-150405.000")
+		if rerr := os.Rename(p, bad); rerr != nil {
+			return nil, fmt.Errorf(M.ManifestCorruptLocked, p, derr)
+		}
+		return nil, fmt.Errorf(M.ManifestCorrupt, p, bad, derr)
+	}
+	m.Version = manifestVersion
+	m.Repo = repo
+	return m, nil
+}
+
+// writeManifestFile 原子写回整份账本。
+func writeManifestFile(output string, m *Manifest) error {
+	m.Version = manifestVersion
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return fmt.Errorf(M.ManifestWriteFailed, err)
 	}
+	p := manifestPath(output)
 	tmp := p + ".tmp"
-	if err := writeFileSync(tmp, b, 0644); err != nil {
+	if err := writeFileSync(tmp, b, 0o644); err != nil {
 		return fmt.Errorf(M.ManifestWriteFailed, err)
 	}
 	if err := os.Rename(tmp, p); err != nil {
@@ -1034,4 +1048,71 @@ func writeManifest(output, repo, tag string, batch batchMeta) error {
 		return fmt.Errorf(M.ManifestWriteFailed, err)
 	}
 	return nil
+}
+
+// writeManifest 追加一个批次到 manifest.json。同一次备份（tag 相同）的多个包
+// 合并进同一批：逐包提交不该把「一批 = 一次备份」变成「一批 = 一个包」。
+func writeManifest(output, repo, tag string, batch batchMeta) error {
+	if err := os.MkdirAll(output, 0755); err != nil {
+		return fmt.Errorf(M.ManifestWriteFailed, err)
+	}
+	m, err := readManifestForWrite(output, repo)
+	if err != nil {
+		return err
+	}
+	names := baseNames(batch.Packs)
+	n := len(m.Batches)
+	if n > 0 && tag != "" && m.Batches[n-1].Time == tag {
+		b := &m.Batches[n-1]
+		if b.Packs == nil {
+			b.Packs = map[string]string{}
+		}
+		for i, name := range names {
+			if i < len(batch.Hashes) {
+				b.Packs[name] = batch.Hashes[i]
+			}
+		}
+		if batch.Rm != "" {
+			if b.Rms == nil {
+				b.Rms = map[string]string{}
+			}
+			b.Rms[batch.Rm] = batch.RmHash
+		}
+	} else {
+		nb := ManifestBatch{Time: tag}
+		if len(names) > 0 {
+			nb.Packs = map[string]string{}
+			for i, name := range names {
+				if i < len(batch.Hashes) {
+					nb.Packs[name] = batch.Hashes[i]
+				}
+			}
+		}
+		if batch.Rm != "" {
+			nb.Rms = map[string]string{batch.Rm: batch.RmHash}
+		}
+		m.Batches = append(m.Batches, nb)
+	}
+	return writeManifestFile(output, m)
+}
+
+// updateManifestPackHash 在 compact 重写包之后原地更新它的哈希。
+// 批次归属不变，也不追加「compact 批次」——重写不是一次备份。
+func updateManifestPackHash(output, repo, pack, hash string) error {
+	m, err := readManifestForWrite(output, repo)
+	if err != nil {
+		return err
+	}
+	for i := range m.Batches {
+		if _, ok := m.Batches[i].Packs[pack]; ok {
+			m.Batches[i].Packs[pack] = hash
+			return writeManifestFile(output, m)
+		}
+	}
+	// 账本里没有这个包（比如它本来就没登记）：补一批，别让新哈希丢掉
+	m.Batches = append(m.Batches, ManifestBatch{
+		Time:  time.Now().Format("2006-01-02_15-04-05"),
+		Packs: map[string]string{pack: hash},
+	})
+	return writeManifestFile(output, m)
 }

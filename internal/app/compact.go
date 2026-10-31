@@ -457,14 +457,7 @@ func runCompact(name string, cfg *Config, set *Settings, password, packSpec, min
 			failed++
 			continue
 		}
-		if err := writeManifest(repo.Output, name, time.Now().Format("2006-01-02_15-04-05"), batchMeta{
-			Packs:  []string{res.Pack},
-			Hashes: []string{res.Hash},
-			Hash:   res.Hash,
-			From:   res.From,
-			To:     res.To,
-			Op:     "compact",
-		}); err != nil {
+		if err := updateManifestPackHash(repo.Output, name, res.Pack, res.Hash); err != nil {
 			fmt.Printf(M.CompactPackFailed, plan.Pack, err)
 			logf("compact %s: manifest update failed for %s: %v", name, plan.Pack, err)
 			failed++

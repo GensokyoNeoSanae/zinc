@@ -364,6 +364,22 @@ type Messages struct {
 	ReindexBakFailed  string
 	ReindexDeleted    string
 
+	// remanifest
+	FlagYesRemanifest         string
+	UsageRemanifest           string
+	RemanifestHeader          string
+	RemanifestNoManifest      string
+	RemanifestDropPack        string
+	RemanifestDropRm          string
+	RemanifestAddPack         string
+	RemanifestAddRm           string
+	RemanifestSkipPlaceholder string
+	RemanifestNoChange        string
+	RemanifestPreview         string
+	RemanifestDone            string
+	RemanifestBakFailed       string
+	RemanifestListFailed      string
+
 	// compact
 	FlagCompactPack        string
 	FlagCompactMinGain     string
@@ -435,6 +451,7 @@ var zhMessages = &Messages{
   zinc restore <name> --only <相对路径> [--dest <path>] [--from <包名|序号>]
                        只恢复这一个文件/目录；配 --check-list 可列出它有哪些版本
   zinc reindex <name> [--password <pw>] [--pack-start <名>] [--pack-end <名>] [--yes]
+  zinc remanifest <name> [--password <pw>] [--yes]    manifest 对账：删掉已消失的条目、补登孤儿包
   zinc compact <name> [--password <pw>] [--pack <名|序号>] [--min-gain <5%|8M>] [--yes] [--notify]
                        丢掉包里被新版取代的旧副本；包名不变，云端同名覆盖进历史版本
   zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]
@@ -796,6 +813,21 @@ var zhMessages = &Messages{
 	ReindexBakFailed:  "备份旧索引失败，已中止: %w",
 	ReindexDeleted:    "  按删除记录划掉 %d 个文件\n",
 
+	FlagYesRemanifest:         "真正写回（不给时只报告）",
+	UsageRemanifest:           "用法: zinc remanifest <name> [--password <pw>] [--yes]",
+	RemanifestHeader:          "[对账] %s：manifest 登记 %d 批 / %d 包；磁盘 %d 包 / %d 条删除记录\n",
+	RemanifestNoManifest:      "[提示] 没有 manifest（%s），将按磁盘重建\n",
+	RemanifestDropPack:        "[移除] %s（磁盘上已不存在）\n",
+	RemanifestDropRm:          "[移除] 删除记录 %s（磁盘上已不存在）\n",
+	RemanifestAddPack:         "[补登] %s\n",
+	RemanifestAddRm:           "[补登] 删除记录 %s\n",
+	RemanifestSkipPlaceholder: "[跳过] %s（包内只剩占位文件）\n",
+	RemanifestNoChange:        "[无需改动] manifest 与磁盘一致\n",
+	RemanifestPreview:         "[预演] 没有 --yes，以上改动不会写回（预演不读包内容，占位包执行时才跳过）\n",
+	RemanifestDone:            "[完成] 移除 %d 项、补登 %d 项，已写回 %s\n",
+	RemanifestBakFailed:       "备份旧 manifest 失败，已中止: %w",
+	RemanifestListFailed:      "读取包 %s 的目录失败: %v",
+
 	FlagCompactPack:        "只处理指定的包（包名或序号）",
 	FlagCompactMinGain:     "收益低于这个值就跳过重打：5% 或 8M",
 	FlagYesCompact:         "真正执行（不给时只报告）",
@@ -862,6 +894,7 @@ Usage:
   zinc restore <name> --only <relative-path> [--dest <path>] [--from <pack|index>]
                        restore just that file/dir; add --check-list to list its versions
   zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]
+  zinc remanifest <name> [--password <pw>] [--yes]   reconcile the manifest with the packs on disk
   zinc compact <name> [--password <pw>] [--pack <name|index>] [--min-gain <5%|8M>] [--yes] [--notify]
                        drop copies a newer version has superseded; same name, cloud overwrite
   zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]
@@ -1222,6 +1255,21 @@ Notes:
 	ReindexNoPacks:    "no packs found: %s",
 	ReindexBakFailed:  "failed to back up the old index; aborted: %w",
 	ReindexDeleted:    "  %d file(s) dropped by the deletion records\n",
+
+	FlagYesRemanifest:         "actually write (without it, only report)",
+	UsageRemanifest:           "usage: zinc remanifest <name> [--password <pw>] [--yes]",
+	RemanifestHeader:          "[reconcile] %s: manifest lists %d batches / %d packs; disk has %d packs / %d deletion records\n",
+	RemanifestNoManifest:      "[note] no manifest (%s), rebuilding from disk\n",
+	RemanifestDropPack:        "[drop] %s (no longer on disk)\n",
+	RemanifestDropRm:          "[drop] deletion record %s (no longer on disk)\n",
+	RemanifestAddPack:         "[add] %s\n",
+	RemanifestAddRm:           "[add] deletion record %s\n",
+	RemanifestSkipPlaceholder: "[skip] %s (only the placeholder is left)\n",
+	RemanifestNoChange:        "[unchanged] manifest matches the disk\n",
+	RemanifestPreview:         "[dry-run] no --yes, the changes above are not written (packs are not opened yet; placeholder packs are skipped on the real run)\n",
+	RemanifestDone:            "[done] dropped %d, added %d, wrote %s\n",
+	RemanifestBakFailed:       "failed to back up the old manifest; aborted: %w",
+	RemanifestListFailed:      "failed to list pack %s: %v",
 
 	FlagCompactPack:        "rewrite only this pack (name or index)",
 	FlagCompactMinGain:     "skip rewrites that save less than this: 5% or 8M",
