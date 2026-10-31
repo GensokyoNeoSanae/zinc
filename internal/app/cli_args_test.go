@@ -57,6 +57,8 @@ func writeCLIConfig(t *testing.T, bin string) {
 func runZinc(t *testing.T, bin string, args ...string) (string, int) {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
+	// 断言的是中文文案；CI 的系统语言是英文，不钉住语言就会跟着环境变。
+	cmd.Env = append(os.Environ(), "ZINC_LANG=zh")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		return string(out), 0
@@ -129,9 +131,11 @@ func TestCLIStillAcceptsLegitimateForms(t *testing.T) {
 			t.Errorf("%v: code=%d, out=%s", args, code, out)
 		}
 	}
-	// 非法 --lang 回退系统语言，但必须说一声
+	// 非法 --lang 会回退到系统语言，所以警告本身可能是中英任一；
+	// 用语言无关的断言：退出码 0、把非法值说出来。
 	out, code := runZinc(t, bin, "--lang", "xx", "list")
-	if code != 0 || !strings.Contains(out, "未知语言") {
+	if code != 0 || !strings.Contains(out, "xx") ||
+		(!strings.Contains(out, "语言") && !strings.Contains(out, "language")) {
 		t.Errorf("--lang xx: code=%d, out=%s", code, out)
 	}
 	// 非控制台跑 unschedule --all：读不到回答就取消，不能默默删任务
