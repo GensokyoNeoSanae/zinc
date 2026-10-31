@@ -480,6 +480,7 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 | `*.rm` | `<output>/` | 是 | 这一批的删除记录及其校验和；恢复要靠它删掉文件，必须跟包一起上传 |
 | `index.tsv` | `<output>/` | 是 | 增量检测缓存，丢了用 `zinc reindex` 重建 |
 | `manifest.json` | `<output>/` | 是 | 每个包的 SHA-256 账本（按批次分组），`verify` 用；必须随包上传，否则换机后没法校验旧包 |
+| `manifest.json.v1.bak` | `<output>/` | 否 | 旧格式账本升级到 v2 前的原样副本；只在第一次升级时生成 |
 | `manifest.json.bak` | `<output>/` | 否 | `remanifest --yes` 写回前留的上一份账本 |
 
 `manifest.json` 是**校验账本，不是数据本体**：备份和恢复都不读它，只有 `verify` 拿它比对包/删除记录的哈希。账本和磁盘对不上时（比如手动删过包），用 `zinc remanifest <仓库>` 对账——删掉已消失的条目、补登孤儿包，默认只预演，`--yes` 才写回。

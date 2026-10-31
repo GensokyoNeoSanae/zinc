@@ -60,6 +60,14 @@ func TestManifestV1Migration(t *testing.T) {
 	if !strings.Contains(string(raw), `"packs"`) {
 		t.Errorf("写回后应该是 v2 的 packs 映射:\n%s", raw)
 	}
+	// 升级前必须留下一份旧格式原样副本，降级/迁移出错时能回去
+	bak, err := os.ReadFile(manifestPath(out) + ".v1.bak")
+	if err != nil {
+		t.Fatalf("升级前应该留下 .v1.bak: %v", err)
+	}
+	if !strings.Contains(string(bak), `"files"`) {
+		t.Errorf(".v1.bak 应该是旧格式原样:\n%s", bak)
+	}
 }
 
 // 对账：删掉盘上已消失的幽灵包、补登孤儿包和孤儿删除记录，`--yes` 前不写文件。

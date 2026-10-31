@@ -480,6 +480,7 @@ Output root (sync this folder to your cloud drive):
 | `*.rm` | `<output>/` | yes | deletions of that batch with their checksum; restore needs them to remove files, so upload them with the packs |
 | `index.tsv` | `<output>/` | yes | incremental detection cache; rebuild with `zinc reindex` if lost |
 | `manifest.json` | `<output>/` | yes | per-pack SHA-256 ledger (grouped by batch) for `verify`; must be uploaded, otherwise a new machine cannot verify old packs |
+| `manifest.json.v1.bak` | `<output>/` | no | the old-format ledger as it was before the first upgrade to v2 |
 | `manifest.json.bak` | `<output>/` | no | previous ledger kept by `remanifest --yes` before writing |
 
 `manifest.json` is a **verification ledger, not the data itself**: backup and restore never read it, only `verify` compares pack/deletion-record hashes against it. When the ledger and the disk disagree (say you deleted packs by hand), run `zinc remanifest <repo>`: it drops entries whose files are gone and registers orphan packs. It only reports by default; `--yes` writes.

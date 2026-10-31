@@ -1007,6 +1007,17 @@ func decodeManifest(b []byte) (*Manifest, error) {
 	return m, nil
 }
 
+// manifestFormatVersion 只看文件头的 version，用来判断要不要留升级前的副本。
+func manifestFormatVersion(b []byte) int {
+	var v struct {
+		Version int `json:"version"`
+	}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return 0
+	}
+	return v.Version
+}
+
 // readManifestForWrite 读旧账本准备追加。损坏时改名保留并报错，
 // 绝不把损坏内容当成空账本继续写。
 func readManifestForWrite(output, repo string) (*Manifest, error) {
@@ -1017,6 +1028,16 @@ func readManifestForWrite(output, repo string) (*Manifest, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf(M.ManifestReadFailed, err)
+	}
+	// 旧格式（v1）第一次被写回前留一份原样副本：万一迁移出问题、或者想降级，
+	// 还能拿回旧账本。只在需要升级时做一次，之后 version=2 就不再触发。
+	if manifestFormatVersion(b) < manifestVersion {
+		bak := p + ".v1.bak"
+		if !fileExists(bak) {
+			if werr := writeFileSync(bak, b, 0o644); werr != nil {
+				return nil, fmt.Errorf(M.RemanifestBakFailed, werr)
+			}
+		}
 	}
 	m, derr := decodeManifest(b)
 	if derr != nil {
