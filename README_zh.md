@@ -208,7 +208,7 @@ zinc restore pictures --check-list
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <路径>] [--from <包>]` | 恢复全量或单个路径 |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | 从包重建索引 |
 | `zinc compact <name> [--pack <包>] [--min-gain <5%\|8M>] [--yes]` | 重写已有包，丢掉被新版取代的旧副本 |
-| `zinc verify <name\|--all> [--sample <pct>]` | 校验包与删除记录的 SHA-256，并用配置密码试开每个包 |
+| `zinc verify <name\|--all> [--sample <pct>] [--password-only\|--hash-only]` | 校验包与删除记录的 SHA-256，并用配置密码试开每个包；`--password-only` 只验密码，`--hash-only` 只算哈希 |
 | `zinc status [--all] [<name>]` | 查看状态；`--all` 一次展开所有仓库的详情 |
 | `zinc schedule <name\|--all> --daily --at HH:MM` | 每天定时 |
 | `zinc schedule <name\|--all> --weekly 1,3 --at HH:MM` | 每周定时（1 = 周一） |
@@ -222,6 +222,8 @@ zinc restore pictures --check-list
 `--lang zh|en` 放在子命令前后都行。`zinc verify --sample 20` 只随机抽查 20% 的包文件，而不是全部。
 
 参数位置随意：`zinc schedule 图片 --daily --at 20:00` 和 `zinc schedule --daily --at 20:00 图片` 等价。开关参数要写成 `--notify=false`——写成 `--notify false` 时 `false` 是多余参数，zinc 会直接报错，不会静默忽略。仓库名和 `--all` 也不能同时给。
+
+`verify` 默认同时做哈希和密码两件事；换过密码想快速确认所有包还能开，用 `--password-only`（只读归档头，100 GB 也就十几秒），只想查文件有没有坏用 `--hash-only`。
 
 ### 安全校验
 
@@ -422,6 +424,7 @@ zinc schedule pictures --monthly 1,15 --at 20:00
 - `zinc backup` 在 `complete_notify` 开着（默认）时会弹窗；手动跑想安静就加 `--notify=false`
 - `zinc schedule` 创建的任务命令行里固定带 `--notify`（建任务时用了 `--no-notify` 除外），`complete_notify` 对它无效
 - `--all` 弹一条汇总；单仓库任务各弹一条
+- 通知正文最多两行（Windows 只渲染 3 个 text 元素：标题 + 2 行），第一行总数，第二行只列有变化和失败的仓库；“无新增”的仓库只计数、不占行
 - 全部无新增时不弹（`--notify-empty` 强制）
 - `zinc restore` 只在结果不完整（有包没能干净解开）时弹通知；正常恢复不打扰
 

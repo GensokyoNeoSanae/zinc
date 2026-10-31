@@ -127,3 +127,15 @@ func TestHiddenPowerShell(t *testing.T) {
 		t.Fatalf("输出没拿到: %q", string(out))
 	}
 }
+
+// Windows 的 ToastGeneric 只渲染 3 个 <text>（标题 + 2 行正文），
+// 第 4 个起会被静默丢弃。正文超过两行时必须压缩并留下省略号。
+func TestToastXMLCapsTextElements(t *testing.T) {
+	s := toastXML("t", "a\nb\nc\nd", "")
+	if n := strings.Count(s, "<text>"); n != 3 {
+		t.Errorf("text 元素 = %d, want 3\n%s", n, s)
+	}
+	if !strings.Contains(s, "<text>b …</text>") {
+		t.Errorf("被截断的第二行应带省略号\n%s", s)
+	}
+}

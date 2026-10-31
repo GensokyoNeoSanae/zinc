@@ -525,32 +525,73 @@ func cmdBackup(args []string) {
 }
 
 func sendSummary(results []BackupResult, notifyEmpty bool) {
-	var lines []string
-	any := false
-	for _, r := range results {
-		if r.Err != nil {
-			lines = append(lines, r.Repo+M.SummaryFailed)
-			any = true
-			continue
-		}
-		if r.Changed() == 0 {
-			lines = append(lines, r.Repo+M.SummaryNoNew)
-			continue
-		}
-		any = true
-		lines = append(lines, fmt.Sprintf(M.SummaryLine,
-			r.Repo, r.Changed(), humanSize(r.TotalSize), shortHash(r.BatchHash)))
-	}
-	if !any && !notifyEmpty {
+	body, ok := summaryBody(results, notifyEmpty)
+	if !ok {
 		return
-	}
-	body := strings.Join(lines, "\n")
-	if len(lines) > 8 {
-		body = strings.Join(lines[:8], "\n") + fmt.Sprintf(M.SummaryMore, len(lines)-8)
 	}
 	if err := sendToast(M.ToastTitle, body); err != nil {
 		fmt.Printf(M.NotifyFailed, err)
 	}
+}
+
+// summaryBody 生成 toast 正文：最多两行，因为 ToastGeneric 只渲染 3 个 <text>
+// （标题 + 2 行正文），更多的会被系统静默丢掉，也不会有展开入口。
+func summaryBody(results []BackupResult, notifyEmpty bool) (string, bool) {
+	changed, noNew, failed := 0, 0, 0
+	var total int64
+	var changedParts, failedParts []string
+	for _, r := range results {
+		switch {
+		case r.Err != nil:
+			failed++
+			failedParts = append(failedParts, r.Repo)
+		case r.Changed() == 0:
+			noNew++
+		default:
+			changed++
+			total += r.TotalSize
+			changedParts = append(changedParts, r.Repo+" "+humanSize(r.TotalSize))
+		}
+	}
+	if changed == 0 && failed == 0 && !notifyEmpty {
+		return "", false
+	}
+
+	var head string
+	switch {
+	case failed > 0 && changed > 0:
+		head = fmt.Sprintf(M.ToastHeadChangedFail, changed, failed, humanSize(total))
+	case failed > 0:
+		head = fmt.Sprintf(M.ToastHeadFailed, failed)
+	case changed > 0:
+		head = fmt.Sprintf(M.ToastHeadChanged, changed, noNew, humanSize(total))
+	default:
+		head = fmt.Sprintf(M.ToastHeadNone, noNew)
+	}
+
+	var second []string
+	if len(changedParts) > 0 {
+		second = append(second, strings.Join(changedParts, " · "))
+	}
+	if len(failedParts) > 0 {
+		second = append(second, M.ToastFailedPrefix+strings.Join(failedParts, " · "))
+	}
+	body := head
+	if line := toastLine(second); line != "" {
+		body += "\n" + line
+	}
+	return body, true
+}
+
+// toastLine 把一段可能很长的正文压到一行；toast 自己会省略，我们主动截一刀，
+// 免得多出来的字符把最后几个仓库名挤没。
+func toastLine(parts []string) string {
+	line := strings.Join(parts, " · ")
+	runes := []rune(line)
+	if len(runes) > 110 {
+		return string(runes[:109]) + "…"
+	}
+	return line
 }
 
 func cmdRestore(args []string) {
@@ -646,11 +687,17 @@ func cmdVerify(args []string) {
 	fs := flag.NewFlagSet("verify", flag.ExitOnError)
 	all := fs.Bool("all", false, M.FlagAllVerify)
 	sample := fs.Int("sample", 100, M.FlagSample)
+	passwordOnly := fs.Bool("password-only", false, M.FlagPasswordOnly)
+	hashOnly := fs.Bool("hash-only", false, M.FlagHashOnly)
 	fs.Parse(reorderArgs(args))
 
 	if *sample < 1 || *sample > 100 {
 		die(M.SampleInvalid, *sample)
 	}
+	if *passwordOnly && *hashOnly {
+		die(M.VerifyFlagConflict)
+	}
+	doHash, doPw := !*passwordOnly, !*hashOnly
 	cfg := mustConfig()
 	set := mustSettings()
 	var names []string
@@ -666,7 +713,7 @@ func cmdVerify(args []string) {
 
 	failed := false
 	for _, n := range names {
-		if err := runVerify(n, cfg, set, *sample); err != nil {
+		if err := runVerify(n, cfg, set, *sample, doHash, doPw); err != nil {
 			fmt.Printf("%s: %v\n", n, err)
 			failed = true
 		}

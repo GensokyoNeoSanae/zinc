@@ -208,7 +208,7 @@ zinc restore pictures --check-list
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <path>] [--from <pack>]` | restore everything or one path |
 | `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | rebuild the index from the packs |
 | `zinc compact <name> [--pack <pack>] [--min-gain <5%\|8M>] [--yes]` | rewrite existing packs, dropping copies a newer version superseded |
-| `zinc verify <name\|--all> [--sample <pct>]` | SHA-256 check of the packs and deletion records, and opens every pack with the configured password |
+| `zinc verify <name\|--all> [--sample <pct>] [--password-only\|--hash-only]` | SHA-256 check of the packs and deletion records, and opens every pack with the configured password; `--password-only` checks the password only, `--hash-only` checks hashes only |
 | `zinc status [--all] [<name>]` | show status; `--all` expands every repo |
 | `zinc schedule <name\|--all> --daily --at HH:MM` | daily schedule |
 | `zinc schedule <name\|--all> --weekly 1,3 --at HH:MM` | weekly (1 = Monday) |
@@ -222,6 +222,8 @@ zinc restore pictures --check-list
 `--lang zh|en` is accepted before or after the subcommand. `zinc verify --sample 20` hashes a random 20% of the pack files instead of all of them.
 
 Flags can go before or after the repo name: `zinc schedule pictures --daily --at 20:00` and `zinc schedule --daily --at 20:00 pictures` are equivalent. Boolean flags must be written `--notify=false`; `--notify false` leaves `false` as an unexpected argument, and zinc now reports that instead of ignoring it. A repo name and `--all` cannot be combined.
+
+`verify` does both hashes and the password check by default. After changing a password, `--password-only` confirms every pack still opens (headers only, so a 100 GB repo takes seconds); use `--hash-only` to check for corruption without touching the password.
 
 ### Safety guards
 
@@ -422,6 +424,7 @@ Tasks are created through Task Scheduler and point at `zincw.exe` (GUI subsystem
 - `zinc backup` pops a toast when it finishes while `complete_notify` is on (the default). For a quiet manual run, pass `--notify=false`.
 - Tasks created by `zinc schedule` always pass `--notify` unless the task was created with `--no-notify`; `complete_notify` has no effect on them.
 - `--all` sends one summary; single-repo tasks each send one.
+- The toast body is capped at two lines (Windows renders only three text elements: title + two lines): line one is the totals, line two lists only repos that changed or failed; unchanged repos are counted, not listed.
 - Nothing changed → no popup (`--notify-empty` forces one).
 - `zinc restore` only pops up when the result is incomplete — some pack could not be extracted cleanly. A clean restore stays quiet.
 

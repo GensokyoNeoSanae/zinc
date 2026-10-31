@@ -195,7 +195,14 @@ func toastXML(title, body, png string) string {
 
 	var texts strings.Builder
 	texts.WriteString("<text>" + esc(title) + "</text>")
-	for _, line := range strings.Split(body, "\n") {
+	lines := strings.Split(body, "\n")
+	// ToastGeneric 只渲染 3 个 <text>（标题 + 2 行正文），第 4 个起会被静默丢掉，
+	// 也不会有展开入口。统一压到 2 行并加省略号，让截断是看得见的。
+	if len(lines) > 2 {
+		lines = lines[:2]
+		lines[1] += " …"
+	}
+	for _, line := range lines {
 		texts.WriteString("<text>" + esc(line) + "</text>")
 	}
 

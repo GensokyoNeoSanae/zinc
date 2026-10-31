@@ -71,7 +71,12 @@ var completionCommands = []CmdSpec{
 		{Name: "no-verify"},
 		{Name: "notify"},
 	}, PositionalKind: "repo"},
-	{Name: "verify", Flags: []FlagSpec{{Name: "all"}, {Name: "sample", HasValue: true}}, PositionalKind: "repo"},
+	{Name: "verify", Flags: []FlagSpec{
+		{Name: "all"},
+		{Name: "sample", HasValue: true},
+		{Name: "password-only"},
+		{Name: "hash-only"},
+	}, PositionalKind: "repo"},
 	{Name: "status", Flags: []FlagSpec{{Name: "all"}}, PositionalKind: "repo"},
 	{Name: "schedule", Flags: []FlagSpec{
 		{Name: "list"},

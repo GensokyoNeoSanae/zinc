@@ -456,13 +456,13 @@ func TestCompactEndToEnd(t *testing.T) {
 	}
 
 	// 校验必须通过：同一个包出现两次时以最后一次的哈希为准
-	if err := runVerify("t", cfg, set, 100); err != nil {
+	if err := runVerify("t", cfg, set, 100, true, true); err != nil {
 		t.Fatalf("verify 失败: %v", err)
 	}
 
 	// 密码不对时必须报错：包哈希对、但 7z 打不开。
 	// 历史事故里 verify 只算 SHA-256，查不出「包完好、密码却是别的」。
-	if err := runVerify("t", cfg, &Settings{SevenZipPath: sz, DefaultPassword: "WRONGPW"}, 100); err == nil {
+	if err := runVerify("t", cfg, &Settings{SevenZipPath: sz, DefaultPassword: "WRONGPW"}, 100, true, true); err == nil {
 		t.Fatal("密码不对时 verify 应该失败")
 	}
 }

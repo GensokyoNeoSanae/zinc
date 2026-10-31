@@ -22,9 +22,9 @@ func loadManifest(output string) (*Manifest, error) {
 	return &m, nil
 }
 
-// runVerify 对本地包做 SHA-256 校验，并用配置里的密码试开每个包。
+// runVerify 校验本地包：doHash 时比对 SHA-256，doPw 时用配置密码试开每个包。
 // samplePct < 100 时按包随机抽样。
-func runVerify(name string, cfg *Config, set *Settings, samplePct int) error {
+func runVerify(name string, cfg *Config, set *Settings, samplePct int, doHash, doPw bool) error {
 	repo, err := cfg.repo(name)
 	if err != nil {
 		return err
@@ -42,10 +42,21 @@ func runVerify(name string, cfg *Config, set *Settings, samplePct int) error {
 	// （历史事故：计划任务里固化了一个测试密码，包一直「校验通过」却拿真密码解不开。）
 	sz := repo.sevenZip(set)
 	pw := repo.password(set)
-	if pw != "" && sz == "" {
+	if doPw && sz == "" {
+		// 显式只要密码检查时，缺 7-Zip 不能假装通过
+		if !doHash {
+			return errors.New(M.SevenZipMissing)
+		}
 		fmt.Print(M.VerifyPwNo7zip)
+		doPw = false
 	}
-	checkPw := pw != "" && sz != ""
+	if doPw && pw == "" {
+		// 显式只要密码检查时，没有密码就没得验
+		if !doHash {
+			return errors.New(M.VerifyNoPassword)
+		}
+		doPw = false
+	}
 
 	type packCheck struct {
 		name string
@@ -59,7 +70,7 @@ func runVerify(name string, cfg *Config, set *Settings, samplePct int) error {
 	latest := make(map[string]string)
 	checked := make(map[string]struct{})
 	for _, b := range m.Batches {
-		if b.Rm != "" {
+		if doHash && b.Rm != "" {
 			// 同一条删除记录也可能被后面的批次重提一次，别重复计数
 			if _, done := checked[b.Rm]; !done {
 				checked[b.Rm] = struct{}{}
@@ -113,30 +124,46 @@ func runVerify(name string, cfg *Config, set *Settings, samplePct int) error {
 			fmt.Printf(M.MissingFile, p.name)
 			continue
 		}
-		h, hashErr := sha256File(full)
-		if hashErr != nil || h != p.hash {
-			bad++
-			fmt.Printf(M.CorruptFile, p.name)
-			continue
+		if doHash {
+			h, hashErr := sha256File(full)
+			if hashErr != nil || h != p.hash {
+				bad++
+				fmt.Printf(M.CorruptFile, p.name)
+				continue
+			}
 		}
-		if checkPw {
+		pwOK := true
+		if doPw {
 			if _, lerr := listPackContents(sz, full, pw); lerr != nil {
 				pwBad++
+				pwOK = false
 				fmt.Printf(M.VerifyPwBad, p.name)
 			}
 		}
-		ok++
+		if pwOK {
+			ok++
+		}
 	}
 
-	if rmOK+rmBad+rmMissing > 0 {
+	if doHash && rmOK+rmBad+rmMissing > 0 {
 		fmt.Printf(M.VerifyRmSummary, rmOK, rmBad, rmMissing)
 	}
-	if pwBad > 0 {
+	if doPw && pwBad > 0 {
 		fmt.Printf(M.VerifyPwSummary, pwBad)
 	}
-	fmt.Printf(M.VerifySummary, name, ok, bad, missing)
-	logf("verify %s: ok=%d bad=%d missing=%d pw_bad=%d rm_ok=%d rm_bad=%d rm_missing=%d",
-		name, ok, bad, missing, pwBad, rmOK, rmBad, rmMissing)
+	if doHash {
+		fmt.Printf(M.VerifySummary, name, ok, bad, missing)
+	} else {
+		fmt.Printf(M.VerifyPwOnlySummary, name, ok, pwBad, missing)
+	}
+	mode := "both"
+	if !doHash {
+		mode = "password"
+	} else if !doPw {
+		mode = "hash"
+	}
+	logf("verify %s: mode=%s ok=%d bad=%d missing=%d pw_bad=%d rm_ok=%d rm_bad=%d rm_missing=%d",
+		name, mode, ok, bad, missing, pwBad, rmOK, rmBad, rmMissing)
 	if bad > 0 || missing > 0 || pwBad > 0 || rmBad > 0 || rmMissing > 0 {
 		return errors.New(M.VerifyFailedMsg)
 	}

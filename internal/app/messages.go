@@ -64,33 +64,34 @@ type Messages struct {
 	RemoveHasTasks     string
 
 	// backup
-	FlagAllBackup       string
-	FlagAllStatus       string
-	FlagPassword        string
-	FlagNotify          string
-	FlagNotifyEmpty     string
-	FlagNoVerify        string
-	UsageBackup         string
-	NoReposBackup       string
-	ScanErrSource       string
-	ScanErrGeneric      string
-	NoNew               string
-	BackupFailed        string
-	SummaryFailed       string
-	SummaryNoNew        string
-	SummaryLine         string
-	SummaryMore         string
-	ToastTitle          string
-	NotifyFailed        string
-	SourceNotExist      string
-	SourceEqualsOutput  string
-	CreateOutputFailed  string
-	LogNoChange         string
-	VerifyFailed        string
-	LogVerifyFailed     string
-	WriteListfileFailed string
-	CompressFailed      string
-	NoVolumes           string
+	FlagAllBackup        string
+	FlagAllStatus        string
+	FlagPassword         string
+	FlagNotify           string
+	FlagNotifyEmpty      string
+	FlagNoVerify         string
+	UsageBackup          string
+	NoReposBackup        string
+	ScanErrSource        string
+	ScanErrGeneric       string
+	NoNew                string
+	BackupFailed         string
+	ToastTitle           string
+	ToastHeadChanged     string
+	ToastHeadChangedFail string
+	ToastHeadFailed      string
+	ToastHeadNone        string
+	ToastFailedPrefix    string
+	NotifyFailed         string
+	SourceNotExist       string
+	SourceEqualsOutput   string
+	CreateOutputFailed   string
+	LogNoChange          string
+	VerifyFailed         string
+	LogVerifyFailed      string
+	WriteListfileFailed  string
+	CompressFailed       string
+	NoVolumes            string
 
 	// --all + 显式密码与配置不一致时的拦截
 	BackupPwMismatch  string
@@ -111,19 +112,24 @@ type Messages struct {
 	RestoreDestInOutput string
 
 	// verify
-	FlagAllVerify   string
-	FlagSample      string
-	UsageVerify     string
-	NoManifest      string
-	ManifestBroken  string
-	SampleInvalid   string
-	MissingFile     string
-	CorruptFile     string
-	VerifySummary   string
-	VerifyFailedMsg string
-	VerifyPwBad     string
-	VerifyPwSummary string
-	VerifyPwNo7zip  string
+	FlagAllVerify       string
+	FlagSample          string
+	UsageVerify         string
+	NoManifest          string
+	ManifestBroken      string
+	SampleInvalid       string
+	MissingFile         string
+	CorruptFile         string
+	VerifySummary       string
+	VerifyFailedMsg     string
+	VerifyPwBad         string
+	VerifyPwSummary     string
+	VerifyPwNo7zip      string
+	VerifyPwOnlySummary string
+	FlagPasswordOnly    string
+	FlagHashOnly        string
+	VerifyFlagConflict  string
+	VerifyNoPassword    string
 
 	// schedule
 	FlagAllSchedule   string
@@ -431,7 +437,7 @@ var zhMessages = &Messages{
   zinc reindex <name> [--password <pw>] [--pack-start <名>] [--pack-end <名>] [--yes]
   zinc compact <name> [--password <pw>] [--pack <名|序号>] [--min-gain <5%|8M>] [--yes] [--notify]
                        丢掉包里被新版取代的旧副本；包名不变，云端同名覆盖进历史版本
-  zinc verify <name|--all> [--sample <pct>]
+  zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]
   zinc status [--all] [<name>]
   zinc completion <powershell|bash|zsh|fish> [--install]   生成 Tab 补全脚本
   zinc schedule <name|--all> --daily --at HH:MM[,HH:MM...]
@@ -507,33 +513,34 @@ var zhMessages = &Messages{
 	OutputCaseWarn:     "[警告] 输出目录 %s 与仓库 %q 的输出只有大小写不同，Windows 上会落到同一个目录\n",
 	RemoveHasTasks:     "[警告] 仓库 %s 还有 %d 个计划任务（%s），可用 zinc unschedule %s 删除\n",
 
-	FlagAllBackup:       "备份全部仓库",
-	FlagAllStatus:       "一次展开所有仓库的详细信息",
-	FlagPassword:        "备份密码",
-	FlagNotify:          "发送 Windows 通知",
-	FlagNotifyEmpty:     "无新增也通知",
-	FlagNoVerify:        "跳过 7za t 自检",
-	UsageBackup:         "用法: zinc backup <name> 或 zinc backup --all",
-	NoReposBackup:       "没有仓库",
-	ScanErrSource:       "%s · 源目录不存在",
-	ScanErrGeneric:      "%s · 扫描失败: %v",
-	NoNew:               "%s · 无新增\n",
-	BackupFailed:        "%s · 失败: %v\n",
-	SummaryFailed:       " · 失败",
-	SummaryNoNew:        " · 无新增",
-	SummaryLine:         "%s · %d 文件 · %s · %s",
-	SummaryMore:         "\n等 %d 个仓库",
-	ToastTitle:          "zinc 备份完成",
-	NotifyFailed:        "[通知失败] %v\n",
-	SourceNotExist:      "源目录不存在: %s",
-	SourceEqualsOutput:  "源目录与输出目录相同，无法备份: %s",
-	CreateOutputFailed:  "创建输出目录失败: %w",
-	LogNoChange:         "backup %s: 无变化",
-	VerifyFailed:        "自检失败，已删除本批次卷: %w",
-	LogVerifyFailed:     "backup %s: 自检失败 %v",
-	WriteListfileFailed: "写 listfile 失败: %w",
-	CompressFailed:      "7za 压缩失败: %v\n%s",
-	NoVolumes:           "7za 执行成功但未生成任何包",
+	FlagAllBackup:        "备份全部仓库",
+	FlagAllStatus:        "一次展开所有仓库的详细信息",
+	FlagPassword:         "备份密码",
+	FlagNotify:           "发送 Windows 通知",
+	FlagNotifyEmpty:      "无新增也通知",
+	FlagNoVerify:         "跳过 7za t 自检",
+	UsageBackup:          "用法: zinc backup <name> 或 zinc backup --all",
+	NoReposBackup:        "没有仓库",
+	ScanErrSource:        "%s · 源目录不存在",
+	ScanErrGeneric:       "%s · 扫描失败: %v",
+	NoNew:                "%s · 无新增\n",
+	BackupFailed:         "%s · 失败: %v\n",
+	ToastTitle:           "zinc 备份完成",
+	ToastHeadChanged:     "%d 个仓库有新增，%d 个无新增 · 合计 %s",
+	ToastHeadChangedFail: "%d 个仓库有新增 · %d 个失败 · 合计 %s",
+	ToastHeadFailed:      "%d 个仓库失败",
+	ToastHeadNone:        "全部 %d 个仓库无新增",
+	ToastFailedPrefix:    "失败: ",
+	NotifyFailed:         "[通知失败] %v\n",
+	SourceNotExist:       "源目录不存在: %s",
+	SourceEqualsOutput:   "源目录与输出目录相同，无法备份: %s",
+	CreateOutputFailed:   "创建输出目录失败: %w",
+	LogNoChange:          "backup %s: 无变化",
+	VerifyFailed:         "自检失败，已删除本批次卷: %w",
+	LogVerifyFailed:      "backup %s: 自检失败 %v",
+	WriteListfileFailed:  "写 listfile 失败: %w",
+	CompressFailed:       "7za 压缩失败: %v\n%s",
+	NoVolumes:            "7za 执行成功但未生成任何包",
 
 	BackupPwMismatch:  "[警告] --password 与仓库 %s 的配置密码不一致\n",
 	ConfirmPwMismatch: "密码与仓库默认密码不一致！确定要执行吗？[y/n]: ",
@@ -551,19 +558,24 @@ var zhMessages = &Messages{
 	RestoreDestSource:   "拒绝恢复到源目录（会覆盖源文件）: %s",
 	RestoreDestInOutput: "拒绝恢复到输出目录或其中: %s（输出目录 %s）",
 
-	FlagAllVerify:   "校验全部仓库",
-	FlagSample:      "抽样百分比 1-100",
-	UsageVerify:     "用法: zinc verify <name> 或 zinc verify --all",
-	NoManifest:      "没有 manifest（%s），无法校验",
-	ManifestBroken:  "manifest %s 损坏或无法读取: %v",
-	SampleInvalid:   "--sample 必须在 1-100 之间: %d",
-	MissingFile:     "[缺失] %s\n",
-	CorruptFile:     "[损坏] %s\n",
-	VerifySummary:   "%s: 通过 %d, 损坏 %d, 缺失 %d\n",
-	VerifyFailedMsg: "校验未通过",
-	VerifyPwBad:     "[密码不符] %s\n",
-	VerifyPwSummary: "[密码] %d 个包无法用当前配置的密码打开（包本身可能没坏，是密码不对）\n",
-	VerifyPwNo7zip:  "[提示] 找不到 7-Zip，跳过密码校验\n",
+	FlagAllVerify:       "校验全部仓库",
+	FlagSample:          "抽样百分比 1-100",
+	FlagPasswordOnly:    "只验密码，不做 SHA-256",
+	FlagHashOnly:        "只算 SHA-256，不验密码",
+	VerifyFlagConflict:  "--password-only 和 --hash-only 不能同时用",
+	VerifyNoPassword:    "没有可用密码：先设置仓库密码或 settings.default_password",
+	UsageVerify:         "用法: zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]",
+	NoManifest:          "没有 manifest（%s），无法校验",
+	ManifestBroken:      "manifest %s 损坏或无法读取: %v",
+	SampleInvalid:       "--sample 必须在 1-100 之间: %d",
+	MissingFile:         "[缺失] %s\n",
+	CorruptFile:         "[损坏] %s\n",
+	VerifySummary:       "%s: 通过 %d, 损坏 %d, 缺失 %d\n",
+	VerifyPwOnlySummary: "%s: 密码通过 %d, 密码不符 %d, 缺失 %d\n",
+	VerifyFailedMsg:     "校验未通过",
+	VerifyPwBad:         "[密码不符] %s\n",
+	VerifyPwSummary:     "[密码] %d 个包无法用当前配置的密码打开（包本身可能没坏，是密码不对）\n",
+	VerifyPwNo7zip:      "[提示] 找不到 7-Zip，跳过密码校验\n",
 
 	FlagAllSchedule:   "为全部仓库建总任务",
 	FlagDaily:         "每天",
@@ -852,7 +864,7 @@ Usage:
   zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]
   zinc compact <name> [--password <pw>] [--pack <name|index>] [--min-gain <5%|8M>] [--yes] [--notify]
                        drop copies a newer version has superseded; same name, cloud overwrite
-  zinc verify <name|--all> [--sample <pct>]
+  zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]
   zinc status [--all] [<name>]
   zinc completion <powershell|bash|zsh|fish> [--install]   generate a tab-completion script
   zinc schedule <name|--all> --daily --at HH:MM[,HH:MM...]
@@ -928,33 +940,34 @@ Notes:
 	OutputCaseWarn:     "[warning] output %s differs only by case from repo %q's output; on Windows they are the same directory\n",
 	RemoveHasTasks:     "[warning] repo %s still has %d scheduled task(s) (%s); remove them with zinc unschedule %s\n",
 
-	FlagAllBackup:       "back up all repos",
-	FlagAllStatus:       "show details for every repo at once",
-	FlagPassword:        "backup password",
-	FlagNotify:          "send a Windows notification",
-	FlagNotifyEmpty:     "notify even when nothing changed",
-	FlagNoVerify:        "skip 7za t self-check",
-	UsageBackup:         "usage: zinc backup <name> or zinc backup --all",
-	NoReposBackup:       "no repos",
-	ScanErrSource:       "%s · source directory not found",
-	ScanErrGeneric:      "%s · scan failed: %v",
-	NoNew:               "%s · nothing new\n",
-	BackupFailed:        "%s · failed: %v\n",
-	SummaryFailed:       " · failed",
-	SummaryNoNew:        " · nothing new",
-	SummaryLine:         "%s · %d files · %s · %s",
-	SummaryMore:         "\nand %d more repos",
-	ToastTitle:          "zinc backup complete",
-	NotifyFailed:        "[notify failed] %v\n",
-	SourceNotExist:      "source directory not found: %s",
-	SourceEqualsOutput:  "source and output are the same directory, cannot back up: %s",
-	CreateOutputFailed:  "failed to create output directory: %w",
-	LogNoChange:         "backup %s: no changes",
-	VerifyFailed:        "self-check failed, removed this batch: %w",
-	LogVerifyFailed:     "backup %s: self-check failed %v",
-	WriteListfileFailed: "failed to write listfile: %w",
-	CompressFailed:      "7za compression failed: %v\n%s",
-	NoVolumes:           "7za succeeded but produced no packs",
+	FlagAllBackup:        "back up all repos",
+	FlagAllStatus:        "show details for every repo at once",
+	FlagPassword:         "backup password",
+	FlagNotify:           "send a Windows notification",
+	FlagNotifyEmpty:      "notify even when nothing changed",
+	FlagNoVerify:         "skip 7za t self-check",
+	UsageBackup:          "usage: zinc backup <name> or zinc backup --all",
+	NoReposBackup:        "no repos",
+	ScanErrSource:        "%s · source directory not found",
+	ScanErrGeneric:       "%s · scan failed: %v",
+	NoNew:                "%s · nothing new\n",
+	BackupFailed:         "%s · failed: %v\n",
+	ToastTitle:           "zinc backup complete",
+	ToastHeadChanged:     "%d repo(s) changed, %d unchanged · %s",
+	ToastHeadChangedFail: "%d repo(s) changed · %d failed · %s",
+	ToastHeadFailed:      "%d repo(s) failed",
+	ToastHeadNone:        "all %d repos unchanged",
+	ToastFailedPrefix:    "failed: ",
+	NotifyFailed:         "[notify failed] %v\n",
+	SourceNotExist:       "source directory not found: %s",
+	SourceEqualsOutput:   "source and output are the same directory, cannot back up: %s",
+	CreateOutputFailed:   "failed to create output directory: %w",
+	LogNoChange:          "backup %s: no changes",
+	VerifyFailed:         "self-check failed, removed this batch: %w",
+	LogVerifyFailed:      "backup %s: self-check failed %v",
+	WriteListfileFailed:  "failed to write listfile: %w",
+	CompressFailed:       "7za compression failed: %v\n%s",
+	NoVolumes:            "7za succeeded but produced no packs",
 
 	BackupPwMismatch:  "[warning] --password differs from the configured password of repo %s\n",
 	ConfirmPwMismatch: "password differs from the repo/default password! continue? [y/n]: ",
@@ -972,19 +985,24 @@ Notes:
 	RestoreDestSource:   "refusing to restore into the source directory (it would overwrite source files): %s",
 	RestoreDestInOutput: "refusing to restore into the output directory or below it: %s (output %s)",
 
-	FlagAllVerify:   "verify all repos",
-	FlagSample:      "sample percentage 1-100",
-	UsageVerify:     "usage: zinc verify <name> or zinc verify --all",
-	NoManifest:      "no manifest (%s), cannot verify",
-	ManifestBroken:  "manifest %s is corrupt or unreadable: %v",
-	SampleInvalid:   "--sample must be between 1 and 100: %d",
-	MissingFile:     "[missing] %s\n",
-	CorruptFile:     "[corrupt] %s\n",
-	VerifySummary:   "%s: passed %d, corrupt %d, missing %d\n",
-	VerifyFailedMsg: "verification failed",
-	VerifyPwBad:     "[wrong password] %s\n",
-	VerifyPwSummary: "[password] %d pack(s) cannot be opened with the configured password (the pack may be fine; the password is wrong)\n",
-	VerifyPwNo7zip:  "[note] 7-Zip not found, skipping the password check\n",
+	FlagAllVerify:       "verify all repos",
+	FlagSample:          "sample percentage 1-100",
+	FlagPasswordOnly:    "check the password only, skip SHA-256",
+	FlagHashOnly:        "check SHA-256 only, skip the password",
+	VerifyFlagConflict:  "--password-only and --hash-only cannot be combined",
+	VerifyNoPassword:    "no password available: set a repo password or settings.default_password",
+	UsageVerify:         "usage: zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]",
+	NoManifest:          "no manifest (%s), cannot verify",
+	ManifestBroken:      "manifest %s is corrupt or unreadable: %v",
+	SampleInvalid:       "--sample must be between 1 and 100: %d",
+	MissingFile:         "[missing] %s\n",
+	CorruptFile:         "[corrupt] %s\n",
+	VerifySummary:       "%s: passed %d, corrupt %d, missing %d\n",
+	VerifyPwOnlySummary: "%s: password ok %d, wrong password %d, missing %d\n",
+	VerifyFailedMsg:     "verification failed",
+	VerifyPwBad:         "[wrong password] %s\n",
+	VerifyPwSummary:     "[password] %d pack(s) cannot be opened with the configured password (the pack may be fine; the password is wrong)\n",
+	VerifyPwNo7zip:      "[note] 7-Zip not found, skipping the password check\n",
 
 	FlagAllSchedule:   "create one task for all repos",
 	FlagDaily:         "daily",
