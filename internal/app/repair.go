@@ -44,6 +44,14 @@ func cmdRepair(args []string) {
 		return
 	}
 
+	// 三步都在同一把锁里完成：runRemanifest / runReindex / runRehash 内部不再各自拿锁，
+	// 否则外面持锁、里面再拿就是自己等自己。
+	lock, lerr := acquireLock(repo.Output, set.lockTimeout())
+	if lerr != nil {
+		die("%v", lerr)
+	}
+	defer lock.release()
+
 	// 1) manifest 对账：盘上没了的删登记、盘上多出来的补登
 	if err := runRemanifest(name, cfg, set, pw, !*check); err != nil {
 		die("%v", err)
@@ -107,11 +115,7 @@ func runRehash(name string, cfg *Config, set *Settings, check bool) error {
 		printColored(M.RepairRehashDryRun, changed)
 		return nil
 	}
-	lock, lerr := acquireLock(repo.Output, set.lockTimeout())
-	if lerr != nil {
-		return lerr
-	}
-	defer lock.release()
+	// 锁由 cmdRepair 统一持有
 	if err := writeManifestFile(repo.Output, m); err != nil {
 		return err
 	}

@@ -115,17 +115,41 @@ type Messages struct {
 	RestoreDestInOutput string
 
 	// verify
-	FlagAllVerify       string
-	FlagSample          string
-	UsageVerify         string
-	NoManifest          string
-	ManifestBroken      string
-	SampleInvalid       string
-	MissingFile         string
-	CorruptFile         string
-	VerifySummary       string
-	VerifyCorruptWarn   string
-	VerifyCorruptFix    string
+	FlagAllVerify     string
+	FlagSample        string
+	UsageVerify       string
+	NoManifest        string
+	ManifestBroken    string
+	SampleInvalid     string
+	MissingFile       string
+	CorruptFile       string
+	VerifySummary     string
+	VerifyCorruptWarn string
+	VerifyCorruptFix  string
+	// fixpack：修包（剔坏文件、找替代、重打包）
+	UsageFixpack        string
+	FixNoPacks          string
+	FixTesting          string
+	FixPackOK           string
+	FixPackBad          string
+	FixLooking          string
+	FixFound            string
+	FixNotFound         string
+	FixAllOK            string
+	FixSummary          string
+	FixDryRun           string
+	FixConfirm          string
+	FixPackSkip         string
+	FixPackFail         string
+	FixPackDone         string
+	FixStillLost        string
+	FixSyncing          string
+	FixDone             string
+	FixExtractWarn      string
+	FixReadFail         string
+	FixSrcSame          string
+	FixSrcChanged       string
+	FixFromPack         string
 	VerifyFailedMsg     string
 	VerifyPwBad         string
 	VerifyPwSummary     string
@@ -508,6 +532,8 @@ var zhMessages = &Messages{
   zinc status [--all] [<仓库名>]
   zinc repair <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash]
                         [--check] [--password <密码>]
+  zinc fixpack <仓库名> [--check] [--password <密码>]
+                        修包：捞回坏包里还能用的文件，给读不出来的找替代来源后重打包
 
 自动化:
   zinc schedule <仓库名|--all> --daily --at HH:MM[,HH:MM...] [--check] [--no-notify] [--password <密码>]
@@ -640,21 +666,45 @@ var zhMessages = &Messages{
 	RestoreDestSource:   "拒绝恢复到源目录（会覆盖源文件）: %s",
 	RestoreDestInOutput: "拒绝恢复到输出目录或其中: %s（输出目录 %s）",
 
-	FlagAllVerify:       "校验全部仓库",
-	FlagSample:          "抽样百分比 1-100",
-	FlagPasswordOnly:    "只验密码，不做 SHA-256",
-	FlagHashOnly:        "只算 SHA-256，不验密码",
-	VerifyFlagConflict:  "--password-only 和 --hash-only 不能同时用",
-	VerifyNoPassword:    "没有可用密码：先设置仓库密码或 settings.default_password",
-	UsageVerify:         "用法: zinc verify <仓库名|--all> [--sample <百分比>] [--password-only|--hash-only]",
-	NoManifest:          "没有 manifest（%s），无法校验",
-	ManifestBroken:      "manifest %s 损坏或无法读取: %v",
-	SampleInvalid:       "--sample 必须在 1-100 之间: %d",
-	MissingFile:         "[缺失] %s\n",
-	CorruptFile:         "[更改] %s\n",
-	VerifySummary:       "%s: 通过 %d, 更改 %d, 缺失 %d\n",
-	VerifyCorruptWarn:   "如果你确定没有手动修改过输出目录里的压缩包，那它很可能已经损坏了。\n",
-	VerifyCorruptFix:    "如果原文件还在，可以这样补救：删掉被改动的包和该仓库的 index.tsv，执行 zinc repair %[1]s 重建账本，再跑一次 zinc backup %[1]s 把文件重新打包。\n",
+	FlagAllVerify:      "校验全部仓库",
+	FlagSample:         "抽样百分比 1-100",
+	FlagPasswordOnly:   "只验密码，不做 SHA-256",
+	FlagHashOnly:       "只算 SHA-256，不验密码",
+	VerifyFlagConflict: "--password-only 和 --hash-only 不能同时用",
+	VerifyNoPassword:   "没有可用密码：先设置仓库密码或 settings.default_password",
+	UsageVerify:        "用法: zinc verify <仓库名|--all> [--sample <百分比>] [--password-only|--hash-only]",
+	NoManifest:         "没有 manifest（%s），无法校验",
+	ManifestBroken:     "manifest %s 损坏或无法读取: %v",
+	SampleInvalid:      "--sample 必须在 1-100 之间: %d",
+	MissingFile:        "[缺失] %s\n",
+	CorruptFile:        "[更改] %s\n",
+	VerifySummary:      "%s: 通过 %d, 更改 %d, 缺失 %d\n",
+	VerifyCorruptWarn:  "如果你确定没有手动修改过输出目录里的压缩包，那它很可能已经损坏了。\n",
+	VerifyCorruptFix:   "如果原文件还在，可以这样补救：删掉被改动的包和该仓库的 index.tsv，执行 zinc repair %[1]s 重建账本，再跑一次 zinc backup %[1]s 把文件重新打包。\n",
+
+	UsageFixpack:        "用法: zinc fixpack <仓库名> [--check] [--password <密码>]",
+	FixNoPacks:          "输出目录里没有包: %s",
+	FixTesting:          "[检查] %s\n",
+	FixPackOK:           "[ok] %s 完好\n",
+	FixPackBad:          "[损坏] %s · %d 个文件读不出来\n",
+	FixLooking:          "  查找 %s 的替代来源\n",
+	FixFound:            "[ok] 找到 %s ← %s\n",
+	FixNotFound:         "[丢失] %s 没有可用的替代来源\n",
+	FixAllOK:            "[ok] %s 的所有包都完好，不需要修复\n",
+	FixSummary:          "[汇总] %d / %d 个包需要修复\n",
+	FixDryRun:           "[预演] 给了 --check，没有改动任何文件\n",
+	FixConfirm:          "将重写 %d 个包（解压、补文件、重新打包、同名覆盖）。\n",
+	FixPackSkip:         "[跳过] %s · %d 个文件无法恢复，保留原包不动\n",
+	FixPackFail:         "[失败] %s: %v\n",
+	FixPackDone:         "[完成] %s 已重写并通过自检\n",
+	FixStillLost:        "  仍无法恢复: %s\n",
+	FixSyncing:          "[同步] 重建 %s 的账本与索引\n",
+	FixDone:             "[ok] %s 修复完成\n",
+	FixExtractWarn:      "[警告] %s 解压时有个别文件读不出来，其余已提取\n",
+	FixReadFail:         "读取替代文件失败 %s: %v",
+	FixSrcSame:          "源目录（与索引记录一致）",
+	FixSrcChanged:       "源目录（内容已变化，采用当前版本）",
+	FixFromPack:         "历史包 %s",
 	VerifyPwOnlySummary: "%s: 密码通过 %d, 密码不符 %d, 缺失 %d\n",
 	VerifyFailedMsg:     "校验未通过",
 	VerifyPwBad:         "[密码不符] %s\n",
@@ -1009,6 +1059,8 @@ Verify and repair:
   zinc status [--all] [<repo_name>]
   zinc repair <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>]
                         [--rehash] [--check] [--password <password>]
+  zinc fixpack <repo_name> [--check] [--password <password>]
+                        repair packs: salvage what is readable, find replacements, repack
 
 Automation:
   zinc schedule <repo_name|--all> --daily --at HH:MM[,HH:MM...] [--check] [--no-notify] [--password <password>]
@@ -1141,21 +1193,45 @@ Notes:
 	RestoreDestSource:   "refusing to restore into the source directory (it would overwrite source files): %s",
 	RestoreDestInOutput: "refusing to restore into the output directory or below it: %s (output %s)",
 
-	FlagAllVerify:       "verify all repos",
-	FlagSample:          "sample percentage 1-100",
-	FlagPasswordOnly:    "check the password only, skip SHA-256",
-	FlagHashOnly:        "check SHA-256 only, skip the password",
-	VerifyFlagConflict:  "--password-only and --hash-only cannot be combined",
-	VerifyNoPassword:    "no password available: set a repo password or settings.default_password",
-	UsageVerify:         "usage: zinc verify <repo_name|--all> [--sample <percent>] [--password-only|--hash-only]",
-	NoManifest:          "no manifest (%s), cannot verify",
-	ManifestBroken:      "manifest %s is corrupt or unreadable: %v",
-	SampleInvalid:       "--sample must be between 1 and 100: %d",
-	MissingFile:         "[missing] %s\n",
-	CorruptFile:         "[changed] %s\n",
-	VerifySummary:       "%s: passed %d, changed %d, missing %d\n",
-	VerifyCorruptWarn:   "If you never edited the packs in the output directory yourself, this one is probably damaged.\n",
-	VerifyCorruptFix:    "If the source files are still there: delete the changed pack and the repo's index.tsv, run zinc repair %[1]s to rebuild the ledger, then zinc backup %[1]s to pack them again.\n",
+	FlagAllVerify:      "verify all repos",
+	FlagSample:         "sample percentage 1-100",
+	FlagPasswordOnly:   "check the password only, skip SHA-256",
+	FlagHashOnly:       "check SHA-256 only, skip the password",
+	VerifyFlagConflict: "--password-only and --hash-only cannot be combined",
+	VerifyNoPassword:   "no password available: set a repo password or settings.default_password",
+	UsageVerify:        "usage: zinc verify <repo_name|--all> [--sample <percent>] [--password-only|--hash-only]",
+	NoManifest:         "no manifest (%s), cannot verify",
+	ManifestBroken:     "manifest %s is corrupt or unreadable: %v",
+	SampleInvalid:      "--sample must be between 1 and 100: %d",
+	MissingFile:        "[missing] %s\n",
+	CorruptFile:        "[changed] %s\n",
+	VerifySummary:      "%s: passed %d, changed %d, missing %d\n",
+	VerifyCorruptWarn:  "If you never edited the packs in the output directory yourself, this one is probably damaged.\n",
+	VerifyCorruptFix:   "If the source files are still there: delete the changed pack and the repo's index.tsv, run zinc repair %[1]s to rebuild the ledger, then zinc backup %[1]s to pack them again.\n",
+
+	UsageFixpack:        "usage: zinc fixpack <repo_name> [--check] [--password <password>]",
+	FixNoPacks:          "no packs in the output directory: %s",
+	FixTesting:          "[check] %s\n",
+	FixPackOK:           "[ok] %s is intact\n",
+	FixPackBad:          "[damaged] %s · %d file(s) unreadable\n",
+	FixLooking:          "  looking for a replacement of %s\n",
+	FixFound:            "[ok] %s <- %s\n",
+	FixNotFound:         "[lost] %s has no usable replacement\n",
+	FixAllOK:            "[ok] every pack in %s is intact; nothing to fix\n",
+	FixSummary:          "[summary] %d / %d pack(s) need repair\n",
+	FixDryRun:           "[dry-run] --check given, nothing was changed\n",
+	FixConfirm:          "About to rewrite %d pack(s): extract, patch, repack, overwrite by name.\n",
+	FixPackSkip:         "[skip] %s · %d file(s) unrecoverable, pack left untouched\n",
+	FixPackFail:         "[fail] %s: %v\n",
+	FixPackDone:         "[done] %s rewritten and verified\n",
+	FixStillLost:        "  still unrecoverable: %s\n",
+	FixSyncing:          "[sync] rebuilding the ledger and index of %s\n",
+	FixDone:             "[ok] %s repaired\n",
+	FixExtractWarn:      "[warn] %s had unreadable files during extraction; the rest came out fine\n",
+	FixReadFail:         "failed to read the replacement %s: %v",
+	FixSrcSame:          "source directory (matches the index)",
+	FixSrcChanged:       "source directory (content changed; using the current version)",
+	FixFromPack:         "history pack %s",
 	VerifyPwOnlySummary: "%s: password ok %d, wrong password %d, missing %d\n",
 	VerifyFailedMsg:     "verification failed",
 	VerifyPwBad:         "[wrong password] %s\n",

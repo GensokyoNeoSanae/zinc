@@ -65,6 +65,10 @@ var completionCommands = []CmdSpec{
 		{Name: "rehash"},
 		{Name: "check"},
 	}, PositionalKind: "repo"},
+	{Name: "fixpack", Flags: []FlagSpec{
+		{Name: "password", HasValue: true},
+		{Name: "check"},
+	}, PositionalKind: "repo"},
 	{Name: "compact", Flags: []FlagSpec{
 		{Name: "password", HasValue: true},
 		{Name: "pack", HasValue: true},

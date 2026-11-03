@@ -306,6 +306,22 @@ var zhHelp = map[string]HelpTopic{
 		Params:  []string{"--force：即使已经注册过也重做。"},
 		Notes:   []string{"改完 PATH 要重开终端才生效。"},
 	},
+	"fixpack": {
+		Usage:   "fixpack <仓库名> [--check] [--password <密码>]",
+		Purpose: `修包。包坏掉之后，把还能读出来的文件捞出来，给读不出来的文件找一份替代来源，然后重新打包成同名文件。它只管包的内容，不碰账本——账本的问题是 repair 的事。`,
+		How:     `先对每个包跑一遍 7z t，拿到坏掉的文件名（非固实包下 7-Zip 会逐文件报出具体是哪个）。对每个坏文件按优先级找替代：先看源目录（还在且大小和时间与索引一致，就是那一份），再按从新到旧的顺序翻其他历史包，并且用 7z t 确认那份没坏。全都没有就标记为无法恢复。确认后逐个重写坏包：解压出好文件、补上替代来源、按原参数重新打包。`,
+		Params: []string{
+			"<仓库名>：要修哪个仓库。",
+			"--check：只检查并列出计划，不动任何文件。",
+			"--password <密码>：不给时按「仓库 > settings」取，取不到会交互询问。",
+		},
+		Notes: []string{
+			"非固实包坏了不等于全废：7z t 只报真正坏掉的文件，其余文件仍能正常提取。",
+			"没有任何替代来源的文件会被跳过，那个包保留原样不动——它可能是你最后一份数据。",
+			"重打包后账本会重建，不需要再手动跑 repair。",
+			"zinc 只能确认源文件在、大小和时间对得上，不能确认它本身没坏。",
+		},
+	},
 	"repair": {
 		Usage: "repair <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check] [--password <密码>]",
 		Purpose: `修复「元数据」与「磁盘上的包」对不上的情况。它不碰包的内容，只重写两个记账文件：
@@ -567,6 +583,22 @@ Several times can be given, comma separated, creating one task each. Days 29-31 
 		How:     `Writes the HKCU PATH and the notification registration. It never touches backup data.--force redoes it, for when notifications stopped working or PATH was cleared.`,
 		Params:  []string{"--force: run the setup again even if it was already done."},
 		Notes:   []string{"Reopen the terminal after changing PATH."},
+	},
+	"fixpack": {
+		Usage:   "fixpack <repo_name> [--check] [--password <password>]",
+		Purpose: `Repair packs. When an archive is damaged, salvage the files that still read, find a replacement for the ones that do not, and repack under the same name. It only touches pack content, never the ledger — that is repair's job.`,
+		How:     `Run 7z t on every pack first; on a non-solid archive 7-Zip reports each unreadable file by name. For every bad file, look for a replacement in order: the source directory first (still there, size and mtime matching the index = that copy), then other packs from newest to oldest, each confirmed with 7z t so a damaged history copy is skipped. Nothing found means unrecoverable. After confirmation each bad pack is rewritten: extract what reads, drop in the replacements, repack with the same settings.`,
+		Params: []string{
+			"<repo_name>: which repo to repair.",
+			"--check: only inspect and print the plan; change nothing.",
+			"--password <password>: omit to use repo > settings; prompt if neither has one.",
+		},
+		Notes: []string{
+			"A damaged non-solid pack is not a total loss: 7z t names the bad files, the rest still extract.",
+			"Files with no replacement are skipped and the pack is left alone — it may be the last copy of that data.",
+			"The ledger is rebuilt afterwards, so there is no need to run repair by hand.",
+			"zinc can confirm the source file exists with matching size and mtime; it cannot confirm the file itself is intact.",
+		},
 	},
 	"repair": {
 		Usage: "repair <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>] [--rehash] [--check] [--password <password>]",
