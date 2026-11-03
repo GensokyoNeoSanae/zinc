@@ -463,54 +463,66 @@ var M *Messages
 var zhMessages = &Messages{
 	Usage: `zinc - 多仓库、文件级增量、加密独立包备份
 
-用法:
-  zinc [--lang zh|en] <command> ...
+元:
+  zinc [--lang zh|en] <命令> ...
+  zinc version | --version | -v          显示版本
+  zinc help [<命令>]                     显示用法；给命令名时展开该命令的详细说明
+  zinc init [--force]                    一次性初始化：注册通知 + 把本目录加入用户 PATH
 
-  zinc init [--force]                   一次性初始化：注册通知 + 把本目录加入用户 PATH
-  zinc root [<path>]                    查看/设置全局输出根目录
-  zinc list                             列出仓库
-  zinc add <name> --source <path> [--output <path>]
-  zinc remove <name>
-  zinc set <name> [--source <path>] [--output <path>] [--password <pw>]
-                  [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>]
-                  [--mhe on|off] [--exclude <glob>]
-  zinc config [get|set|unset|path|list|show] [<key>] [<value>]      全局设置
-  zinc backup <name|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]
-  zinc restore <name> [--dest <path>] [--password <pw>]
-                       [--overwrite|--no-overwrite] [--no-delete] [--check-list]
-  zinc restore <name> --only <相对路径> [--dest <path>] [--from <包名|序号>]
-                       只恢复这一个文件/目录；配 --check-list 可列出它有哪些版本
-  zinc repair <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check] [--password <密码>]
-                        修复索引与账本；--rehash 按磁盘实际内容重算包哈希
-  zinc compact <name> [--password <pw>] [--pack <名|序号>] [--min-gain <5%|8M>] [--yes] [--notify]
-                       丢掉包里被新版取代的旧副本；包名不变，云端同名覆盖进历史版本
-  zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]
-  zinc status [--all] [<name>]
-  zinc completion <powershell|bash|zsh|fish> [--install]   生成 Tab 补全脚本
+全局设置:
+  zinc config [get|set|unset|path|list|show] [<键>] [<值>]
+
+仓库管理:
+  zinc root [<路径>]                     查看/设置全局输出根目录
+  zinc list [--names]                    列出仓库
+  zinc add <仓库名> --source <路径> [--output <路径>]
+  zinc remove <仓库名>
+  zinc set <仓库名> [--source <路径>] [--output <路径>] [--compress <0-9>]
+                    [--solid <块大小|off>] [--mhe on|off] [--max-pack-byte <数量>]
+                    [--exclude <通配符>] [--password <密码>]
+
+备份与恢复:
+  zinc backup <仓库名|--all> [--notify] [--notify-empty] [--no-verify] [--password <密码>]
+  zinc restore <仓库名> --dest <路径> [--only <相对路径>] [--from <包名>]
+                        [--no-overwrite] [--no-delete] [--check] [--password <密码>]
+  zinc compact <仓库名> [--pack <包名>] [--min-gain <阈值>] [--check] [--notify]
+                        [--no-verify] [--password <密码>]
+
+校验与维护:
+  zinc verify <仓库名|--all> [--sample <百分比>] [--password-only|--hash-only]
+  zinc status [--all] [<仓库名>]
+  zinc repair <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash]
+                        [--check] [--password <密码>]
+
+自动化:
+  zinc schedule <仓库名|--all> --daily --at HH:MM[,HH:MM...] [--check] [--no-notify] [--password <密码>]
+  zinc schedule <仓库名|--all> --weekly 1,3 --at HH:MM
+  zinc schedule <仓库名|--all> --monthly 1,15 --at HH:MM
+  zinc schedule --list                   列出当前所有计划任务
+  zinc unschedule [<仓库名>|--all]
+
+工具:
+  zinc completion <shell> [--install]    生成 Tab 补全脚本
   zinc hash-compare --source1 <路径> --source2 <路径>
-  zinc hash-compare --source <文件> --hash-value <SHA-256>   手动比对哈希/目录
-  zinc schedule <name|--all> --daily --at HH:MM[,HH:MM...]
-  zinc schedule <name|--all> --weekly 1,3 --at HH:MM
-  zinc schedule <name|--all> --monthly 1,15 --at HH:MM [--yes]
-  zinc schedule --list                 列出当前所有计划任务
-  zinc unschedule [<name>|--all]
-  zinc version | --version | -v        显示版本
+  zinc hash-compare --source <路径> --hash-value <SHA-256>
 
 说明:
   - 每个包都是独立完整的加密 7z，文件名就是打包时刻，恢复按名字升序
   - 压缩等级 0 时恒为非固实（每文件独立块）；等级 >0 时固实块默认 64M，块里坏一个字节该块后续文件就解不出来，--solid off 可改成每文件独立块
   - 头部默认加密（-mhe=on）：文件名也不明文，网盘按文件名审查时看不到包里有什么；--mhe off 关掉，代价是头一旦损坏整个包连目录都列不出来
-  - 不给 --password 时按「仓库 > settings」取；backup/restore 取不到才交互输入，schedule 取不到直接报错
-  - schedule 会把解析到的密码明文写进计划任务，之后改了密码要重建任务（zinc unschedule <name> 再 schedule）
-  - 恢复默认覆盖同名文件（--no-overwrite 则保留两份）
-  - --check-list 只列顺序不动手；--dest 可省略
+  - 不给 --password 时按「仓库 > settings > 交互询问」取；schedule 取不到直接报错
+  - 危险操作（restore / compact / repair / schedule / remove）执行前会打印计划并问 y/N；把 confirm_tips 设为 false 就不再询问
+  - schedule 会把解析到的密码明文写进计划任务，之后改了密码要重建任务（zinc unschedule <仓库名> 再 schedule）
+  - 恢复默认覆盖同名文件（--no-overwrite 则保留两份）；--dest 必填，只有 --check 时可以省
+  - 建议恢复到空目录、检查无误后再手动覆盖回源目录；直接往源目录恢复等于拿唯一的副本冒险
   - 恢复会执行之后备份记下的删除（--no-delete 保留这些文件）；删除记录是输出目录里的 .rm 旁注
   - compact 删掉的是「已被新版取代 / 已从源目录删除」的副本，那些旧版本随之消失；包被腾空后只留一个占位文件
-  - 索引只是缓存，丢了用 zinc repair 从包本身重建
-  - 输出默认落在 <root>\<name>，用 zinc root 设置
+  - 索引与账本坏了用 zinc repair 重建；包本身是权威数据
+  - 输出默认落在 <根目录>\<仓库名>，用 zinc root 设置
   - 解压后先跑一次 zinc init，之后在任意终端直接敲 zinc
-  - 安装/卸载用 tools\ 下的 zinc-register.exe / zinc-unregister.exe；zinc init 是轻量版，不强制 7-Zip
-  - unschedule <name> 删该仓库的任务；unschedule --all 删所有 zinc 任务；unschedule all 只删 --all 建的那个总任务
+  - 安装/卸载用 tools\ 下的 zinc-register.exe / zinc-unregister.exe
+  - unschedule <仓库名> 删该仓库的任务；unschedule --all 删所有 zinc 任务；unschedule all 只删 --all 建的那个总任务
+  - 详细说明：zinc help <命令>
 `,
 
 	ErrPrefix:         "[错误] ",
@@ -541,20 +553,20 @@ var zhMessages = &Messages{
 
 	RootUnset:          "(未设置)",
 	UsageList:          "用法: zinc list [--names]",
-	UsageStatus:        "用法: zinc status [--all] [<name>]（--all 不能和仓库名一起用）",
-	UsageRoot:          "用法: zinc root [<path>]",
+	UsageStatus:        "用法: zinc status [--all] [<仓库名>]（--all 不能和仓库名一起用）",
+	UsageRoot:          "用法: zinc root [<路径>]",
 	RootNotDir:         "root 路径已存在且不是目录: %s",
 	NoRepos:            "还没有仓库，先 zinc add",
 	ListItem:           "%s\n  源:   %s\n  输出: %s\n",
-	UsageAdd:           "用法: zinc add <name> --source <path>",
+	UsageAdd:           "用法: zinc add <仓库名> --source <路径>",
 	MissingSource:      "缺少 --source",
 	RepoExists:         "仓库 %q 已存在，用 zinc set 修改",
-	RootNotSet:         "root 未设置，请先 zinc root <path> 或显式给 --output",
+	RootNotSet:         "root 未设置，请先 zinc root <路径> 或显式给 --output",
 	WarnSourceMissing:  "[警告] 源目录当前不存在: %s\n",
 	AddedRepo:          "已添加 %s\n  源:   %s\n  输出: %s\n",
-	UsageRemove:        "用法: zinc remove <name>",
+	UsageRemove:        "用法: zinc remove <仓库名>",
 	RemovedRepo:        "已移除仓库 %s（包文件和索引未删除）\n",
-	UsageSet:           "用法: zinc set <name> [--source <path>] [--output <path>] [--password <pw>]\n                    [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>] [--mhe on|off] [--exclude <glob>]",
+	UsageSet:           "用法: zinc set <仓库名> [--source <路径>] [--output <路径>] [--compress <0-9>] [--solid <块大小|off>] [--mhe on|off>] [--max-pack-byte <数量>] [--exclude <通配符>] [--password <密码>]",
 	NeedSourceOrOutput: "至少给一个设置项：--source / --output / --password / --max-pack-byte / --compress / --solid / --mhe / --exclude",
 	UpdatedRepo:        "已更新 %s\n  源:   %s\n  输出: %s\n",
 	PathInvalid:        "路径无效: %s（%v）",
@@ -571,7 +583,7 @@ var zhMessages = &Messages{
 	FlagNotify:           "发送 Windows 通知",
 	FlagNotifyEmpty:      "无新增也通知",
 	FlagNoVerify:         "跳过 7za t 自检",
-	UsageBackup:          "用法: zinc backup <name> 或 zinc backup --all",
+	UsageBackup:          "用法: zinc backup <仓库名|--all>",
 	NoReposBackup:        "没有仓库",
 	ScanErrSource:        "%s · 源目录不存在",
 	ScanErrGeneric:       "%s · 扫描失败: %v",
@@ -599,7 +611,7 @@ var zhMessages = &Messages{
 	BackupPwAborted:   "已取消：密码与配置不一致",
 
 	FlagDest:            "恢复目标目录",
-	UsageRestore:        "用法: zinc restore <name> --dest <path>",
+	UsageRestore:        "用法: zinc restore <仓库名> --dest <路径> [--only <相对路径>] [--from <包名>] [--no-overwrite] [--no-delete] [--check] [--password <密码>]",
 	MissingDest:         "缺少 --dest",
 	NoVolumesRestore:    "没有找到任何包: %s",
 	CreateDestFailed:    "创建恢复目录失败: %w",
@@ -616,7 +628,7 @@ var zhMessages = &Messages{
 	FlagHashOnly:        "只算 SHA-256，不验密码",
 	VerifyFlagConflict:  "--password-only 和 --hash-only 不能同时用",
 	VerifyNoPassword:    "没有可用密码：先设置仓库密码或 settings.default_password",
-	UsageVerify:         "用法: zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]",
+	UsageVerify:         "用法: zinc verify <仓库名|--all> [--sample <百分比>] [--password-only|--hash-only]",
 	NoManifest:          "没有 manifest（%s），无法校验",
 	ManifestBroken:      "manifest %s 损坏或无法读取: %v",
 	SampleInvalid:       "--sample 必须在 1-100 之间: %d",
@@ -638,7 +650,7 @@ var zhMessages = &Messages{
 	FlagYes:           "跳过每月日期警告",
 	NeedPeriod:        "必须指定 --daily / --weekly / --monthly 之一",
 	NeedAt:            "缺少 --at HH:MM",
-	UsageSchedule:     "用法: zinc schedule <name|--all> ...",
+	UsageSchedule:     "用法: zinc schedule <仓库名|--all> ...",
 	TimeInvalid:       "时间格式错误: %q（应为 HH:MM）",
 	MonthlyDayInvalid: "每月日期错误: %q（应为 1-31）",
 	MonthlyWarn:       "你设置了每月 %d 号备份，但 2 月没有 %d 号，4/6/9/11 月只有 30 天；这些月份不会执行备份。\n",
@@ -651,7 +663,7 @@ var zhMessages = &Messages{
 	Deleted:           "[删除] %s\n",
 	NoMatch:           "没有匹配的任务",
 	FlagAllUnschedule: "删除全部 zinc 任务",
-	UsageUnschedule:   "用法: zinc unschedule <name> 或 zinc unschedule --all",
+	UsageUnschedule:   "用法: zinc unschedule <仓库名> 或 zinc unschedule --all",
 
 	SchedulePwFromCLI:      "[密码] 取自命令行\n",
 	SchedulePwFromRepo:     "[密码] 取自仓库配置\n",
@@ -659,7 +671,7 @@ var zhMessages = &Messages{
 	SchedulePwMissing:      "找不到可用密码：用 --password 指定，或先 zinc config set default_password <密码>",
 	SchedulePwMixed:        "--all 的目标仓库密码不一致，一条任务没法统一；请分开建任务，或先统一各仓库密码",
 
-	UsageCompletion:           "用法: zinc completion <powershell|bash|zsh|fish> [--install]",
+	UsageCompletion:           "用法: zinc completion <shell> [--install]",
 	FlagCompletionInstall:     "只为 powershell：写好脚本并往 $PROFILE 追加加载行",
 	FlagListNames:             "每行一个仓库名（给脚本/补全用）",
 	CompletionUnknownShell:    "不支持的 shell: %s（可选: powershell, bash, zsh, fish）",
@@ -747,7 +759,7 @@ var zhMessages = &Messages{
 	ParseSettingsFailed: "解析设置文件 %s 失败: %w",
 	ConfigUnknownKey:    "未知的设置项: %s",
 	ConfigBadValue:      "设置项 %s 的值无效: %q",
-	UsageConfig:         "用法: zinc config [get|set|unset|path|list|show] [<key>] [<value>]",
+	UsageConfig:         "用法: zinc config [get|set|unset|path|list|show] [<键>] [<值>]",
 	HelpUnknownTopic:    "没有「%s」的详细帮助。先用 zinc --help 看命令列表，再 zinc help <命令> 展开说明。",
 	HelpUsage:           "用法",
 	HelpPurpose:         "目的",
@@ -877,7 +889,7 @@ var zhMessages = &Messages{
 	FlagCompactPack:        "只处理指定的包（包名或序号）",
 	FlagCompactMinGain:     "收益低于这个值就跳过重打：5% / 8M / 0（默认取 settings.compact_min_gain）",
 	FlagYesCompact:         "真正执行（不给时只报告）",
-	UsageCompact:           "用法: zinc compact <name> [--pack <名|序号>] [--min-gain <5%%|8M>] [--yes] [--notify] [--password <pw>]",
+	UsageCompact:           "用法: zinc compact <仓库名> [--pack <包名>] [--min-gain <阈值>] [--check] [--notify] [--no-verify] [--password <密码>]",
 	CompactStart:           "[压缩] %s：检查 %d 个包（只读归档头）\n",
 	CompactDryRunHead:      "[预演] 给了 --check，这一步只看不改\n",
 	CompactDryRunTail:      "确认无误后去掉 --check 执行（执行前会再问一次 y/N）。\n",
@@ -938,54 +950,66 @@ var zhMessages = &Messages{
 var enMessages = &Messages{
 	Usage: `zinc - multi-repo, file-level incremental, encrypted independent packs
 
-Usage:
+Meta:
   zinc [--lang zh|en] <command> ...
+  zinc version | --version | -v          show the version
+  zinc help [<command>]                  show usage; with a command, expand its details
+  zinc init [--force]                    one-time setup: notifications + this dir on user PATH
 
-  zinc init [--force]                   one-time setup: register notifications + add this dir to user PATH
-  zinc root [<path>]                    show/set global output root
-  zinc list                             list repos
-  zinc add <name> --source <path> [--output <path>]
-  zinc remove <name>
-  zinc set <name> [--source <path>] [--output <path>] [--password <pw>]
-                  [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>]
-                  [--mhe on|off] [--exclude <glob>]
-  zinc config [get|set|unset|path|list|show] [<key>] [<value>]      global settings
-  zinc backup <name|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]
-  zinc restore <name> [--dest <path>] [--password <pw>]
-                       [--overwrite|--no-overwrite] [--no-delete] [--check-list]
-  zinc restore <name> --only <relative-path> [--dest <path>] [--from <pack|index>]
-                       restore just that file/dir; add --check-list to list its versions
-  zinc repair <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>] [--rehash] [--check] [--password <password>]
-                        fix the index and the manifest; --rehash recomputes pack hashes from disk
-  zinc compact <name> [--password <pw>] [--pack <name|index>] [--min-gain <5%|8M>] [--yes] [--notify]
-                       drop copies a newer version has superseded; same name, cloud overwrite
-  zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]
-  zinc status [--all] [<name>]
-  zinc completion <powershell|bash|zsh|fish> [--install]   generate a tab-completion script
+Settings:
+  zinc config [get|set|unset|path|list|show] [<key>] [<value>]
+
+Repositories:
+  zinc root [<path>]                     show/set the global output root
+  zinc list [--names]                    list repos
+  zinc add <repo_name> --source <path> [--output <path>]
+  zinc remove <repo_name>
+  zinc set <repo_name> [--source <path>] [--output <path>] [--compress <0-9>]
+                    [--solid <block|off>] [--mhe on|off] [--max-pack-byte <quantity>]
+                    [--exclude <glob>] [--password <password>]
+
+Backup and restore:
+  zinc backup <repo_name|--all> [--notify] [--notify-empty] [--no-verify] [--password <password>]
+  zinc restore <repo_name> --dest <path> [--only <rel_path>] [--from <pack_name>]
+                        [--no-overwrite] [--no-delete] [--check] [--password <password>]
+  zinc compact <repo_name> [--pack <pack_name>] [--min-gain <threshold>] [--check]
+                        [--notify] [--no-verify] [--password <password>]
+
+Verify and repair:
+  zinc verify <repo_name|--all> [--sample <percent>] [--password-only|--hash-only]
+  zinc status [--all] [<repo_name>]
+  zinc repair <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>]
+                        [--rehash] [--check] [--password <password>]
+
+Automation:
+  zinc schedule <repo_name|--all> --daily --at HH:MM[,HH:MM...] [--check] [--no-notify] [--password <password>]
+  zinc schedule <repo_name|--all> --weekly 1,3 --at HH:MM
+  zinc schedule <repo_name|--all> --monthly 1,15 --at HH:MM
+  zinc schedule --list                   list all scheduled tasks
+  zinc unschedule [<repo_name>|--all]
+
+Tools:
+  zinc completion <shell> [--install]    generate a tab-completion script
   zinc hash-compare --source1 <path> --source2 <path>
-  zinc hash-compare --source <file> --hash-value <SHA-256>   compare hashes or trees by hand
-  zinc schedule <name|--all> --daily --at HH:MM[,HH:MM...]
-  zinc schedule <name|--all> --weekly 1,3 --at HH:MM
-  zinc schedule <name|--all> --monthly 1,15 --at HH:MM [--yes]
-  zinc schedule --list                 list all scheduled tasks
-  zinc unschedule [<name>|--all]
-  zinc version | --version | -v        show the version
+  zinc hash-compare --source <path> --hash-value <SHA-256>
 
 Notes:
   - every pack is a complete encrypted 7z; its name is the packing time, restore goes by name
   - compression level 0 is always non-solid (one folder per file); with level >0 solid blocks default to 64M, and --solid off keeps one block per file
   - the header is encrypted by default (-mhe=on): file names stay out of plaintext, so a drive scanning names sees nothing; --mhe off trades that away so a damaged header still lists the pack
-  - without --password the password comes from repo > settings; backup/restore prompt only if none exists, schedule fails instead
-  - schedule stores the resolved password in plain text inside the task; recreate the task after changing the password (zinc unschedule <name>, then schedule again)
-  - restore overwrites same-name files by default; --no-overwrite keeps both
-  - --check-list only prints the order, --dest may be omitted
+  - without --password the password comes from repo > settings > a prompt; schedule fails instead
+  - destructive commands (restore / compact / repair / schedule / remove) print the plan and ask y/N first; set confirm_tips to false to stop asking
+  - schedule stores the resolved password in plain text inside the task; recreate the task after changing the password (zinc unschedule <repo_name>, then schedule again)
+  - restore overwrites same-name files by default; --no-overwrite keeps both; --dest is required (only --check may omit it)
+  - restore into an empty directory and copy the result back by hand; restoring straight into the source puts your only copy at risk
   - restore also applies deletions recorded by later backups; --no-delete keeps those files
   - compact drops copies a newer version has superseded, so those old versions disappear; an emptied pack keeps only a placeholder
-  - the index is a cache; zinc repair rebuilds it from the packs themselves
-  - output defaults to <root>\<name>; set it with zinc root
+  - a broken index or manifest is rebuilt by zinc repair; the packs themselves are the source of truth
+  - output defaults to <root>\<repo_name>; set it with zinc root
   - run zinc init once after unzipping; then just type zinc in any terminal
-  - use zinc-register.exe / zinc-unregister.exe from the tools folder for install and removal; zinc init is the light version that does not require 7-Zip
-  - unschedule <name> removes that repo's tasks; unschedule --all removes every zinc task; unschedule all removes only the --all summary task
+  - use zinc-register.exe / zinc-unregister.exe from the tools folder for install and removal
+  - unschedule <repo_name> removes that repo's tasks; unschedule --all removes every zinc task; unschedule all removes only the --all summary task
+  - detailed help: zinc help <command>
 `,
 
 	ErrPrefix:         "[error] ",
@@ -1016,20 +1040,20 @@ Notes:
 
 	RootUnset:          "(not set)",
 	UsageList:          "usage: zinc list [--names]",
-	UsageStatus:        "usage: zinc status [--all] [<name>] (--all cannot be combined with a repo name)",
+	UsageStatus:        "usage: zinc status [--all] [<repo_name>] (--all cannot be combined with a repo name)",
 	UsageRoot:          "usage: zinc root [<path>]",
 	RootNotDir:         "root path exists and is not a directory: %s",
 	NoRepos:            "no repos yet, run zinc add first",
 	ListItem:           "%s\n  source: %s\n  output: %s\n",
-	UsageAdd:           "usage: zinc add <name> --source <path>",
+	UsageAdd:           "usage: zinc add <repo_name> --source <path>",
 	MissingSource:      "missing --source",
 	RepoExists:         "repo %q already exists, use zinc set",
 	RootNotSet:         "root is not set; run zinc root <path> or pass --output",
 	WarnSourceMissing:  "[warn] source directory does not exist yet: %s\n",
 	AddedRepo:          "added %s\n  source: %s\n  output: %s\n",
-	UsageRemove:        "usage: zinc remove <name>",
+	UsageRemove:        "usage: zinc remove <repo_name>",
 	RemovedRepo:        "removed repo %s (packs and index are kept)\n",
-	UsageSet:           "usage: zinc set <name> [--source <path>] [--output <path>] [--password <pw>]\n                    [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>] [--mhe on|off] [--exclude <glob>]",
+	UsageSet:           "usage: zinc set <repo_name> [--source <path>] [--output <path>] [--compress <0-9>] [--solid <block|off>] [--mhe on|off>] [--max-pack-byte <quantity>] [--exclude <glob>] [--password <password>]",
 	NeedSourceOrOutput: "at least one setting is required: --source / --output / --password / --max-pack-byte / --compress / --solid / --mhe / --exclude",
 	UpdatedRepo:        "updated %s\n  source: %s\n  output: %s\n",
 	PathInvalid:        "invalid path: %s (%v)",
@@ -1046,7 +1070,7 @@ Notes:
 	FlagNotify:           "send a Windows notification",
 	FlagNotifyEmpty:      "notify even when nothing changed",
 	FlagNoVerify:         "skip 7za t self-check",
-	UsageBackup:          "usage: zinc backup <name> or zinc backup --all",
+	UsageBackup:          "usage: zinc backup <repo_name|--all>",
 	NoReposBackup:        "no repos",
 	ScanErrSource:        "%s · source directory not found",
 	ScanErrGeneric:       "%s · scan failed: %v",
@@ -1074,7 +1098,7 @@ Notes:
 	BackupPwAborted:   "cancelled: password differs from config",
 
 	FlagDest:            "restore destination",
-	UsageRestore:        "usage: zinc restore <name> --dest <path>",
+	UsageRestore:        "usage: zinc restore <repo_name> --dest <path> [--only <rel_path>] [--from <pack_name>] [--no-overwrite] [--no-delete] [--check] [--password <password>]",
 	MissingDest:         "missing --dest",
 	NoVolumesRestore:    "no packs found: %s",
 	CreateDestFailed:    "failed to create restore directory: %w",
@@ -1091,7 +1115,7 @@ Notes:
 	FlagHashOnly:        "check SHA-256 only, skip the password",
 	VerifyFlagConflict:  "--password-only and --hash-only cannot be combined",
 	VerifyNoPassword:    "no password available: set a repo password or settings.default_password",
-	UsageVerify:         "usage: zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]",
+	UsageVerify:         "usage: zinc verify <repo_name|--all> [--sample <percent>] [--password-only|--hash-only]",
 	NoManifest:          "no manifest (%s), cannot verify",
 	ManifestBroken:      "manifest %s is corrupt or unreadable: %v",
 	SampleInvalid:       "--sample must be between 1 and 100: %d",
@@ -1113,7 +1137,7 @@ Notes:
 	FlagYes:           "skip the monthly-day warning",
 	NeedPeriod:        "one of --daily / --weekly / --monthly is required",
 	NeedAt:            "missing --at HH:MM",
-	UsageSchedule:     "usage: zinc schedule <name|--all> ...",
+	UsageSchedule:     "usage: zinc schedule <repo_name|--all> ...",
 	TimeInvalid:       "invalid time: %q (expected HH:MM)",
 	MonthlyDayInvalid: "invalid day of month: %q (expected 1-31)",
 	MonthlyWarn:       "you set day %d of every month, but February has no day %d, and Apr/Jun/Sep/Nov only have 30 days; those months will be skipped.\n",
@@ -1126,15 +1150,15 @@ Notes:
 	Deleted:           "[deleted] %s\n",
 	NoMatch:           "no matching tasks",
 	FlagAllUnschedule: "delete all zinc tasks",
-	UsageUnschedule:   "usage: zinc unschedule <name> or zinc unschedule --all",
+	UsageUnschedule:   "usage: zinc unschedule <repo_name> or zinc unschedule --all",
 
 	SchedulePwFromCLI:      "[password] from the command line\n",
 	SchedulePwFromRepo:     "[password] from the repo config\n",
 	SchedulePwFromSettings: "[password] from settings.json (default_password)\n",
-	SchedulePwMissing:      "no usable password: pass --password, or set one with zinc config set default_password <pw>",
+	SchedulePwMissing:      "no usable password: pass --password, or set one with zinc config set default_password <password>",
 	SchedulePwMixed:        "the target repos do not share one password, so a single task cannot cover them; create separate tasks or unify the passwords",
 
-	UsageCompletion:           "usage: zinc completion <powershell|bash|zsh|fish> [--install]",
+	UsageCompletion:           "usage: zinc completion <shell> [--install]",
 	FlagCompletionInstall:     "PowerShell only: write the script and add a loader line to $PROFILE",
 	FlagListNames:             "one repo name per line (for scripts and completion)",
 	CompletionUnknownShell:    "unsupported shell: %s (choose powershell, bash, zsh or fish)",
@@ -1352,7 +1376,7 @@ Notes:
 	FlagCompactPack:        "rewrite only this pack (name or index)",
 	FlagCompactMinGain:     "skip rewrites that save less than this: 5% / 8M / 0 (default from settings.compact_min_gain)",
 	FlagYesCompact:         "actually rewrite (without it, only report)",
-	UsageCompact:           "usage: zinc compact <name> [--pack <name|index>] [--min-gain <5%%|8M>] [--yes] [--notify] [--password <pw>]",
+	UsageCompact:           "usage: zinc compact <repo_name> [--pack <pack_name>] [--min-gain <threshold>] [--check] [--notify] [--no-verify] [--password <password>]",
 	CompactStart:           "[compact] %s: checking %d packs (headers only)\n",
 	CompactDryRunHead:      "[dry-run] --check given, nothing will be changed\n",
 	CompactDryRunTail:      "drop --check to run it (it asks y/N once more).\n",
@@ -1394,7 +1418,7 @@ Notes:
 	StatusPacks:   "  packs: %d batches / %d packs / %s\n",
 	StatusContent: "  content dates: %s ~ %s\n",
 
-	UsageHashCompare:    "usage: zinc hash-compare --source1 <path> --source2 <path>\n       zinc hash-compare --source <file> --hash-value <SHA-256>",
+	UsageHashCompare:    "usage: zinc hash-compare --source1 <path> --source2 <path>\n       zinc hash-compare --source <path> --hash-value <SHA-256>",
 	FlagHashSource1:     "left side: a file or a directory",
 	FlagHashSource2:     "right side: a file or a directory",
 	FlagHashSource:      "file whose SHA-256 is computed",

@@ -122,7 +122,7 @@ var zhHelp = map[string]HelpTopic{
 		},
 	},
 	"restore": {
-		Usage: "restore <仓库名> [--only <相对路径>] [--dest <目标路径>] [--from <包名>]\n" +
+		Usage: "restore <仓库名> <目标路径> [--only <相对路径>] [--from <包名>]\n" +
 			"                 [--no-overwrite] [--no-delete] [--check] [--password <密码>]",
 		Purpose: `把备份包里的内容还原到磁盘。默认还原整个仓库的全部文件，也可以只还原一个路径
 （--only），或从某个包开始还原（--from）。
@@ -142,11 +142,10 @@ var zhHelp = map[string]HelpTopic{
 		Params: []string{
 			"--only <相对路径>：只恢复这一个文件或目录。它同样会重放与该路径相关的删除记录，\n" +
 				"  所以恢复出来的结果与整仓恢复一致，只是范围小。",
-			"--dest <目标路径>：恢复到别处。不给就回到仓库登记的源目录。",
 			"--from <包名>：只从这个包开始恢复，不给就从第一个包开始。",
 			"--no-overwrite：目标已存在同名文件时保留它，不覆盖。",
 			"--no-delete：不执行删除记录，目标目录里多出来的旧文件统统保留。",
-			"--check：只打印将要执行的清单，不询问、不写盘。",
+			"--check：只打印将要执行的清单，不询问、不写盘；此时可以不写目标路径。",
 			"--password <密码>：不给时按「仓库 > settings」取，取不到会交互询问。",
 		},
 		Notes: []string{
@@ -199,7 +198,7 @@ restoring needs no special handling.`,
 		},
 	},
 	"restore": {
-		Usage: "restore <repo_name> [--only <rel_path>] [--dest <path>] [--from <pack_name>]\n" +
+		Usage: "restore <repo_name> <dest_path> [--only <rel_path>] [--from <pack_name>]\n" +
 			"                 [--no-overwrite] [--no-delete] [--check] [--password <password>]",
 		Purpose: `Put the contents of the packs back on disk. By default it restores everything in the repo;
 --only narrows it to one path, and --from starts at a given pack.
@@ -223,11 +222,10 @@ is removed from the destination as well. That is what "restore to that moment" m
 		Params: []string{
 			"--only <rel_path>: restore just this file or directory. It still replays the deletions\n" +
 				"  related to that path, so the result matches a full restore, only narrower.",
-			"--dest <path>: restore somewhere else. Omit to restore to the repo's source directory.",
 			"--from <pack_name>: start at this pack instead of the first one.",
 			"--no-overwrite: keep an existing same-name file instead of overwriting it.",
 			"--no-delete: do not replay deletions; keep the extra old files in the destination.",
-			"--check: print the plan, ask nothing, write nothing.",
+			"--check: print the plan, ask nothing, write nothing; the destination may be omitted.",
 			"--password <password>: omit to use repo > settings; prompt if neither has one.",
 		},
 		Notes: []string{
