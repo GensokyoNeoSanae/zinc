@@ -14,6 +14,7 @@ const (
 	defaultCompressLvl = 0                             // 存储模式
 	defaultSolidBlock  = int64(64 * 1024 * 1024)       // 固实块上限 64 MB
 	defaultHeaderCrypt = true                          // 头部加密（-mhe=on）
+	defaultConfirmTips = true                          // 危险操作前询问 y/n
 )
 
 // Repo 是一个备份仓库的配置。字段留空表示回落到 settings.json。

@@ -258,15 +258,22 @@ type Messages struct {
 	ConfigUnknownKey    string
 	ConfigBadValue      string
 	UsageConfig         string
-	ConfigPath          string
-	ConfigHeader        string
-	ConfigItem          string
-	ConfigSet           string
-	ConfigUnset         string
-	ConfigNotSet        string
-	ConfigPromptValue   string
-	ConfigAuto          string
-	ConfigEmpty         string
+	HelpUnknownTopic    string
+	// zinc help <命令> 的分节标题
+	HelpUsage         string
+	HelpPurpose       string
+	HelpHow           string
+	HelpParams        string
+	HelpNotes         string
+	ConfigPath        string
+	ConfigHeader      string
+	ConfigItem        string
+	ConfigSet         string
+	ConfigUnset       string
+	ConfigNotSet      string
+	ConfigPromptValue string
+	ConfigAuto        string
+	ConfigEmpty       string
 
 	// index
 	IndexBadHeader        string
@@ -322,10 +329,8 @@ type Messages struct {
 	VerifyRmSummary      string
 
 	// restore
-	FlagOverwrite        string
 	FlagNoOverwrite      string
-	FlagCheckList        string
-	FlagConflict         string
+	FlagCheck            string
 	ModeOverwrite        string
 	ModeRename           string
 	DestUnset            string
@@ -334,19 +339,23 @@ type Messages struct {
 	CheckListHeader      string
 	CheckListItem        string
 	CheckListTotal       string
-	PackOrderBroken      string
-	NoPacksRestore       string
-	FlagOnly             string
-	FlagFrom             string
-	FromRequiresOnly     string
-	RestorePartial       string
-	MissingOnly          string
-	PathNotBackedUp      string
-	PackNotSpecified     string
-	OnlyOrigin           string
-	OnlyDone             string
-	OnlyVersions         string
-	OnlyNoVersions       string
+	// 危险操作确认（confirm_tips=on 时生效）
+	ConfirmPrompt      string
+	ConfirmCancelled   string
+	RestoreConfirmHead string
+	PackOrderBroken    string
+	NoPacksRestore     string
+	FlagOnly           string
+	FlagFrom           string
+	FromRequiresOnly   string
+	RestorePartial     string
+	MissingOnly        string
+	PathNotBackedUp    string
+	PackNotSpecified   string
+	OnlyOrigin         string
+	OnlyDone           string
+	OnlyVersions       string
+	OnlyNoVersions     string
 
 	// reindex
 	FlagPackStart     string
@@ -732,6 +741,12 @@ var zhMessages = &Messages{
 	ConfigUnknownKey:    "未知的设置项: %s",
 	ConfigBadValue:      "设置项 %s 的值无效: %q",
 	UsageConfig:         "用法: zinc config [get|set|unset|path|list|show] [<key>] [<value>]",
+	HelpUnknownTopic:    "没有「%s」的详细帮助。先用 zinc --help 看命令列表，再 zinc help <命令> 展开说明。",
+	HelpUsage:           "用法",
+	HelpPurpose:         "目的",
+	HelpHow:             "原理",
+	HelpParams:          "参数",
+	HelpNotes:           "注意",
 	ConfigPath:          "配置文件: %s\n",
 	ConfigHeader:        "全局设置（%s）\n",
 	ConfigItem:          "  %-22s = %s\n",
@@ -792,10 +807,11 @@ var zhMessages = &Messages{
 	VerifyRmCorrupt:      "[损坏] 删除记录 %s\n",
 	VerifyRmSummary:      "删除记录: 通过 %d, 损坏 %d, 缺失 %d\n",
 
-	FlagOverwrite:        "恢复时覆盖同名文件",
 	FlagNoOverwrite:      "恢复时不覆盖，同名文件重命名为 _1",
-	FlagCheckList:        "只列出将解压的包顺序，不动文件",
-	FlagConflict:         "不能同时使用 --overwrite 与 --no-overwrite",
+	FlagCheck:            "只打印计划，不执行、不询问",
+	ConfirmPrompt:        "继续吗？[y/N] ",
+	ConfirmCancelled:     "已取消，未做任何改动。\n",
+	RestoreConfirmHead:   "目标目录 %s 里已有文件，恢复可能覆盖或删除它们。\n",
 	ModeOverwrite:        "覆盖",
 	ModeRename:           "不覆盖",
 	DestUnset:            "(未指定)",
@@ -851,8 +867,8 @@ var zhMessages = &Messages{
 	FlagYesCompact:         "真正执行（不给时只报告）",
 	UsageCompact:           "用法: zinc compact <name> [--pack <名|序号>] [--min-gain <5%%|8M>] [--yes] [--notify] [--password <pw>]",
 	CompactStart:           "[压缩] %s：检查 %d 个包（只读归档头）\n",
-	CompactDryRunHead:      "[预演] 没有 --yes，这一步只看不改\n",
-	CompactDryRunTail:      "确认无误后加 --yes 执行。\n",
+	CompactDryRunHead:      "[预演] 给了 --check，这一步只看不改\n",
+	CompactDryRunTail:      "确认无误后去掉 --check 执行（执行前会再问一次 y/N）。\n",
 	CompactPlanPack:        "  %s · 可删 %d 个 / %s（%.1f%%）→ 待重写\n",
 	CompactSkipNone:        "  %s · 没有可删的文件\n",
 	CompactSkipSmall:       "  %s · 可删 %d 个 / %s（%.1f%%），未达阈值 %s → 跳过\n",
@@ -1194,6 +1210,12 @@ Notes:
 	ConfigUnknownKey:    "unknown setting: %s",
 	ConfigBadValue:      "invalid value for %s: %q",
 	UsageConfig:         "usage: zinc config [get|set|unset|path|list|show] [<key>] [<value>]",
+	HelpUnknownTopic:    "no detailed help for \"%s\". Run zinc --help for the command list, then zinc help <command>.",
+	HelpUsage:           "Usage",
+	HelpPurpose:         "Purpose",
+	HelpHow:             "How it works",
+	HelpParams:          "Arguments",
+	HelpNotes:           "Notes",
 	ConfigPath:          "settings file: %s\n",
 	ConfigHeader:        "global settings (%s)\n",
 	ConfigItem:          "  %-22s = %s\n",
@@ -1254,10 +1276,11 @@ Notes:
 	VerifyRmCorrupt:      "[corrupt] deletion record %s\n",
 	VerifyRmSummary:      "deletion records: %d ok, %d corrupt, %d missing\n",
 
-	FlagOverwrite:        "overwrite files with the same name on restore",
 	FlagNoOverwrite:      "keep both: same-name files are restored as _1",
-	FlagCheckList:        "only list the packs and their order, do not touch files",
-	FlagConflict:         "--overwrite and --no-overwrite cannot be used together",
+	FlagCheck:            "print the plan only; do not run or ask",
+	ConfirmPrompt:        "Continue? [y/N] ",
+	ConfirmCancelled:     "Cancelled; nothing changed.\n",
+	RestoreConfirmHead:   "The destination %s already has files; restoring may overwrite or delete them.\n",
 	ModeOverwrite:        "overwrite",
 	ModeRename:           "no-overwrite",
 	DestUnset:            "(not specified)",
@@ -1313,8 +1336,8 @@ Notes:
 	FlagYesCompact:         "actually rewrite (without it, only report)",
 	UsageCompact:           "usage: zinc compact <name> [--pack <name|index>] [--min-gain <5%%|8M>] [--yes] [--notify] [--password <pw>]",
 	CompactStart:           "[compact] %s: checking %d packs (headers only)\n",
-	CompactDryRunHead:      "[dry-run] no --yes, nothing will be changed\n",
-	CompactDryRunTail:      "add --yes to do it.\n",
+	CompactDryRunHead:      "[dry-run] --check given, nothing will be changed\n",
+	CompactDryRunTail:      "drop --check to run it (it asks y/N once more).\n",
 	CompactPlanPack:        "  %s · %d dead file(s) / %s (%.1f%%) → will rewrite\n",
 	CompactSkipNone:        "  %s · nothing to drop\n",
 	CompactSkipSmall:       "  %s · %d dead file(s) / %s (%.1f%%), below the %s threshold → skipped\n",

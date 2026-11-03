@@ -174,6 +174,12 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 	if err != nil {
 		return err
 	}
+	// 目标已经有东西才问一句：空目录直接恢复。非空意味着可能覆盖同名文件、
+	// 也可能按删除记录删掉里面的文件，这是整个工具唯一会动既有数据的地方。
+	if dirHasEntries(target) && !askConfirm(set, M.RestoreConfirmHead, target) {
+		fmt.Print(M.ConfirmCancelled)
+		return nil
+	}
 	if err := os.MkdirAll(target, 0755); err != nil {
 		return fmt.Errorf(M.CreateDestFailed, err)
 	}
@@ -427,6 +433,11 @@ func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, onl
 	}
 	if err := checkRestoreDest(repo, dest); err != nil {
 		return err
+	}
+	// 跟整仓恢复同一个判定：目标目录非空才问一句。
+	if dirHasEntries(dest) && !askConfirm(set, M.RestoreConfirmHead, dest) {
+		fmt.Print(M.ConfirmCancelled)
+		return nil
 	}
 
 	// --from：只要那一个包，按原样解，不套删除记录（用户要的是「那一版」）

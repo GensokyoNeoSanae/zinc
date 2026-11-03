@@ -638,9 +638,8 @@ func cmdRestore(args []string) {
 	fs := flag.NewFlagSet("restore", flag.ExitOnError)
 	dest := fs.String("dest", "", M.FlagDest)
 	password := fs.String("password", "", M.FlagPassword)
-	overwrite := fs.Bool("overwrite", false, M.FlagOverwrite)
 	noOverwrite := fs.Bool("no-overwrite", false, M.FlagNoOverwrite)
-	checkList := fs.Bool("check-list", false, M.FlagCheckList)
+	checkList := fs.Bool("check", false, M.FlagCheck)
 	noDelete := fs.Bool("no-delete", false, M.FlagNoDelete)
 	notify := fs.Bool("notify", set.completeNotify(), M.FlagNotifyWarn)
 	only := fs.String("only", "", M.FlagOnly)
@@ -648,17 +647,12 @@ func cmdRestore(args []string) {
 	fs.Parse(reorderArgs(args))
 	requireArgs(fs, 1, 1, M.UsageRestore)
 	name := fs.Arg(0)
-	if *overwrite && *noOverwrite {
-		die(M.FlagConflict)
-	}
 	if *from != "" && *only == "" {
 		die(M.FromRequiresOnly)
 	}
 
+	// 覆盖是恢复的默认语义，--no-overwrite 才是例外；不再提供 --overwrite。
 	ow := set.restoreOverwrite()
-	if *overwrite {
-		ow = true
-	}
 	if *noOverwrite {
 		ow = false
 	}
@@ -891,7 +885,7 @@ func cmdCompact(args []string) {
 	password := fs.String("password", "", M.FlagPassword)
 	packSpec := fs.String("pack", "", M.FlagCompactPack)
 	minGain := fs.String("min-gain", set.compactMinGain(), M.FlagCompactMinGain)
-	yes := fs.Bool("yes", false, M.FlagYesCompact)
+	check := fs.Bool("check", false, M.FlagCheck)
 	noVerify := fs.Bool("no-verify", false, M.FlagNoVerify)
 	notify := fs.Bool("notify", set.completeNotify(), M.FlagNotifyCompact)
 	fs.Parse(reorderArgs(args))
@@ -905,7 +899,7 @@ func cmdCompact(args []string) {
 	if pw == "" {
 		pw = promptPassword(false)
 	}
-	if err := runCompact(name, cfg, set, pw, *packSpec, *minGain, *yes, *noVerify, *notify); err != nil {
+	if err := runCompact(name, cfg, set, pw, *packSpec, *minGain, *check, *noVerify, *notify); err != nil {
 		logf("compact %s: failed: %v", name, err)
 		die("%v", err)
 	}

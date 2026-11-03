@@ -21,6 +21,7 @@ type Settings struct {
 	CompressionLevel   *int     `json:"compression_level,omitempty"`
 	SolidBlock         *int64   `json:"solid_block,omitempty"`       // 0 = 非固实（每文件独立块）
 	HeaderCrypt        *bool    `json:"header_encryption,omitempty"` // nil = 开（-mhe=on）
+	ConfirmTips        *bool    `json:"confirm_tips,omitempty"`      // nil = 开（危险操作问 y/n）
 	SevenZipPath       string   `json:"7zip_path,omitempty"`
 	Lang               string   `json:"lang,omitempty"`
 	LockTimeoutMinutes int      `json:"lock_timeout_minutes,omitempty"`
@@ -128,6 +129,15 @@ func (s *Settings) headerCrypt() bool {
 	return *s.HeaderCrypt
 }
 
+// confirmTips 返回危险操作前是否要问 y/n。关掉之后 restore / compact /
+// repair / schedule / remove 全部直接执行，适合脚本里批量跑或全程不交互。
+func (s *Settings) confirmTips() bool {
+	if s.ConfirmTips == nil {
+		return defaultConfirmTips
+	}
+	return *s.ConfirmTips
+}
+
 // sevenZipPath 返回可用的 7-Zip：显式配置优先，没配（或配了个不存在的文件）就在
 // PATH 和常见安装目录里现找。找不到时返回空串，由调用方决定怎么报错。
 // 配置的路径不做存在性检查就去 exec，用户只会看到一句“这个包解压报错”——那是在骗人。
@@ -200,6 +210,7 @@ var cfgKeys = []cfgKey{
 	{"compression_level", kInt, "7z 压缩等级 0-9（0=仅存储）"},
 	{"solid_block", kSolid, "7z 固实块上限：64M / off（块越小越抗损，压缩率略降；等级 0 时恒为非固实）"},
 	{"header_encryption", kBool, "7z 头部加密（默认 true）：连文件名一起加密，避免网盘按文件名审查；关掉后头损坏仍能列目录"},
+	{"confirm_tips", kBool, "危险操作前询问 y/n（默认 true）；关掉后 restore/compact/repair/schedule/remove 直接执行"},
 	{"7zip_path", kString, "7za.exe 路径"},
 	{"lang", kString, "界面语言 zh / en，空=自动"},
 	{"lock_timeout_minutes", kInt, "仓库锁最长等待分钟数"},
@@ -248,6 +259,8 @@ func cfgValueString(s *Settings, key string) string {
 		return "off"
 	case "header_encryption":
 		return strconv.FormatBool(s.headerCrypt())
+	case "confirm_tips":
+		return strconv.FormatBool(s.confirmTips())
 	case "7zip_path":
 		return s.sevenZipPath()
 	case "lang":
@@ -303,6 +316,8 @@ func cfgIsSet(s *Settings, key string) bool {
 		return s.SolidBlock != nil
 	case "header_encryption":
 		return s.HeaderCrypt != nil
+	case "confirm_tips":
+		return s.ConfirmTips != nil
 	case "7zip_path":
 		return s.SevenZipPath != ""
 	case "lang":
@@ -360,6 +375,8 @@ func cfgSet(s *Settings, key, val string) error {
 			s.CompleteNotify = &b
 		case "header_encryption":
 			s.HeaderCrypt = &b
+		case "confirm_tips":
+			s.ConfirmTips = &b
 		}
 	case kSize:
 		n, err := parseSize(val)
@@ -417,6 +434,8 @@ func cfgUnset(s *Settings, key string) error {
 		s.SolidBlock = nil
 	case "header_encryption":
 		s.HeaderCrypt = nil
+	case "confirm_tips":
+		s.ConfirmTips = nil
 	case "7zip_path":
 		s.SevenZipPath = ""
 	case "lang":

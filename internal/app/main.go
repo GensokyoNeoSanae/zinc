@@ -57,6 +57,11 @@ func Main() {
 	case "hash-compare":
 		cmdHashCompare(rest)
 	case "help", "--help", "-h":
+		// `zinc help <命令>` 展开单条命令的详细说明；不带参数才是主面板
+		if len(rest) > 0 {
+			printHelp(rest)
+			return
+		}
 		usage()
 	case "version", "--version", "-v":
 		// 跟其他命令一样，多余参数直接报错，不静默忽略

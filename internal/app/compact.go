@@ -337,7 +337,7 @@ func keepRange(keep []packEntry) (string, string) {
 }
 
 // runCompact 是 compact 命令的主体
-func runCompact(name string, cfg *Config, set *Settings, password, packSpec, minGain string, yes, noVerify, notify bool) error {
+func runCompact(name string, cfg *Config, set *Settings, password, packSpec, minGain string, check, noVerify, notify bool) error {
 	repo, err := cfg.repo(name)
 	if err != nil {
 		return err
@@ -382,7 +382,7 @@ func runCompact(name string, cfg *Config, set *Settings, password, packSpec, min
 	}
 
 	fmt.Printf(M.CompactStart, name, len(packs))
-	if !yes {
+	if check {
 		fmt.Print(M.CompactDryRunHead)
 	}
 
@@ -423,13 +423,15 @@ func runCompact(name string, cfg *Config, set *Settings, password, packSpec, min
 		return nil
 	}
 
-	if !yes {
-		fmt.Printf(M.CompactPlanSummary, len(plans), humanSize(totalDrop))
+	fmt.Printf(M.CompactPlanSummary, len(plans), humanSize(totalDrop))
+	if check {
 		fmt.Print(M.CompactDryRunTail)
 		return nil
 	}
-
-	fmt.Printf(M.CompactPlanSummary, len(plans), humanSize(totalDrop))
+	if !askConfirm(set, "") {
+		fmt.Print(M.ConfirmCancelled)
+		return nil
+	}
 
 	free, ferr := freeSpaceAt(repo.Output)
 	var done []compactResult
