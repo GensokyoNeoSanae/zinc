@@ -462,7 +462,7 @@ var zhMessages = &Messages{
   zinc set <name> [--source <path>] [--output <path>] [--password <pw>]
                   [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>]
                   [--mhe on|off] [--exclude <glob>]
-  zinc config [get|set|unset|path] [<key>] [<value>]      全局设置
+  zinc config [get|set|unset|path|list|show] [<key>] [<value>]      全局设置
   zinc backup <name|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]
   zinc restore <name> [--dest <path>] [--password <pw>]
                        [--overwrite|--no-overwrite] [--no-delete] [--check-list]
@@ -490,7 +490,8 @@ var zhMessages = &Messages{
   - 头部默认加密（-mhe=on）：文件名也不明文，网盘按文件名审查时看不到包里有什么；--mhe off 关掉，代价是头一旦损坏整个包连目录都列不出来
   - 不给 --password 时按「仓库 > settings」取；backup/restore 取不到才交互输入，schedule 取不到直接报错
   - schedule 会把解析到的密码明文写进计划任务，之后改了密码要重建任务（zinc unschedule <name> 再 schedule）
-  - 恢复默认覆盖同名文件（--no-overwrite 则保留两份），--check-list 只列顺序不动手
+  - 恢复默认覆盖同名文件（--no-overwrite 则保留两份）
+  - --check-list 只列顺序不动手；--dest 可省略
   - 恢复会执行之后备份记下的删除（--no-delete 保留这些文件）；删除记录是输出目录里的 .rm 旁注
   - compact 删掉的是「已被新版取代 / 已从源目录删除」的副本，那些旧版本随之消失；包被腾空后只留一个占位文件
   - 索引只是缓存，丢了用 zinc reindex 从包本身重建
@@ -733,7 +734,7 @@ var zhMessages = &Messages{
 	ParseSettingsFailed: "解析设置文件 %s 失败: %w",
 	ConfigUnknownKey:    "未知的设置项: %s",
 	ConfigBadValue:      "设置项 %s 的值无效: %q",
-	UsageConfig:         "用法: zinc config [get|set|unset|path] [<key>] [<value>]",
+	UsageConfig:         "用法: zinc config [get|set|unset|path|list|show] [<key>] [<value>]",
 	ConfigPath:          "配置文件: %s\n",
 	ConfigHeader:        "全局设置（%s）\n",
 	ConfigItem:          "  %-22s = %s\n",
@@ -926,7 +927,7 @@ Usage:
   zinc set <name> [--source <path>] [--output <path>] [--password <pw>]
                   [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>]
                   [--mhe on|off] [--exclude <glob>]
-  zinc config [get|set|unset|path] [<key>] [<value>]      global settings
+  zinc config [get|set|unset|path|list|show] [<key>] [<value>]      global settings
   zinc backup <name|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]
   zinc restore <name> [--dest <path>] [--password <pw>]
                        [--overwrite|--no-overwrite] [--no-delete] [--check-list]
@@ -950,14 +951,14 @@ Usage:
 
 Notes:
   - every pack is a complete encrypted 7z; its name is the packing time, restore goes by name
-  - solid blocks default to 64M: one bad byte can cost the rest of that block; --solid off makes one block per file
   - compression level 0 is always non-solid (one folder per file); with level >0 solid blocks default to 64M, and --solid off keeps one block per file
   - the header is encrypted by default (-mhe=on): file names stay out of plaintext, so a drive scanning names sees nothing; --mhe off trades that away so a damaged header still lists the pack
   - without --password the password comes from repo > settings; backup/restore prompt only if none exists, schedule fails instead
   - schedule stores the resolved password in plain text inside the task; recreate the task after changing the password (zinc unschedule <name>, then schedule again)
   - restore overwrites same-name files by default; --no-overwrite keeps both
-  - restore also applies deletions recorded by later backups; --no-delete keeps those files
   - --check-list only prints the order, --dest may be omitted
+  - restore also applies deletions recorded by later backups; --no-delete keeps those files
+  - compact drops copies a newer version has superseded, so those old versions disappear; an emptied pack keeps only a placeholder
   - the index is a cache; zinc reindex rebuilds it from the packs themselves
   - output defaults to <root>\<name>; set it with zinc root
   - run zinc init once after unzipping; then just type zinc in any terminal
@@ -1198,7 +1199,7 @@ Notes:
 	ParseSettingsFailed: "failed to parse settings file %s: %w",
 	ConfigUnknownKey:    "unknown setting: %s",
 	ConfigBadValue:      "invalid value for %s: %q",
-	UsageConfig:         "usage: zinc config [get|set|unset|path] [<key>] [<value>]",
+	UsageConfig:         "usage: zinc config [get|set|unset|path|list|show] [<key>] [<value>]",
 	ConfigPath:          "settings file: %s\n",
 	ConfigHeader:        "global settings (%s)\n",
 	ConfigItem:          "  %-22s = %s\n",

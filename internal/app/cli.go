@@ -303,6 +303,11 @@ func cmdRemove(args []string) {
 	if len(args) < 1 {
 		die(M.UsageRemove)
 	}
+	// 跟 root 一致：-h 打印用法、退出码 0，别把 --help 当成仓库名去查
+	if args[0] == "-h" || args[0] == "--help" {
+		fmt.Print(M.UsageRemove)
+		return
+	}
 	if len(args) > 1 {
 		die(M.TooManyArgs, args[1])
 	}
