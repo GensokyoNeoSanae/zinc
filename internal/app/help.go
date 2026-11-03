@@ -86,6 +86,166 @@ func printHelp(args []string) {
 }
 
 var zhHelp = map[string]HelpTopic{
+	"add": {
+		Usage: "add <仓库名> --source <路径> [--output <路径>]",
+		Purpose: `新建一个备份仓库：登记要备份的源目录，和存放包的位置。
+
+仓库名是你之后所有命令用的代号，可以带中文。源目录必须是已存在的目录；输出目录
+不存在会自动创建。`,
+		How: `只写 repos.json，不碰磁盘上的任何数据。输出目录默认是 <root>\<仓库名>，
+root 由 zinc root 设置。源目录当前不存在只会警告，不会拒绝——挂载盘还没插上时
+也能先把仓库配好。`,
+		Params: []string{
+			"--source <路径>：要备份哪个目录。",
+			"--output <路径>：包放哪儿。不给就用全局 root 下的同名子目录。",
+		},
+		Notes: []string{
+			"同一个输出目录不能给两个仓库用，会直接拒绝。",
+			"大小写不同的两个路径会被提示可能是同一个目录（Windows 上它们是）。",
+		},
+	},
+	"remove": {
+		Usage:   "remove <仓库名>",
+		Purpose: `删掉一个仓库的配置。只动 repos.json，输出目录里的包和索引一个都不会删。`,
+		How:     `确认后从配置里移除这个条目。如果它还有计划任务，会提示你去 unschedule。`,
+		Params:  []string{"（无参数，仓库名是唯一的位置参数）"},
+		Notes: []string{
+			"想连数据一起删，得自己去输出目录手动删。",
+			"删错了可以用 add 重新加回来，只要输出目录还在。",
+		},
+	},
+	"set": {
+		Usage: "set <仓库名> [--source <路径>] [--output <路径>] [--compress <0-9>] [--solid <块大小|off>] [--mhe on|off>] [--max-pack-byte <数量>] [--exclude <通配符>] [--password <密码>]",
+		Purpose: `修改某个仓库的参数。只给想改的那几项，其余保持原样。这些参数优先级高于
+config 里的同名全局设置。`,
+		How: `写进 repos.json 的对应字段。压缩等级、固实块、头部加密只影响之后打的新包；
+已经存在的包不会被重打——compact 不做转换器，它只处理有旧副本可丢的包。`,
+		Params: []string{
+			"--compress <0-9>：7z 压缩等级，0=仅存储。默认 0，抗损最好也最快。",
+			"--solid <块大小|off>：固实块上限（如 64M）或 off。压缩等级为 0 时不生效。",
+			"--mhe on|off：是否加密 7z 头部（隐藏包内文件名）。",
+			"--max-pack-byte <数量>：单包上限，如 4G、500M。",
+			"--exclude <通配符>：追加排除规则，可重复给。",
+			"--password <密码>：这个仓库专用密码，覆盖全局默认。",
+		},
+		Notes: []string{
+			"改密码不会重打旧包：旧包还是老密码，新旧混用时 restore 会提示打不开的包。",
+			"改 source 不会让旧包失效，但之后扫描的是新目录。",
+		},
+	},
+	"list": {
+		Usage:   "list [--names]",
+		Purpose: `列出所有仓库，以及它们的源目录和输出目录。`,
+		How:     `读 repos.json，按名字排序输出。`,
+		Params:  []string{"--names：每行只输出仓库名，给脚本和补全用。"},
+		Notes:   []string{"没配任何仓库时输出一句提示，不是错误。"},
+	},
+	"root": {
+		Usage: "root [<路径>]",
+		Purpose: `查看或设置全局输出根目录：新建仓库时没给 --output，包就放在
+<root>\<仓库名> 下。`,
+		How:    `写在 repos.json 的 root 字段。给路径时会先校验是不是目录。`,
+		Params: []string{"<路径>：要设置的目录。不给就是查看当前值。"},
+		Notes:  []string{"已经存在的仓库不受影响，它们各自记着自己的输出目录。"},
+	},
+	"config": {
+		Usage:   "config [get|set|unset|path|list|show] [<键>] [<值>]",
+		Purpose: `读写全局设置（settings.json）。这些是没被仓库覆盖时的默认值。`,
+		How: `get/set/unset 是单键操作；list 列出所有键和当前值；show 显示文件路径。
+取值优先级永远是：命令行 > 仓库字段 > settings.json > 内置默认。`,
+		Params: []string{
+			"get <键>：读一个键。set <键> <值>：写一个键。unset <键>：删掉，回落到内置默认。",
+			"path：打印 settings.json 的位置。",
+		},
+		Notes: []string{"布尔键接受 on/off/true/false/yes/no。"},
+	},
+	"verify": {
+		Usage: "verify <仓库名|--all> [--sample <百分比>] [--password-only|--hash-only]",
+		Purpose: `检查每个包是否还和账本记的一样：重算 SHA-256 比对，并用配置的密码试着打开它。
+
+它是「事后体检」，跟 backup 打包时的自检不是一回事：那个只证明写进去的那一刻是对的，
+verify 证明的是现在还是对的（磁盘位腐、网盘下载出错都靠它发现）。`,
+		How: `读 manifest 里每个包的最新哈希，逐个算文件 SHA-256 比对。默认还会用密码
+开一次包（只读归档头），确认密码没错、头没坏。
+
+删除记录（.rm 旁注）也一起校验——它坏了恢复时不是少删就是删错。`,
+		Params: []string{
+			"--all：验证所有仓库。",
+			"--sample <百分比>：只随机抽查这么多包，大仓库省时间。",
+			"--password-only：只试密码，不算哈希（快）。",
+			"--hash-only：只算哈希，不试密码。",
+		},
+		Notes: []string{
+			"报「损坏」只说明文件变了，不一定真坏——但复算哈希不通过就不能信任它。",
+			"verify 不改任何东西，是安全的只读操作。",
+		},
+	},
+	"status": {
+		Usage:   "status [--all] [<仓库名>]",
+		Purpose: `看一个仓库的概况：多少包、总体积、最近一次备份、索引和账本的状态。`,
+		How:     `读索引和 manifest，不读包内容，所以很快。`,
+		Params:  []string{"--all：一次展开所有仓库。", "<仓库名>：只看一个。"},
+		Notes:   []string{"它不校验数据完整性，那是 verify 的事。"},
+	},
+	"schedule": {
+		Usage:   "schedule <仓库名|--all> --daily|--weekly <1-7>|--monthly <1-31> --at HH:MM[,HH:MM...] [--check] [--no-notify] [--password <密码>]",
+		Purpose: `给某个仓库（或全部）建一个 Windows 计划任务，到点自动跑 backup。`,
+		How: `调用 schtasks 创建任务，命令行里带的是 zinc backup 和你指定的密码。
+计划任务本身不联网、不需要你在场，所以密码必须能提前解析出来——解析不到直接报错，
+不会留一个到点才失败的坑。
+
+一次可以给多个时间，用逗号分隔，会建多个任务。每月 29-31 号在某些月份不存在，
+它会在创建前问你一次。`,
+		Params: []string{
+			"--daily / --weekly 1,3 / --monthly 1,15：周期。",
+			"--at HH:MM[,HH:MM...]：执行时间，可多个。",
+			"--check：只打印会创建哪些任务，不真建。",
+			"--no-notify：任务里不带 --notify。",
+			"--password <密码>：写进任务里，之后改密码要重建任务。",
+		},
+		Notes: []string{
+			"密码会明文存在计划任务里，这是 schtasks 的机制，不是 zinc 的选择。",
+			"zinc schedule --list 查看现有任务。",
+		},
+	},
+	"unschedule": {
+		Usage:   "unschedule [<仓库名>|--all]",
+		Purpose: `删除计划任务。不带 --all 时删这个仓库的全部任务。`,
+		How:     `用 PowerShell 查任务名再删（schtasks 的输出是 GBK，直接读会乱码）。`,
+		Params:  []string{"--all：删所有 zinc 任务。"},
+		Notes:   []string{"只删任务，不删仓库配置，也不删包。"},
+	},
+	"completion": {
+		Usage:   "completion <shell> [--install]",
+		Purpose: `生成 Tab 补全脚本，让终端能补全命令名、仓库名和参数。`,
+		How:     `按命令表生成对应 shell 的脚本，写到 stdout；加 --install 则直接装进用户配置。`,
+		Params: []string{
+			"<shell>：powershell / bash / zsh / fish。",
+			"--install：自动写进当前 shell 的启动配置（目前只对 PowerShell 实现）。",
+		},
+		Notes: []string{"装完要重开终端才生效：补全靠 dot-source 加载，当前进程不会重读配置。"},
+	},
+	"hash-compare": {
+		Usage: "hash-compare --source1 <路径> --source2 <路径>\n       zinc hash-compare --source <路径> --hash-value <SHA-256>",
+		Purpose: `手动比对哈希，不依赖仓库。两种用法：比两棵树/两个文件，或拿一个文件对
+一个已知的 SHA-256。`,
+		How: `第一种逐个文件算 SHA-256，输出不同 / 缺失 / 多出三类；第二种只算一个文件。
+有差异时退出码是 1，方便脚本判断。`,
+		Params: []string{
+			"--source1 / --source2：两边必须同为文件或同为目录。",
+			"--source / --hash-value：单文件对期望值，不能配目录。",
+		},
+		Notes: []string{"跟备份仓库无关，纯粹是附带的工具。"},
+	},
+	"init": {
+		Usage: "init [--force]",
+		Purpose: `一次性初始化：注册通知、把程序目录写进用户 PATH，让你在任意终端能直接敲
+zinc。绿色版和手动解压的用户需要跑一次；用安装包装过的已经做过了。`,
+		How: `写 HKCU 的 PATH 和通知注册，不碰任何备份数据。用 --force 可以重做一遍，
+适合通知失效或 PATH 被清掉的情况。`,
+		Params: []string{"--force：即使已经注册过也重做。"},
+		Notes:  []string{"改完 PATH 要重开终端才生效。"},
+	},
 	"repair": {
 		Usage: "repair <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check] [--password <密码>]",
 		Purpose: `修复「元数据」与「磁盘上的包」对不上的情况。它不碰包的内容，只重写两个记账文件：
@@ -227,6 +387,175 @@ var zhHelp = map[string]HelpTopic{
 }
 
 var enHelp = map[string]HelpTopic{
+	"add": {
+		Usage: "add <repo_name> --source <path> [--output <path>]",
+		Purpose: `Create a repo: register which directory to back up and where the packs go.
+
+The name is the handle every later command uses; it can contain any characters. The
+source must already exist; the output directory is created if missing.`,
+		How: `Writes repos.json only, touching nothing on disk. The output defaults to
+<root>\<repo_name>, where root comes from zinc root. A missing source is only a
+warning, not a refusal, so you can configure a repo before plugging the drive in.`,
+		Params: []string{
+			"--source <path>: the directory to back up.",
+			"--output <path>: where the packs go; defaults to a subdirectory of the global root.",
+		},
+		Notes: []string{
+			"The same output directory cannot be shared by two repos.",
+			"Two paths differing only in case are flagged as probably the same directory (on Windows they are).",
+		},
+	},
+	"remove": {
+		Usage: "remove <repo_name>",
+		Purpose: `Drop a repo definition. Only repos.json changes; the packs and index in the output
+directory are left alone.`,
+		How:    `Asks once, then removes the entry. If scheduled tasks reference it, it tells you to unschedule them.`,
+		Params: []string{"(none; the repo name is the only positional argument)"},
+		Notes: []string{
+			"To delete the data too, remove the output directory by hand.",
+			"Add the repo back with add if you removed it by mistake and the output directory still exists.",
+		},
+	},
+	"set": {
+		Usage: "set <repo_name> [--source <path>] [--output <path>] [--compress <0-9>] [--solid <block|off>] [--mhe on|off>] [--max-pack-byte <quantity>] [--exclude <glob>] [--password <password>]",
+		Purpose: `Change one repo's settings. Pass only what you want to change; the rest stays as it is.
+These override the same-named global settings in config.`,
+		How: `Written to repos.json. Compression level, solid blocks and header encryption only affect
+packs built afterwards; existing packs are not rebuilt — compact is not a converter, it
+only touches packs that have old copies to drop.`,
+		Params: []string{
+			"--compress <0-9>: 7z level, 0 = store only. Default 0, fastest and most damage-tolerant.",
+			"--solid <block|off>: solid block limit (e.g. 64M) or off. Ignored at level 0.",
+			"--mhe on|off: encrypt the 7z header, hiding the file names inside.",
+			"--max-pack-byte <quantity>: pack size limit, e.g. 4G, 500M.",
+			"--exclude <glob>: add an exclusion rule; repeatable.",
+			"--password <password>: repo-specific password, overriding the global default.",
+		},
+		Notes: []string{
+			"Changing the password does not re-encrypt old packs; restore will report the ones it cannot open.",
+			"Changing source does not invalidate old packs, but later scans look at the new directory.",
+		},
+	},
+	"list": {
+		Usage:   "list [--names]",
+		Purpose: `List every repo with its source and output directories.`,
+		How:     `Reads repos.json and prints in name order.`,
+		Params:  []string{"--names: print only the names, one per line, for scripts and completion."},
+		Notes:   []string{"An empty config prints a hint, not an error."},
+	},
+	"root": {
+		Usage: "root [<path>]",
+		Purpose: `Show or set the global output root: a new repo without --output puts its packs in
+<root>\<repo_name>.`,
+		How:    `Stored in repos.json. A path argument is validated as a directory first.`,
+		Params: []string{"<path>: the directory to set. Omit to just print the current one."},
+		Notes:  []string{"Existing repos keep their own output directories and are unaffected."},
+	},
+	"config": {
+		Usage: "config [get|set|unset|path|list|show] [<key>] [<value>]",
+		Purpose: `Read and write global settings (settings.json): the defaults used when a repo does not
+override them.`,
+		How: `get/set/unset work on one key; list prints every key and its current value; show prints the
+file location. Precedence is always: command line > repo field > settings.json > built-in.`,
+		Params: []string{
+			"get <key>: read one key. set <key> <value>: write one. unset <key>: drop it, back to the built-in.",
+			"path: print where settings.json lives.",
+		},
+		Notes: []string{"Boolean keys accept on/off/true/false/yes/no."},
+	},
+	"verify": {
+		Usage: "verify <repo_name|--all> [--sample <percent>] [--password-only|--hash-only]",
+		Purpose: `Check that every pack still matches the manifest: recompute its SHA-256, and try to open
+it with the configured password.
+
+This is the after-the-fact check. backup's own 7za t only proves the pack was correct
+when written; verify proves it is correct now — which is how disk rot and a bad cloud
+download get caught.`,
+		How: `Reads the latest hash for each pack from the manifest and compares it to the file on
+disk. By default it also opens each pack (reading only the header) to confirm the password
+and the header are still fine.
+
+Deletion records (.rm sidecars) are checked too: a broken one makes restore delete the
+wrong things.`,
+		Params: []string{
+			"--all: verify every repo.",
+			"--sample <percent>: check a random sample of packs, for big repos.",
+			"--password-only: only test the password, skip hashing (fast).",
+			"--hash-only: only hash, skip the password test.",
+		},
+		Notes: []string{
+			"A corrupt report means the bytes changed; it may not be physically damaged, but it cannot be trusted.",
+			"verify changes nothing; it is read-only.",
+		},
+	},
+	"status": {
+		Usage: "status [--all] [<repo_name>]",
+		Purpose: `Show a repo at a glance: pack count, total size, the last backup, and the state of the
+index and manifest.`,
+		How:    `Reads the index and manifest without opening packs, so it is fast.`,
+		Params: []string{"--all: expand every repo.", "<repo_name>: just one."},
+		Notes:  []string{"It does not verify data integrity; that is verify's job."},
+	},
+	"schedule": {
+		Usage: "schedule <repo_name|--all> --daily|--weekly <1-7>|--monthly <1-31> --at HH:MM[,HH:MM...] [--check] [--no-notify] [--password <password>]",
+		Purpose: `Create a Windows scheduled task that runs backup for a repo (or all of them) at fixed
+times.`,
+		How: `Calls schtasks with a command line containing zinc backup and the password you resolved.
+A scheduled task cannot ask questions later, so the password must resolve now — if it
+cannot, this fails instead of leaving a task that breaks at 3 AM.
+
+Several times can be given, comma separated, creating one task each. Days 29-31 do not
+exist in every month, so it asks once before creating those.`,
+		Params: []string{
+			"--daily / --weekly 1,3 / --monthly 1,15: the period.",
+			"--at HH:MM[,HH:MM...]: when to run, one or more times.",
+			"--check: print the tasks it would create, create nothing.",
+			"--no-notify: leave --notify out of the task.",
+			"--password <password>: baked into the task; changing the password later means recreating it.",
+		},
+		Notes: []string{
+			"The password is stored in plain text inside the task; that is schtasks, not a zinc choice.",
+			"zinc schedule --list shows the existing tasks.",
+		},
+	},
+	"unschedule": {
+		Usage:   "unschedule [<repo_name>|--all]",
+		Purpose: `Delete scheduled tasks. Without --all it removes every task of that repo.`,
+		How:     `Queries task names with PowerShell, then deletes them (schtasks output is GBK and garbles in a UTF-8 read).`,
+		Params:  []string{"--all: remove every zinc task."},
+		Notes:   []string{"Only tasks are removed; the repo definition and the packs stay."},
+	},
+	"completion": {
+		Usage:   "completion <shell> [--install]",
+		Purpose: `Generate a tab-completion script so the shell completes command names, repo names and flags.`,
+		How:     `Renders a script for the requested shell to stdout; --install writes it into the user profile instead.`,
+		Params: []string{
+			"<shell>: powershell / bash / zsh / fish.",
+			"--install: write it into the current shell's startup config (PowerShell only for now).",
+		},
+		Notes: []string{"Reopen the terminal afterwards: completion is loaded by dot-sourcing, and the running shell will not reread its config."},
+	},
+	"hash-compare": {
+		Usage: "hash-compare --source1 <path> --source2 <path>\n       zinc hash-compare --source <path> --hash-value <SHA-256>",
+		Purpose: `Compare hashes by hand, without a repo. Either two files/trees against each other, or one
+file against a known SHA-256.`,
+		How: `The first form hashes every file and reports changed / missing / extra. The second hashes
+one file. Any difference exits 1, so scripts can branch on it.`,
+		Params: []string{
+			"--source1 / --source2: both must be files, or both directories.",
+			"--source / --hash-value: one file against an expected value; not valid for directories.",
+		},
+		Notes: []string{"Unrelated to the backup repos; it is a bundled utility."},
+	},
+	"init": {
+		Usage: "init [--force]",
+		Purpose: `One-time setup: register notifications and put the program directory on the user PATH so
+zinc works in any terminal. Needed for the portable zip; the installer already did it.`,
+		How: `Writes the HKCU PATH and the notification registration. It never touches backup data.
+--force redoes it, for when notifications stopped working or PATH was cleared.`,
+		Params: []string{"--force: run the setup again even if it was already done."},
+		Notes:  []string{"Reopen the terminal after changing PATH."},
+	},
 	"repair": {
 		Usage: "repair <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>] [--rehash] [--check] [--password <password>]",
 		Purpose: `Fix the case where the metadata no longer matches the packs on disk. It never touches
