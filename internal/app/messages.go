@@ -286,12 +286,9 @@ type Messages struct {
 	DetailLine       string
 	EncFrom          string
 	ScanSkipItem     string
-	ScanSkipMore     string
 	LockedItem       string
-	LockedMore       string
 	AllLocked        string
 	PackSkipItem     string
-	PackSkipMore     string
 	PartialCommit    string
 
 	// 删除记录
@@ -761,12 +758,9 @@ var zhMessages = &Messages{
 	DetailLine:       "[ok] %s · %d 文件 · %s · %d 包 · %s · scan %dms · hash %s",
 	EncFrom:          "enc✓(%s)",
 	ScanSkipItem:     "[跳过] %s\n",
-	ScanSkipMore:     "  …另有 %d 项跳过\n",
 	LockedItem:       "[占用] %s（下次备份会重试）\n",
-	LockedMore:       "  …另有 %d 个文件被占用\n",
 	AllLocked:        "%s · 变更的 %d 个文件全被占用，本次跳过\n",
 	PackSkipItem:     "[跳过] %s（打包时读不到，下次备份会重试）\n",
-	PackSkipMore:     "  …另有 %d 个文件本次没能打进包\n",
 	PartialCommit:    "%s · 部分完成：已提交 %d 包（%s），%d 个文件留待下次\n",
 
 	DeletedLine:          "[删除] %s · %d 个文件已从源目录消失（记录 %s）\n",
@@ -1226,12 +1220,9 @@ Notes:
 	DetailLine:       "[ok] %s · %d files · %s · %d packs · %s · scan %dms · hash %s",
 	EncFrom:          "enc✓(%s)",
 	ScanSkipItem:     "[skip] %s\n",
-	ScanSkipMore:     "  …and %d more skipped\n",
 	LockedItem:       "[locked] %s (will retry next backup)\n",
-	LockedMore:       "  …and %d more locked files\n",
 	AllLocked:        "%s · all %d changed files are locked, skipped this run\n",
 	PackSkipItem:     "[skip] %s (unreadable while packing, will retry next backup)\n",
-	PackSkipMore:     "  …and %d more files left out of this pack\n",
 	PartialCommit:    "%s · partial: committed %d pack(s) (%s), %d files left for next run\n",
 
 	DeletedLine:          "[deleted] %s · %d file(s) disappeared from the source (recorded in %s)\n",

@@ -691,27 +691,13 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 	}
 	res.Locked = len(locked)
 
-	shown := 0
+	// 占用/跳过一律全列：用户要靠这份清单去逐个处理，截断只会让人
+	// 反复重跑 backup 挤牙膏，一轮下来还不一定凑齐。
 	for _, p := range scan.Skipped {
-		if shown >= 3 {
-			break
-		}
 		fmt.Printf(M.ScanSkipItem, p)
-		shown++
 	}
-	if scan.SkippedN > shown {
-		fmt.Printf(M.ScanSkipMore, scan.SkippedN-shown)
-	}
-	shown = 0
 	for _, p := range locked {
-		if shown >= 3 {
-			break
-		}
 		fmt.Printf(M.LockedItem, p)
-		shown++
-	}
-	if len(locked) > shown {
-		fmt.Printf(M.LockedMore, len(locked)-shown)
 	}
 
 	if len(ready) == 0 && len(del) == 0 {
@@ -757,16 +743,9 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 	// 打包时读不到的文件：跟预检跳过的一样，不写索引、下次重试。
 	res.Skipped += len(packSkipped)
 
-	shown = 0
+	// 打包时才读不到的文件同样全列，理由跟上面对 locked 一样。
 	for _, p := range packSkipped {
-		if shown >= 3 {
-			break
-		}
 		fmt.Printf(M.PackSkipItem, p)
-		shown++
-	}
-	if len(packSkipped) > shown {
-		fmt.Printf(M.PackSkipMore, len(packSkipped)-shown)
 	}
 
 	// 中途失败：已提交的包留下；删除记录一律不写 —— 下次扫描会重新发现这些「消失」，
