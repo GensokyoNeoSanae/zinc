@@ -65,7 +65,10 @@ type Messages struct {
 
 	// backup
 	FlagAllBackup        string
-	FlagAllStatus        string
+	FlagExpandStatus     string
+	FlagSortStatus       string
+	FlagAsc              string
+	FlagDesc             string
 	FlagPassword         string
 	FlagNotify           string
 	FlagNotifyEmpty      string
@@ -196,6 +199,16 @@ type Messages struct {
 	StatusBrief           string
 	StatusSource          string
 	StatusOutput          string
+	StatusSizes           string
+	SizeUnknown           string
+	SizeSame              string
+	SortInvalid           string
+	SortDirectionConflict string
+	ExpandWithName        string
+	// color.go 用它按行首标记上色
+	OkTag                 string
+	WarnTag               string
+	ErrTag                string
 	StatusBacked          string
 	StatusPending         string
 	StatusVolumes         string
@@ -578,7 +591,10 @@ var zhMessages = &Messages{
 	RemoveHasTasks:     "[警告] 仓库 %s 还有 %d 个计划任务（%s），可用 zinc unschedule %s 删除\n",
 
 	FlagAllBackup:        "备份全部仓库",
-	FlagAllStatus:        "一次展开所有仓库的详细信息",
+	FlagExpandStatus:     "展开每个仓库的详细信息（不看总数，直接逐个展开）",
+	FlagSortStatus:       "排序字段: name / src / out / backup",
+	FlagAsc:              "升序（覆盖默认方向）",
+	FlagDesc:             "降序（覆盖默认方向）",
 	FlagPassword:         "备份密码",
 	FlagNotify:           "发送 Windows 通知",
 	FlagNotifyEmpty:      "无新增也通知",
@@ -701,6 +717,15 @@ var zhMessages = &Messages{
 	StatusBrief:           "%-12s %6d 文件 / %3d 批次 / %3d 包   最后备份 %-19s\n",
 	StatusSource:          "  源:   %s\n",
 	StatusOutput:          "  输出: %s\n",
+	StatusSizes:           "  占用: 源 %s，输出 %s（%s）\n",
+	SizeUnknown:           "—",
+	SizeSame:              "与源相当",
+	SortInvalid:           "未知的排序字段: %s（可用 name / src / out / backup）",
+	SortDirectionConflict: "--asc 与 --desc 不能同时用",
+	ExpandWithName:        "--expand 是展开全部仓库，不能再指定仓库名: %s",
+	OkTag:                 "[ok]",
+	WarnTag:               "[警告]",
+	ErrTag:                "[错误]",
 	StatusBacked:          "  已备份: %d 文件\n",
 	StatusPending:         "  待备份: %d 个新增, %d 个修改, %d 个待删除, %d 个跳过\n",
 	StatusVolumes:         "  卷: %d 批次 / %d 个文件 / %s\n",
@@ -1065,7 +1090,10 @@ Notes:
 	RemoveHasTasks:     "[warning] repo %s still has %d scheduled task(s) (%s); remove them with zinc unschedule %s\n",
 
 	FlagAllBackup:        "back up all repos",
-	FlagAllStatus:        "show details for every repo at once",
+	FlagExpandStatus:     "expand every repo into its detail view",
+	FlagSortStatus:       "sort field: name / src / out / backup",
+	FlagAsc:              "ascending (overrides the default direction)",
+	FlagDesc:             "descending (overrides the default direction)",
 	FlagPassword:         "backup password",
 	FlagNotify:           "send a Windows notification",
 	FlagNotifyEmpty:      "notify even when nothing changed",
@@ -1188,6 +1216,15 @@ Notes:
 	StatusBrief:           "%-12s %6d files / %3d batches / %3d packs   last backup %-19s\n",
 	StatusSource:          "  source: %s\n",
 	StatusOutput:          "  output: %s\n",
+	StatusSizes:           "  footprint: source %s, output %s (%s)\n",
+	SizeUnknown:           "—",
+	SizeSame:              "same as source",
+	SortInvalid:           "unknown sort field: %s (use name / src / out / backup)",
+	SortDirectionConflict: "--asc and --desc cannot be combined",
+	ExpandWithName:        "--expand expands every repo; it cannot be combined with a repo name: %s",
+	OkTag:                 "[ok]",
+	WarnTag:               "[warn]",
+	ErrTag:                "[error]",
 	StatusBacked:          "  backed up: %d files\n",
 	StatusPending:         "  pending: %d new, %d modified, %d to be deleted, %d skipped\n",
 	StatusVolumes:         "  volumes: %d batches / %d files / %s\n",

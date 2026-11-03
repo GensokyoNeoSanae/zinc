@@ -79,7 +79,12 @@ var completionCommands = []CmdSpec{
 		{Name: "password-only"},
 		{Name: "hash-only"},
 	}, PositionalKind: "repo"},
-	{Name: "status", Flags: []FlagSpec{{Name: "all"}}, PositionalKind: "repo"},
+	{Name: "status", Flags: []FlagSpec{
+		{Name: "expand"},
+		{Name: "sort", HasValue: true},
+		{Name: "asc"},
+		{Name: "desc"},
+	}, PositionalKind: "repo"},
 	{Name: "schedule", Flags: []FlagSpec{
 		{Name: "list"},
 		{Name: "all"},

@@ -90,7 +90,8 @@ func requireArgs(fs *flag.FlagSet, minN, maxN int, usageMsg string) {
 }
 
 func die(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, M.ErrPrefix+format+"\n", args...)
+	// 前缀上色，正文不动：整行变红在长消息里反而更难读
+	fmt.Fprintf(os.Stderr, red(M.ErrPrefix)+format+"\n", args...)
 	os.Exit(1)
 }
 
@@ -760,43 +761,72 @@ func cmdVerify(args []string) {
 
 func cmdStatus(args []string) {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
-	all := fs.Bool("all", false, M.FlagAllStatus)
+	expand := fs.Bool("expand", false, M.FlagExpandStatus)
+	sortBy := fs.String("sort", "name", M.FlagSortStatus)
+	asc := fs.Bool("asc", false, M.FlagAsc)
+	desc := fs.Bool("desc", false, M.FlagDesc)
 	fs.Parse(reorderArgs(args))
+
+	switch *sortBy {
+	case "name", "src", "out", "backup":
+	default:
+		die(M.SortInvalid, *sortBy)
+	}
+	if *asc && *desc {
+		die(M.SortDirectionConflict)
+	}
+	// 默认方向：按大小排序默认大的在前，其余默认升序
+	down := *sortBy == "src" || *sortBy == "out"
+	if *asc {
+		down = false
+	}
+	if *desc {
+		down = true
+	}
 
 	cfg := mustConfig()
 	set := mustSettings()
 
-	// --all：每个仓库都展开成详情，仓库之间空一行。
-	if *all {
-		if fs.NArg() > 0 {
-			die(M.AllWithName, fs.Arg(0))
-		}
+	name := ""
+	if fs.NArg() > 0 {
+		name = fs.Arg(0)
+	}
+	if *expand && name != "" {
+		die(M.ExpandWithName, name)
+	}
+	if !*expand {
+		requireArgs(fs, 0, 1, M.UsageStatus)
+	}
+
+	// --expand：每个仓库都展开成详情，仓库之间空一行。
+	if *expand {
 		names := cfg.sortedNames()
 		if len(names) == 0 {
 			fmt.Println(M.NoRepos)
 			return
 		}
-		var firstErr error
-		for i, n := range names {
+		var list []repoStatus
+		for _, n := range names {
+			st, err := collectStatus(n, cfg)
+			if err != nil {
+				fmt.Printf("%s: %v\n", n, err)
+				continue
+			}
+			list = append(list, st)
+		}
+		sortStatus(list, *sortBy, down)
+		for i, st := range list {
 			if i > 0 {
 				fmt.Println()
 			}
-			if err := runStatus(n, cfg, set); err != nil && firstErr == nil {
-				firstErr = err
+			if err := printStatusDetail(st.name, cfg, set, st); err != nil {
+				fmt.Printf("%s: %v\n", st.name, err)
 			}
-		}
-		if firstErr != nil {
-			os.Exit(1)
 		}
 		return
 	}
 
-	requireArgs(fs, 0, 1, M.UsageStatus)
-	name := ""
-	if fs.NArg() > 0 {
-		name = fs.Arg(0)
-	}
-	if err := runStatus(name, cfg, set); err != nil {
+	if err := runStatus(name, cfg, set, *sortBy, down); err != nil {
 		os.Exit(1)
 	}
 }
