@@ -180,13 +180,18 @@ zinc backup pictures
 # 备份全部仓库
 zinc backup --all
 
-# 查看状态
+# 查看状态（简表：文件数、批次、包数、源与输出占用、最后备份）
 zinc list
 zinc status
 zinc status pictures
 
-# 一次展开所有仓库的详情（不只是单行摘要）
-zinc status --all
+# 按不同维度排序；--asc/--desc 覆盖默认方向（大小默认降序，其余升序）
+zinc status --sort out
+zinc status --sort backup --desc
+zinc status --sort name          # 拼音序（中文走 CLDR collation）
+
+# 一次展开所有仓库的详情
+zinc status --expand
 
 # 恢复（默认覆盖同名文件）
 zinc restore pictures --dest D:\restore\pictures
@@ -213,7 +218,7 @@ zinc restore pictures --check
 | `zinc hash-compare --source <文件> --hash-value <SHA-256>` | 单个文件对期望哈希 |
 | `zinc compact <仓库名> [--pack <包名>] [--min-gain <5%\|8M>] [--check]` | 重写已有包，丢掉被新版取代的旧副本 |
 | `zinc verify <仓库名\|--all> [--sample <百分比>] [--password-only\|--hash-only]` | 校验包与删除记录的 SHA-256，并用配置密码试开每个包；`--password-only` 只验密码，`--hash-only` 只算哈希 |
-| `zinc status [--all] [<仓库名>]` | 查看状态；`--all` 一次展开所有仓库的详情 |
+| `zinc status [<仓库名>] [--expand] [--sort <字段>] [--asc\|--desc]` | 查看状态；`--expand` 逐个展开详情，`--sort` 按 name/src/out/backup 排序 |
 | `zinc schedule <仓库名\|--all> --daily --at HH:MM` | 每天定时 |
 | `zinc schedule <仓库名\|--all> --weekly 1,3 --at HH:MM` | 每周定时（1 = 周一） |
 | `zinc schedule <仓库名\|--all> --monthly 1,15 --at HH:MM` | 每月定时 |
@@ -258,6 +263,16 @@ zinc restore pictures --check
 | `exclude` | `[]` | 排除名单，glob；`set` 追加 |
 | `complete_notify` | `true` | 备份完成发通知 |
 | `compact_min_gain` | `5%` | `compact` 的收益阈值：`5%` / `8M` / `0`（0 = 不看阈值）；命令行 `--min-gain` 优先 |
+
+### 终端颜色
+
+状态标记按语义上色：`[ok]` / `[完成]` 绿，`[警告]` / `[占用]` / `[跳过]` 黄，`[损坏]` / `[密码不符]` / `[错误]` 红。只有标记本身染色，整行不动——否则长列表会糊成一片。
+
+上色只在真正的终端里生效：输出被重定向到文件或管道时自动关闭，设 `NO_COLOR` 环境变量也能关掉。给脚本吃的输出（`zinc list --names`、补全脚本）永远不带颜色。
+
+### 关于 `status` 的占用统计
+
+简表里的「源 / 输出」是两边目录的实际遍历结果，不是估算。目录项本身就带着大小，不需要打开文件，所以 30 GB 量级也就百来毫秒——跟读一遍索引是同一个数量级。
 
 ```powershell
 zinc config                       # 全部打印（密码打码）

@@ -180,13 +180,19 @@ zinc backup pictures
 # back up everything
 zinc backup --all
 
-# status
+# status (one line per repo: files, batches, packs, footprint, last backup)
 zinc list
 zinc status
 zinc status pictures
 
+# sort by different fields; --asc/--desc override the default direction
+# (size sorts descending, everything else ascending)
+zinc status --sort out
+zinc status --sort backup --desc
+zinc status --sort name          # pinyin order via CLDR collation
+
 # expand every repo's details in one go
-zinc status --all
+zinc status --expand
 
 # restore (overwrites same-name files by default)
 zinc restore pictures --dest D:\restore\pictures
@@ -213,7 +219,7 @@ zinc restore pictures --check
 | `zinc hash-compare --source <file> --hash-value <SHA-256>` | compare one file against an expected hash |
 | `zinc compact <repo_name> [--pack <pack_name>] [--min-gain <5%\|8M>] [--check]` | rewrite existing packs, dropping copies a newer version superseded |
 | `zinc verify <repo_name\|--all> [--sample <percent>] [--password-only\|--hash-only]` | SHA-256 check of the packs and deletion records, and opens every pack with the configured password; `--password-only` checks the password only, `--hash-only` checks hashes only |
-| `zinc status [--all] [<repo_name>]` | show status; `--all` expands every repo |
+| `zinc status [<repo_name>] [--expand] [--sort <field>] [--asc\|--desc]` | show status; `--expand` opens every repo's details, `--sort` orders by name/src/out/backup |
 | `zinc schedule <repo_name\|--all> --daily --at HH:MM` | daily schedule |
 | `zinc schedule <repo_name\|--all> --weekly 1,3 --at HH:MM` | weekly (1 = Monday) |
 | `zinc schedule <repo_name\|--all> --monthly 1,15 --at HH:MM` | monthly |
@@ -258,6 +264,16 @@ Global settings live in `<program dir>\settings.json`. They are **not** part of 
 | `exclude` | `[]` | glob list; `set` appends to it |
 | `complete_notify` | `true` | send a toast when a backup finishes |
 | `compact_min_gain` | `5%` | gain threshold for `compact`: `5%` / `8M` / `0` (0 disables it); `--min-gain` overrides it |
+
+### Terminal colors
+
+Status markers are colored by meaning: `[ok]` / `[done]` green, `[warn]` / `[locked]` / `[skip]` yellow, `[corrupt]` / `[wrong password]` / `[error]` red. Only the marker is painted — coloring whole lines turns a long list into a wall of text.
+
+Color is emitted only on a real console. Redirect to a file or a pipe and it switches itself off; `NO_COLOR` turns it off too. Output meant for scripts (`zinc list --names`, the completion scripts) never carries escapes.
+
+### About the `status` footprint
+
+The source/output numbers are real directory walks, not estimates. Directory entries already carry their size, so nothing is opened: 30 GB takes a few hundred milliseconds, the same order of magnitude as reading the index.
 
 ```powershell
 zinc config                       # print everything (password masked)
