@@ -124,6 +124,8 @@ type Messages struct {
 	MissingFile         string
 	CorruptFile         string
 	VerifySummary       string
+	VerifyCorruptWarn   string
+	VerifyCorruptFix    string
 	VerifyFailedMsg     string
 	VerifyPwBad         string
 	VerifyPwSummary     string
@@ -649,8 +651,10 @@ var zhMessages = &Messages{
 	ManifestBroken:      "manifest %s 损坏或无法读取: %v",
 	SampleInvalid:       "--sample 必须在 1-100 之间: %d",
 	MissingFile:         "[缺失] %s\n",
-	CorruptFile:         "[损坏] %s\n",
-	VerifySummary:       "%s: 通过 %d, 损坏 %d, 缺失 %d\n",
+	CorruptFile:         "[更改] %s\n",
+	VerifySummary:       "%s: 通过 %d, 更改 %d, 缺失 %d\n",
+	VerifyCorruptWarn:   "如果你确定没有手动修改过输出目录里的压缩包，那它很可能已经损坏了。\n",
+	VerifyCorruptFix:    "如果原文件还在，可以这样补救：删掉被改动的包和该仓库的 index.tsv，执行 zinc repair %[1]s 重建账本，再跑一次 zinc backup %[1]s 把文件重新打包。\n",
 	VerifyPwOnlySummary: "%s: 密码通过 %d, 密码不符 %d, 缺失 %d\n",
 	VerifyFailedMsg:     "校验未通过",
 	VerifyPwBad:         "[密码不符] %s\n",
@@ -848,8 +852,8 @@ var zhMessages = &Messages{
 	DelRecordWriteFailed: "写入删除记录失败: %w",
 	DelRemoveFailed:      "删除 %s 失败: %v",
 	VerifyRmMissing:      "[缺失] 删除记录 %s\n",
-	VerifyRmCorrupt:      "[损坏] 删除记录 %s\n",
-	VerifyRmSummary:      "删除记录: 通过 %d, 损坏 %d, 缺失 %d\n",
+	VerifyRmCorrupt:      "[更改] 删除记录 %s\n",
+	VerifyRmSummary:      "删除记录: 通过 %d, 更改 %d, 缺失 %d\n",
 
 	FlagNoOverwrite:      "恢复时不覆盖，同名文件重命名为 _1",
 	FlagCheck:            "只打印计划，不执行、不询问",
@@ -1148,8 +1152,10 @@ Notes:
 	ManifestBroken:      "manifest %s is corrupt or unreadable: %v",
 	SampleInvalid:       "--sample must be between 1 and 100: %d",
 	MissingFile:         "[missing] %s\n",
-	CorruptFile:         "[corrupt] %s\n",
-	VerifySummary:       "%s: passed %d, corrupt %d, missing %d\n",
+	CorruptFile:         "[changed] %s\n",
+	VerifySummary:       "%s: passed %d, changed %d, missing %d\n",
+	VerifyCorruptWarn:   "If you never edited the packs in the output directory yourself, this one is probably damaged.\n",
+	VerifyCorruptFix:    "If the source files are still there: delete the changed pack and the repo's index.tsv, run zinc repair %[1]s to rebuild the ledger, then zinc backup %[1]s to pack them again.\n",
 	VerifyPwOnlySummary: "%s: password ok %d, wrong password %d, missing %d\n",
 	VerifyFailedMsg:     "verification failed",
 	VerifyPwBad:         "[wrong password] %s\n",
@@ -1347,8 +1353,8 @@ Notes:
 	DelRecordWriteFailed: "failed to write deletion record: %w",
 	DelRemoveFailed:      "failed to remove %s: %v",
 	VerifyRmMissing:      "[missing] deletion record %s\n",
-	VerifyRmCorrupt:      "[corrupt] deletion record %s\n",
-	VerifyRmSummary:      "deletion records: %d ok, %d corrupt, %d missing\n",
+	VerifyRmCorrupt:      "[changed] deletion record %s\n",
+	VerifyRmSummary:      "deletion records: %d ok, %d changed, %d missing\n",
 
 	FlagNoOverwrite:      "keep both: same-name files are restored as _1",
 	FlagCheck:            "print the plan only; do not run or ask",

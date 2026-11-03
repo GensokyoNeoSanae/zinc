@@ -19,6 +19,8 @@ func TestStatusLineColorRules(t *testing.T) {
 		{"[警告] demo", ansiYellow},
 		{"[占用] demo", ansiYellow},
 		{"[跳过] demo", ansiYellow},
+		{"[更改] demo", ansiRed},
+		{"[changed] demo", ansiRed},
 		{"[损坏] demo", ansiRed},
 		{"[密码不符] demo", ansiRed},
 		{"普通文字", ""},

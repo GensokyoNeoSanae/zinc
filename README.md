@@ -267,7 +267,7 @@ Global settings live in `<program dir>\settings.json`. They are **not** part of 
 
 ### Terminal colors
 
-Status markers are colored by meaning: `[ok]` / `[done]` green, `[warn]` / `[locked]` / `[skip]` yellow, `[corrupt]` / `[wrong password]` / `[error]` red. Only the marker is painted — coloring whole lines turns a long list into a wall of text.
+Status markers are colored by meaning: `[ok]` / `[done]` green, `[warn]` / `[locked]` / `[skip]` yellow, `[changed]` / `[wrong password]` / `[error]` red. Only the marker is painted — coloring whole lines turns a long list into a wall of text.
 
 Color is emitted only on a real console. Redirect to a file or a pipe and it switches itself off; `NO_COLOR` turns it off too. Output meant for scripts (`zinc list --names`, the completion scripts) never carries escapes.
 

@@ -167,6 +167,12 @@ func runVerify(name string, cfg *Config, set *Settings, samplePct int, doHash, d
 	}
 	logf("verify %s: mode=%s ok=%d bad=%d missing=%d pw_bad=%d rm_ok=%d rm_bad=%d rm_missing=%d",
 		name, mode, ok, bad, missing, pwBad, rmOK, rmBad, rmMissing)
+	if bad > 0 {
+		// 「更改」不等于「损坏」，但没手动动过的话基本就是坏了——把判断留给用户，
+		// 顺便把补救步骤写在下面，免得还要去翻文档。
+		fmt.Print(yellow(M.VerifyCorruptWarn))
+		fmt.Print(blue(fmt.Sprintf(M.VerifyCorruptFix, name)))
+	}
 	if bad > 0 || missing > 0 || pwBad > 0 || rmBad > 0 || rmMissing > 0 {
 		return errors.New(M.VerifyFailedMsg)
 	}
