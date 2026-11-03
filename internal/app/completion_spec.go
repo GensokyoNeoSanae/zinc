@@ -58,15 +58,12 @@ var completionCommands = []CmdSpec{
 		{Name: "only", HasValue: true},
 		{Name: "from", HasValue: true},
 	}, PositionalKind: "repo"},
-	{Name: "reindex", Flags: []FlagSpec{
+	{Name: "repair", Flags: []FlagSpec{
 		{Name: "password", HasValue: true},
 		{Name: "pack-start", HasValue: true},
 		{Name: "pack-end", HasValue: true},
-		{Name: "yes"},
-	}, PositionalKind: "repo"},
-	{Name: "remanifest", Flags: []FlagSpec{
-		{Name: "password", HasValue: true},
-		{Name: "yes"},
+		{Name: "rehash"},
+		{Name: "check"},
 	}, PositionalKind: "repo"},
 	{Name: "compact", Flags: []FlagSpec{
 		{Name: "password", HasValue: true},

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -225,29 +224,5 @@ func runRemanifest(name string, cfg *Config, set *Settings, password string, yes
 	return nil
 }
 
-// cmdRemanifest 入口：默认预演，--yes 写回。
-func cmdRemanifest(args []string) {
-	cfg := mustConfig()
-	set := mustSettings()
-	fs := flag.NewFlagSet("remanifest", flag.ExitOnError)
-	password := fs.String("password", "", M.FlagPassword)
-	yes := fs.Bool("yes", false, M.FlagYesRemanifest)
-	fs.Parse(reorderArgs(args))
-	requireArgs(fs, 1, 1, M.UsageRemanifest)
-	name := fs.Arg(0)
-	repo, err := cfg.repo(name)
-	if err != nil {
-		die("%v", err)
-	}
-	pw := *password
-	if pw == "" {
-		pw = repo.password(set)
-	}
-	// 预演不读包内容，不需要密码；执行时才要（列归档头认占位包）
-	if *yes && pw == "" {
-		pw = promptPassword(false)
-	}
-	if err := runRemanifest(name, cfg, set, pw, *yes); err != nil {
-		die("%v", err)
-	}
-}
+// runRemanifest 由 zinc repair 调用：把 manifest 与磁盘对账。
+// 默认 yes=false 时只预演不写回。

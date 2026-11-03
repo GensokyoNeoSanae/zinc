@@ -359,23 +359,27 @@ type Messages struct {
 	OnlyVersions       string
 	OnlyNoVersions     string
 
-	// reindex
-	FlagPackStart     string
-	FlagPackEnd       string
-	FlagYesReindex    string
-	UsageReindex      string
-	ReindexStart      string
-	ReindexPack       string
-	ReindexDone       string
-	ReindexExists     string
-	ReindexListFailed string
-	ReindexNoPacks    string
-	ReindexBakFailed  string
-	ReindexDeleted    string
+	// repair（原 reindex + remanifest 合并）
+	FlagPackStart      string
+	FlagPackEnd        string
+	FlagRehash         string
+	UsageRepair        string
+	RepairConfirmHead  string
+	RepairRehashPack   string
+	RepairRehashNone   string
+	RepairRehashDryRun string
+	RepairRehashDone   string
+	ReindexStart       string
+	ReindexPack        string
+	ReindexDone        string
+	ReindexDryRun      string
+	ReindexExists      string
+	ReindexListFailed  string
+	ReindexNoPacks     string
+	ReindexBakFailed   string
+	ReindexDeleted     string
 
-	// remanifest
-	FlagYesRemanifest         string
-	UsageRemanifest           string
+	// remanifest（runRemanifest 仍被 repair 调用）
 	RemanifestHeader          string
 	RemanifestNoManifest      string
 	RemanifestDropPack        string
@@ -476,8 +480,8 @@ var zhMessages = &Messages{
                        [--overwrite|--no-overwrite] [--no-delete] [--check-list]
   zinc restore <name> --only <相对路径> [--dest <path>] [--from <包名|序号>]
                        只恢复这一个文件/目录；配 --check-list 可列出它有哪些版本
-  zinc reindex <name> [--password <pw>] [--pack-start <名>] [--pack-end <名>] [--yes]
-  zinc remanifest <name> [--password <pw>] [--yes]    manifest 对账：删掉已消失的条目、补登孤儿包
+  zinc repair <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check] [--password <密码>]
+                        修复索引与账本；--rehash 按磁盘实际内容重算包哈希
   zinc compact <name> [--password <pw>] [--pack <名|序号>] [--min-gain <5%|8M>] [--yes] [--notify]
                        丢掉包里被新版取代的旧副本；包名不变，云端同名覆盖进历史版本
   zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]
@@ -502,7 +506,7 @@ var zhMessages = &Messages{
   - --check-list 只列顺序不动手；--dest 可省略
   - 恢复会执行之后备份记下的删除（--no-delete 保留这些文件）；删除记录是输出目录里的 .rm 旁注
   - compact 删掉的是「已被新版取代 / 已从源目录删除」的副本，那些旧版本随之消失；包被腾空后只留一个占位文件
-  - 索引只是缓存，丢了用 zinc reindex 从包本身重建
+  - 索引只是缓存，丢了用 zinc repair 从包本身重建
   - 输出默认落在 <root>\<name>，用 zinc root 设置
   - 解压后先跑一次 zinc init，之后在任意终端直接敲 zinc
   - 安装/卸载用 tools\ 下的 zinc-register.exe / zinc-unregister.exe；zinc init 是轻量版，不强制 7-Zip
@@ -760,10 +764,10 @@ var zhMessages = &Messages{
 	ConfigAuto:          "(自动)",
 	ConfigEmpty:         "(空)",
 
-	IndexBadHeader:        "索引文件 %s 的头部不是 %q，可能已损坏；用 zinc reindex 重建",
-	IndexLineBad:          "索引文件 %s 第 %d 行格式错误；用 zinc reindex 重建",
-	IndexTruncated:        "索引文件 %s 不完整（缺少结尾标记），可能被截断；用 zinc reindex 重建",
-	IndexCountMismatch:    "索引文件 %s 计数不符（记录 包%d/文件%d，实际 包%d/文件%d）；用 zinc reindex 重建",
+	IndexBadHeader:        "索引文件 %s 的头部不是 %q，可能已损坏；用 zinc repair 重建",
+	IndexLineBad:          "索引文件 %s 第 %d 行格式错误；用 zinc repair 重建",
+	IndexTruncated:        "索引文件 %s 不完整（缺少结尾标记），可能被截断；用 zinc repair 重建",
+	IndexCountMismatch:    "索引文件 %s 计数不符（记录 包%d/文件%d，实际 包%d/文件%d）；用 zinc repair 重建",
 	IndexWriteFailed:      "写索引失败: %w",
 	ManifestCorrupt:       "manifest %s 损坏，已改名为 %s；本次备份中止: %v",
 	ManifestCorruptLocked: "manifest %s 损坏且无法改名: %v",
@@ -838,21 +842,25 @@ var zhMessages = &Messages{
 	OnlyVersions:         "包含 %s 的包（%d 个，时间升序）\n",
 	OnlyNoVersions:       "没有任何包包含这个路径: %s",
 
-	FlagPackStart:     "只重建从该包名开始的范围",
-	FlagPackEnd:       "只重建到该包名为止的范围",
-	FlagYesReindex:    "覆盖已有索引（会先备份为 .bak）",
-	UsageReindex:      "用法: zinc reindex <name> [--password <pw>] [--pack-start <名>] [--pack-end <名>] [--yes]",
-	ReindexStart:      "[重建] 扫描 %d 个包（只读归档头）\n",
-	ReindexPack:       "  %s · %d 个文件\n",
-	ReindexDone:       "[完成] %d 个包 / %d 个文件 → %s\n",
-	ReindexExists:     "索引已存在：%s\n加 --yes 覆盖（会先备份为 .bak）",
-	ReindexListFailed: "读取包 %s 的目录失败: %v",
-	ReindexNoPacks:    "没有找到任何包: %s",
-	ReindexBakFailed:  "备份旧索引失败，已中止: %w",
-	ReindexDeleted:    "  按删除记录划掉 %d 个文件\n",
+	FlagPackStart:      "只重建从该包名开始的范围",
+	FlagPackEnd:        "只重建到该包名为止的范围",
+	FlagRehash:         "按磁盘实际内容重算每个包的哈希（修 compact 中断留下的旧哈希）",
+	UsageRepair:        "用法: zinc repair <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check] [--password <密码>]",
+	RepairConfirmHead:  "修复只重写 index.tsv 与 manifest.json 两个元数据文件，不动任何包内容。\n",
+	RepairRehashPack:   "  [重算] %s\n",
+	RepairRehashNone:   "[ok] 包哈希没有变化\n",
+	RepairRehashDryRun: "[预演] %d 个包的哈希会更新\n",
+	RepairRehashDone:   "[ok] 更新了 %d 个包的哈希\n",
+	ReindexStart:       "[重建] 扫描 %d 个包（只读归档头）\n",
+	ReindexPack:        "  %s · %d 个文件\n",
+	ReindexDone:        "[完成] %d 个包 / %d 个文件 → %s\n",
+	ReindexDryRun:      "[预演] 会重建 %d 个包 / %d 个文件，未写盘\n",
+	ReindexExists:      "[预演] 索引已存在：%s（执行时会先备份为 .bak 再覆盖）\n",
+	ReindexListFailed:  "读取包 %s 的目录失败: %v",
+	ReindexNoPacks:     "没有找到任何包: %s",
+	ReindexBakFailed:   "备份旧索引失败，已中止: %w",
+	ReindexDeleted:     "  按删除记录划掉 %d 个文件\n",
 
-	FlagYesRemanifest:         "真正写回（不给时只报告）",
-	UsageRemanifest:           "用法: zinc remanifest <name> [--password <pw>] [--yes]",
 	RemanifestHeader:          "[对账] %s：manifest 登记 %d 批 / %d 包；磁盘 %d 包 / %d 条删除记录\n",
 	RemanifestNoManifest:      "[提示] 没有 manifest（%s），将按磁盘重建\n",
 	RemanifestDropPack:        "[移除] %s（磁盘上已不存在）\n",
@@ -861,7 +869,7 @@ var zhMessages = &Messages{
 	RemanifestAddRm:           "[补登] 删除记录 %s\n",
 	RemanifestSkipPlaceholder: "[跳过] %s（包内只剩占位文件）\n",
 	RemanifestNoChange:        "[无需改动] manifest 与磁盘一致\n",
-	RemanifestPreview:         "[预演] 没有 --yes，以上改动不会写回（预演不读包内容，占位包执行时才跳过）\n",
+	RemanifestPreview:         "[预演] 给了 --check，以上改动不会写回（预演不读包内容，占位包执行时才跳过）\n",
 	RemanifestDone:            "[完成] 移除 %d 项、补登 %d 项，已写回 %s\n",
 	RemanifestBakFailed:       "备份旧 manifest 失败，已中止: %w",
 	RemanifestListFailed:      "读取包 %s 的目录失败: %v",
@@ -887,7 +895,7 @@ var zhMessages = &Messages{
 	CompactNoPacks:         "没有找到任何包: %s",
 	CompactPackFailed:      "处理包 %s 失败: %v\n",
 	CompactPackNotFound:    "找不到这个包: %s",
-	CompactIndexStale:      "索引与包目录对不上（索引 %d 个包，目录 %d 个）：%s\n先跑 zinc reindex %s 把索引重建完整，再来压缩",
+	CompactIndexStale:      "索引与包目录对不上（索引 %d 个包，目录 %d 个）：%s\n先跑 zinc repair %s 把索引重建完整，再来压缩",
 	CompactPackListFailed:  "读取包 %s 的目录失败: %v",
 	CompactExtractFailed:   "解出包 %s 失败（原包未改动）: %v\n%s",
 	CompactExtractMismatch: "包 %s 里的 %s 没能原样解出来（大小不符），跳过这个包（原包未改动）",
@@ -947,8 +955,8 @@ Usage:
                        [--overwrite|--no-overwrite] [--no-delete] [--check-list]
   zinc restore <name> --only <relative-path> [--dest <path>] [--from <pack|index>]
                        restore just that file/dir; add --check-list to list its versions
-  zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]
-  zinc remanifest <name> [--password <pw>] [--yes]   reconcile the manifest with the packs on disk
+  zinc repair <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>] [--rehash] [--check] [--password <password>]
+                        fix the index and the manifest; --rehash recomputes pack hashes from disk
   zinc compact <name> [--password <pw>] [--pack <name|index>] [--min-gain <5%|8M>] [--yes] [--notify]
                        drop copies a newer version has superseded; same name, cloud overwrite
   zinc verify <name|--all> [--sample <pct>] [--password-only|--hash-only]
@@ -973,7 +981,7 @@ Notes:
   - --check-list only prints the order, --dest may be omitted
   - restore also applies deletions recorded by later backups; --no-delete keeps those files
   - compact drops copies a newer version has superseded, so those old versions disappear; an emptied pack keeps only a placeholder
-  - the index is a cache; zinc reindex rebuilds it from the packs themselves
+  - the index is a cache; zinc repair rebuilds it from the packs themselves
   - output defaults to <root>\<name>; set it with zinc root
   - run zinc init once after unzipping; then just type zinc in any terminal
   - use zinc-register.exe / zinc-unregister.exe from the tools folder for install and removal; zinc init is the light version that does not require 7-Zip
@@ -1231,10 +1239,10 @@ Notes:
 	ConfigAuto:          "(auto)",
 	ConfigEmpty:         "(empty)",
 
-	IndexBadHeader:        "index file %s does not start with %q; it may be corrupt - run zinc reindex",
-	IndexLineBad:          "index file %s has a bad line %d; run zinc reindex",
-	IndexTruncated:        "index file %s is incomplete (no end marker); run zinc reindex",
-	IndexCountMismatch:    "index file %s count mismatch (recorded %d packs/%d files, found %d/%d); run zinc reindex",
+	IndexBadHeader:        "index file %s does not start with %q; it may be corrupt - run zinc repair",
+	IndexLineBad:          "index file %s has a bad line %d; run zinc repair",
+	IndexTruncated:        "index file %s is incomplete (no end marker); run zinc repair",
+	IndexCountMismatch:    "index file %s count mismatch (recorded %d packs/%d files, found %d/%d); run zinc repair",
 	IndexWriteFailed:      "failed to write index: %w",
 	ManifestCorrupt:       "manifest %s is corrupt, renamed to %s; backup aborted: %v",
 	ManifestCorruptLocked: "manifest %s is corrupt and could not be renamed: %v",
@@ -1309,21 +1317,25 @@ Notes:
 	OnlyVersions:         "packs containing %s (%d, oldest first)\n",
 	OnlyNoVersions:       "no pack contains that path: %s",
 
-	FlagPackStart:     "rebuild only from this pack name onwards",
-	FlagPackEnd:       "rebuild only up to this pack name",
-	FlagYesReindex:    "overwrite the existing index (a .bak is kept)",
-	UsageReindex:      "usage: zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]",
-	ReindexStart:      "[reindex] scanning %d packs (headers only)\n",
-	ReindexPack:       "  %s · %d files\n",
-	ReindexDone:       "[done] %d packs / %d files → %s\n",
-	ReindexExists:     "index already exists: %s\nadd --yes to overwrite (a .bak is kept)",
-	ReindexListFailed: "failed to list pack %s: %v",
-	ReindexNoPacks:    "no packs found: %s",
-	ReindexBakFailed:  "failed to back up the old index; aborted: %w",
-	ReindexDeleted:    "  %d file(s) dropped by the deletion records\n",
+	FlagPackStart:      "rebuild only from this pack name onwards",
+	FlagPackEnd:        "rebuild only up to this pack name",
+	FlagRehash:         "recompute every pack hash from what is on disk (fixes a compact that died mid-way)",
+	UsageRepair:        "usage: zinc repair <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>] [--rehash] [--check] [--password <password>]",
+	RepairConfirmHead:  "Repair rewrites only index.tsv and manifest.json; no pack content is touched.\n",
+	RepairRehashPack:   "  [rehash] %s\n",
+	RepairRehashNone:   "[ok] pack hashes are unchanged\n",
+	RepairRehashDryRun: "[dry-run] %d pack hashes would change\n",
+	RepairRehashDone:   "[ok] updated %d pack hashes\n",
+	ReindexStart:       "[reindex] scanning %d packs (headers only)\n",
+	ReindexPack:        "  %s · %d files\n",
+	ReindexDone:        "[done] %d packs / %d files → %s\n",
+	ReindexDryRun:      "[dry-run] would rebuild %d packs / %d files; nothing written\n",
+	ReindexExists:      "[dry-run] index already exists: %s (running it backs the old one up to .bak first)\n",
+	ReindexListFailed:  "failed to list pack %s: %v",
+	ReindexNoPacks:     "no packs found: %s",
+	ReindexBakFailed:   "failed to back up the old index; aborted: %w",
+	ReindexDeleted:     "  %d file(s) dropped by the deletion records\n",
 
-	FlagYesRemanifest:         "actually write (without it, only report)",
-	UsageRemanifest:           "usage: zinc remanifest <name> [--password <pw>] [--yes]",
 	RemanifestHeader:          "[reconcile] %s: manifest lists %d batches / %d packs; disk has %d packs / %d deletion records\n",
 	RemanifestNoManifest:      "[note] no manifest (%s), rebuilding from disk\n",
 	RemanifestDropPack:        "[drop] %s (no longer on disk)\n",
@@ -1332,7 +1344,7 @@ Notes:
 	RemanifestAddRm:           "[add] deletion record %s\n",
 	RemanifestSkipPlaceholder: "[skip] %s (only the placeholder is left)\n",
 	RemanifestNoChange:        "[unchanged] manifest matches the disk\n",
-	RemanifestPreview:         "[dry-run] no --yes, the changes above are not written (packs are not opened yet; placeholder packs are skipped on the real run)\n",
+	RemanifestPreview:         "[dry-run] --check given, the changes above are not written (packs are not opened yet; placeholder packs are skipped on the real run)\n",
 	RemanifestDone:            "[done] dropped %d, added %d, wrote %s\n",
 	RemanifestBakFailed:       "failed to back up the old manifest; aborted: %w",
 	RemanifestListFailed:      "failed to list pack %s: %v",
@@ -1358,7 +1370,7 @@ Notes:
 	CompactNoPacks:         "no packs found: %s",
 	CompactPackFailed:      "failed to process pack %s: %v\n",
 	CompactPackNotFound:    "no such pack: %s",
-	CompactIndexStale:      "the index does not match the pack directory (index %d packs, directory %d packs): %s\nrun zinc reindex %s to rebuild it completely first",
+	CompactIndexStale:      "the index does not match the pack directory (index %d packs, directory %d packs): %s\nrun zinc repair %s to rebuild it completely first",
 	CompactPackListFailed:  "failed to list pack %s: %v",
 	CompactExtractFailed:   "failed to extract pack %s (original untouched): %v\n%s",
 	CompactExtractMismatch: "%s from pack %s did not extract intact (size mismatch); pack skipped (original untouched)",

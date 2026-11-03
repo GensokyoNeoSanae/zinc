@@ -148,7 +148,9 @@ func runReindex(name string, cfg *Config, set *Settings, password, packStart, pa
 	p := indexPath(repo.Output)
 	if fileExists(p) {
 		if !yes {
-			return fmt.Errorf(M.ReindexExists, p)
+			// 预演模式：只说会覆盖，不动手也不报错
+			fmt.Printf(M.ReindexExists, p)
+			return nil
 		}
 		b, rerr := os.ReadFile(p)
 		if rerr != nil {
@@ -219,6 +221,11 @@ func runReindex(name string, cfg *Config, set *Settings, password, packStart, pa
 		fmt.Printf(M.ReindexDeleted, gone)
 	}
 
+	if !yes {
+		// 预演到此为止：上面已经读完包目录、把结果打在屏幕上，但不落盘
+		fmt.Printf(M.ReindexDryRun, len(idx.Packs), len(idx.Files))
+		return nil
+	}
 	if err := saveIndex(repo.Output, idx); err != nil {
 		return err
 	}

@@ -316,7 +316,7 @@ func cmdRemove(args []string) {
 	if _, exists := cfg.Repos[name]; !exists {
 		die(M.RepoNotFound, name)
 	}
-	if !askConfirm(mustSettings(), M.RemoveConfirm, name) {
+	if !askConfirm(mustSettings(), fmt.Sprintf(M.RemoveConfirm, name)) {
 		fmt.Print(M.ConfirmCancelled)
 		return
 	}
@@ -905,31 +905,6 @@ func cmdCompact(args []string) {
 	}
 	if err := runCompact(name, cfg, set, pw, *packSpec, *minGain, *check, *noVerify, *notify); err != nil {
 		logf("compact %s: failed: %v", name, err)
-		die("%v", err)
-	}
-}
-
-func cmdReindex(args []string) {
-	fs := flag.NewFlagSet("reindex", flag.ExitOnError)
-	password := fs.String("password", "", M.FlagPassword)
-	packStart := fs.String("pack-start", "", M.FlagPackStart)
-	packEnd := fs.String("pack-end", "", M.FlagPackEnd)
-	yes := fs.Bool("yes", false, M.FlagYesReindex)
-	fs.Parse(reorderArgs(args))
-	requireArgs(fs, 1, 1, M.UsageReindex)
-	name := fs.Arg(0)
-
-	cfg := mustConfig()
-	set := mustSettings()
-	repo, err := cfg.repo(name)
-	if err != nil {
-		die("%v", err)
-	}
-	pw, _ := pickPassword(*password, "", repo, set)
-	if pw == "" {
-		pw = promptPassword(false)
-	}
-	if err := runReindex(name, cfg, set, pw, *packStart, *packEnd, *yes); err != nil {
 		die("%v", err)
 	}
 }

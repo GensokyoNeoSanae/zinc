@@ -7,16 +7,17 @@ import (
 )
 
 // askConfirm 在危险操作前问一次 y/n。confirm_tips=false 时直接放行，
-// 让脚本或"我知道自己在干什么"的用户一路跑下去。
+// 让脚本或"我知道自己在干什么"的用户一路跑下去。head 是要先打印的说明，
+// 由调用方格式化好再传进来（避免把变量当格式串用）。
 //
 // 返回 false 表示用户放弃：调用方打印 M.ConfirmCancelled 后正常退出
 // ——取消不是错误，退出码保持 0。
-func askConfirm(set *Settings, head string, args ...any) bool {
+func askConfirm(set *Settings, head string) bool {
 	if !set.confirmTips() {
 		return true
 	}
 	if head != "" {
-		fmt.Printf(head, args...)
+		fmt.Print(head)
 		if !strings.HasSuffix(head, "\n") {
 			fmt.Println()
 		}

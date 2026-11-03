@@ -176,7 +176,7 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 	}
 	// 目标已经有东西才问一句：空目录直接恢复。非空意味着可能覆盖同名文件、
 	// 也可能按删除记录删掉里面的文件，这是整个工具唯一会动既有数据的地方。
-	if dirHasEntries(target) && !askConfirm(set, M.RestoreConfirmHead, target) {
+	if dirHasEntries(target) && !askConfirm(set, fmt.Sprintf(M.RestoreConfirmHead, target)) {
 		fmt.Print(M.ConfirmCancelled)
 		return nil
 	}
@@ -435,7 +435,7 @@ func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, onl
 		return err
 	}
 	// 跟整仓恢复同一个判定：目标目录非空才问一句。
-	if dirHasEntries(dest) && !askConfirm(set, M.RestoreConfirmHead, dest) {
+	if dirHasEntries(dest) && !askConfirm(set, fmt.Sprintf(M.RestoreConfirmHead, dest)) {
 		fmt.Print(M.ConfirmCancelled)
 		return nil
 	}

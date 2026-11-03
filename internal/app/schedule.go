@@ -66,7 +66,7 @@ func runSchedule(name string, all bool, kind, days, times, password string, noNo
 				return fmt.Errorf(M.MonthlyDayInvalid, d)
 			}
 			// 29-31 号在部分月份不存在，schtasks 会静默跳过那几个月，问一句再建
-			if n > 28 && !check && !askConfirm(set, M.MonthlyWarn, n, n) {
+			if n > 28 && !check && !askConfirm(set, fmt.Sprintf(M.MonthlyWarn, n, n)) {
 				fmt.Print(M.ConfirmCancelled)
 				return nil
 			}
