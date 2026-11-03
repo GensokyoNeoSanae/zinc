@@ -6,6 +6,14 @@ import (
 	"testing"
 )
 
+// noConfirmSettings 返回一份不询问 y/N 的 Settings。
+// 直接调 run* 的测试没有终端可问，confirm_tips 开着会让每个危险操作都
+// 静默取消，然后把失败伪装成“包没被重写”。
+func noConfirmSettings(sz string) *Settings {
+	no := false
+	return &Settings{SevenZipPath: sz, ConfirmTips: &no}
+}
+
 func TestParseMinGain(t *testing.T) {
 	const gb = int64(1 << 30)
 
@@ -108,7 +116,7 @@ func TestRewritePackKeepsOnlyCurrent(t *testing.T) {
 
 	files := writeFiles(t, src, "f", 4, 4096)
 	repo := &Repo{Source: src, Output: out}
-	set := &Settings{SevenZipPath: sz}
+	set := noConfirmSettings(sz)
 	pack := "20260101_000000_000.7z"
 	if _, err := packOne(repo, set, packPlan{Files: files}, pack, "TESTPW", false); err != nil {
 		t.Fatalf("packOne: %v", err)
@@ -200,7 +208,7 @@ func TestRewritePackEmptyBecomesPlaceholder(t *testing.T) {
 
 	files := writeFiles(t, src, "f", 3, 1024)
 	repo := &Repo{Source: src, Output: out}
-	set := &Settings{SevenZipPath: sz}
+	set := noConfirmSettings(sz)
 	pack := "20260101_000000_000.7z"
 	if _, err := packOne(repo, set, packPlan{Files: files}, pack, "TESTPW", false); err != nil {
 		t.Fatalf("packOne: %v", err)
@@ -264,7 +272,7 @@ func TestRestoreRmMissingAfterCompact(t *testing.T) {
 		}
 	}
 	repo := &Repo{Source: src, Output: out}
-	set := &Settings{SevenZipPath: sz}
+	set := noConfirmSettings(sz)
 	cfg := &Config{Repos: map[string]*Repo{"t": repo}}
 
 	backup := func() BackupResult {
@@ -306,7 +314,7 @@ func TestRestoreRmMissingAfterCompact(t *testing.T) {
 	}
 
 	// compact：前两个包里的 a.txt 旧副本全清掉
-	if err := runCompact("t", cfg, set, "TESTPW", "", "0", true, false, false); err != nil {
+	if err := runCompact("t", cfg, set, "TESTPW", "", "0", false, false, false); err != nil {
 		t.Fatalf("runCompact: %v", err)
 	}
 
@@ -359,7 +367,7 @@ func TestCompactEndToEnd(t *testing.T) {
 
 	files := writeFiles(t, src, "f", 3, 2048)
 	repo := &Repo{Source: src, Output: out}
-	set := &Settings{SevenZipPath: sz}
+	set := noConfirmSettings(sz)
 	cfg := &Config{Repos: map[string]*Repo{"t": repo}}
 
 	scan1, err := scanRepo(repo, set)
@@ -393,7 +401,7 @@ func TestCompactEndToEnd(t *testing.T) {
 	}
 
 	// compact：min-gain 0 → 不看阈值，有死副本就重写
-	if err := runCompact("t", cfg, set, "TESTPW", "", "0", true, false, false); err != nil {
+	if err := runCompact("t", cfg, set, "TESTPW", "", "0", false, false, false); err != nil {
 		t.Fatalf("runCompact: %v", err)
 	}
 

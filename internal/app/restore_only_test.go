@@ -22,7 +22,8 @@ func TestRestoreOnlyAppliesDeletions(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := &Repo{Source: src, Output: out}
-	set := &Settings{SevenZipPath: sz, DefaultPassword: "PW"}
+	set := noConfirmSettings(sz)
+	set.DefaultPassword = "PW"
 	cfg := &Config{Repos: map[string]*Repo{"t": repo}}
 
 	sc1, err := scanRepo(repo, set)
@@ -86,7 +87,8 @@ func TestRestoreOnlyNoDeletions(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := &Repo{Source: src, Output: out}
-	set := &Settings{SevenZipPath: sz, DefaultPassword: "PW"}
+	set := noConfirmSettings(sz)
+	set.DefaultPassword = "PW"
 	cfg := &Config{Repos: map[string]*Repo{"t": repo}}
 	sc, err := scanRepo(repo, set)
 	if err != nil {
