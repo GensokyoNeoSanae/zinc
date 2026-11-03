@@ -42,22 +42,25 @@ func dirSize(root string) int64 {
 	return total
 }
 
-// displayWidth 算终端里的显示宽度：CJK 与全角字符占两列。
-// 不这么算，中文仓库名永远对不齐。
+// runeWidth 返回一个字符在终端里占几列：CJK 与全角字符占两列。
+func runeWidth(r rune) int {
+	if r >= 0x1100 && (r <= 0x115F ||
+		(r >= 0x2E80 && r <= 0xA4CF) ||
+		(r >= 0xAC00 && r <= 0xD7A3) ||
+		(r >= 0xF900 && r <= 0xFAFF) ||
+		(r >= 0xFE30 && r <= 0xFE6F) ||
+		(r >= 0xFF00 && r <= 0xFF60) ||
+		(r >= 0xFFE0 && r <= 0xFFE6)) {
+		return 2
+	}
+	return 1
+}
+
+// displayWidth 算字符串的显示宽度。不这么算，中文永远对不齐。
 func displayWidth(s string) int {
 	w := 0
 	for _, r := range s {
-		if r >= 0x1100 && (r <= 0x115F ||
-			(r >= 0x2E80 && r <= 0xA4CF) ||
-			(r >= 0xAC00 && r <= 0xD7A3) ||
-			(r >= 0xF900 && r <= 0xFAFF) ||
-			(r >= 0xFE30 && r <= 0xFE6F) ||
-			(r >= 0xFF00 && r <= 0xFF60) ||
-			(r >= 0xFFE0 && r <= 0xFFE6)) {
-			w += 2
-		} else {
-			w++
-		}
+		w += runeWidth(r)
 	}
 	return w
 }
