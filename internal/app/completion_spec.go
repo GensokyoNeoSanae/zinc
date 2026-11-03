@@ -58,7 +58,7 @@ var completionCommands = []CmdSpec{
 		{Name: "only", HasValue: true},
 		{Name: "from", HasValue: true},
 	}, PositionalKind: "repo"},
-	{Name: "repair", Flags: []FlagSpec{
+	{Name: "fixmeta", Flags: []FlagSpec{
 		{Name: "password", HasValue: true},
 		{Name: "pack-start", HasValue: true},
 		{Name: "pack-end", HasValue: true},

@@ -398,11 +398,11 @@ type Messages struct {
 	OnlyVersions       string
 	OnlyNoVersions     string
 
-	// repair（原 reindex + remanifest 合并）
+	// fixmeta（原 reindex + remanifest 合并）
 	FlagPackStart      string
 	FlagPackEnd        string
 	FlagRehash         string
-	UsageRepair        string
+	UsageFixmeta       string
 	RepairConfirmHead  string
 	RepairRehashPack   string
 	RepairRehashNone   string
@@ -418,7 +418,7 @@ type Messages struct {
 	ReindexBakFailed   string
 	ReindexDeleted     string
 
-	// remanifest（runRemanifest 仍被 repair 调用）
+	// remanifest（runRemanifest 仍被 fixmeta 调用）
 	RemanifestHeader          string
 	RemanifestNoManifest      string
 	RemanifestDropPack        string
@@ -530,7 +530,7 @@ var zhMessages = &Messages{
 校验与维护:
   zinc verify <仓库名|--all> [--sample <百分比>] [--password-only|--hash-only]
   zinc status [--all] [<仓库名>]
-  zinc repair <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash]
+  zinc fixmeta <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash]
                         [--check] [--password <密码>]
   zinc fixpack <仓库名> [--check] [--password <密码>]
                         修包：捞回坏包里还能用的文件，给读不出来的找替代来源后重打包
@@ -552,13 +552,13 @@ var zhMessages = &Messages{
   - 压缩等级 0 时恒为非固实（每文件独立块）；等级 >0 时固实块默认 64M，块里坏一个字节该块后续文件就解不出来，--solid off 可改成每文件独立块
   - 头部默认加密（-mhe=on）：文件名也不明文，网盘按文件名审查时看不到包里有什么；--mhe off 关掉，代价是头一旦损坏整个包连目录都列不出来
   - 不给 --password 时按「仓库 > settings > 交互询问」取；schedule 取不到直接报错
-  - 危险操作（restore / compact / repair / schedule / remove）执行前会打印计划并问 y/N；把 confirm_tips 设为 false 就不再询问
+  - 危险操作（restore / compact / fixmeta / schedule / remove）执行前会打印计划并问 y/N；把 confirm_tips 设为 false 就不再询问
   - schedule 会把解析到的密码明文写进计划任务，之后改了密码要重建任务（zinc unschedule <仓库名> 再 schedule）
   - 恢复默认覆盖同名文件（--no-overwrite 则保留两份）；--dest 必填，只有 --check 时可以省
   - 建议恢复到空目录、检查无误后再手动覆盖回源目录；直接往源目录恢复等于拿唯一的副本冒险
   - 恢复会执行之后备份记下的删除（--no-delete 保留这些文件）；删除记录是输出目录里的 .rm 旁注
   - compact 删掉的是「已被新版取代 / 已从源目录删除」的副本，那些旧版本随之消失；包被腾空后只留一个占位文件
-  - 索引与账本坏了用 zinc repair 重建；包本身是权威数据
+  - 索引与账本坏了用 zinc fixmeta 重建；包本身是权威数据
   - 输出默认落在 <根目录>\<仓库名>，用 zinc root 设置
   - 解压后先跑一次 zinc init，之后在任意终端直接敲 zinc
   - 安装/卸载用 tools\ 下的 zinc-register.exe / zinc-unregister.exe
@@ -680,7 +680,7 @@ var zhMessages = &Messages{
 	CorruptFile:        "[更改] %s\n",
 	VerifySummary:      "%s: 通过 %d, 更改 %d, 缺失 %d\n",
 	VerifyCorruptWarn:  "如果你确定没有手动修改过输出目录里的压缩包，那它很可能已经损坏了。\n",
-	VerifyCorruptFix:   "如果原文件还在，可以这样补救：删掉被改动的包和该仓库的 index.tsv，执行 zinc repair %[1]s 重建账本，再跑一次 zinc backup %[1]s 把文件重新打包。\n",
+	VerifyCorruptFix:   "如果原文件还在，可以这样补救：删掉被改动的包和该仓库的 index.tsv，执行 zinc fixmeta %[1]s 重建账本，再跑一次 zinc backup %[1]s 把文件重新打包。\n",
 
 	UsageFixpack:        "用法: zinc fixpack <仓库名> [--check] [--password <密码>]",
 	FixNoPacks:          "输出目录里没有包: %s",
@@ -855,10 +855,10 @@ var zhMessages = &Messages{
 	ConfigAuto:          "(自动)",
 	ConfigEmpty:         "(空)",
 
-	IndexBadHeader:        "索引文件 %s 的头部不是 %q，可能已损坏；用 zinc repair 重建",
-	IndexLineBad:          "索引文件 %s 第 %d 行格式错误；用 zinc repair 重建",
-	IndexTruncated:        "索引文件 %s 不完整（缺少结尾标记），可能被截断；用 zinc repair 重建",
-	IndexCountMismatch:    "索引文件 %s 计数不符（记录 包%d/文件%d，实际 包%d/文件%d）；用 zinc repair 重建",
+	IndexBadHeader:        "索引文件 %s 的头部不是 %q，可能已损坏；用 zinc fixmeta 重建",
+	IndexLineBad:          "索引文件 %s 第 %d 行格式错误；用 zinc fixmeta 重建",
+	IndexTruncated:        "索引文件 %s 不完整（缺少结尾标记），可能被截断；用 zinc fixmeta 重建",
+	IndexCountMismatch:    "索引文件 %s 计数不符（记录 包%d/文件%d，实际 包%d/文件%d）；用 zinc fixmeta 重建",
 	IndexWriteFailed:      "写索引失败: %w",
 	ManifestCorrupt:       "manifest %s 损坏，已改名为 %s；本次备份中止: %v",
 	ManifestCorruptLocked: "manifest %s 损坏且无法改名: %v",
@@ -936,7 +936,7 @@ var zhMessages = &Messages{
 	FlagPackStart:      "只重建从该包名开始的范围",
 	FlagPackEnd:        "只重建到该包名为止的范围",
 	FlagRehash:         "按磁盘实际内容重算每个包的哈希（修 compact 中断留下的旧哈希）",
-	UsageRepair:        "用法: zinc repair <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check] [--password <密码>]",
+	UsageFixmeta:       "用法: zinc fixmeta <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check] [--password <密码>]",
 	RepairConfirmHead:  "修复只重写 index.tsv 与 manifest.json 两个元数据文件，不动任何包内容。\n",
 	RepairRehashPack:   "  [重算] %s\n",
 	RepairRehashNone:   "[ok] 包哈希没有变化\n",
@@ -986,7 +986,7 @@ var zhMessages = &Messages{
 	CompactNoPacks:         "没有找到任何包: %s",
 	CompactPackFailed:      "处理包 %s 失败: %v\n",
 	CompactPackNotFound:    "找不到这个包: %s",
-	CompactIndexStale:      "索引与包目录对不上（索引 %d 个包，目录 %d 个）：%s\n先跑 zinc repair %s 把索引重建完整，再来压缩",
+	CompactIndexStale:      "索引与包目录对不上（索引 %d 个包，目录 %d 个）：%s\n先跑 zinc fixmeta %s 把索引重建完整，再来压缩",
 	CompactPackListFailed:  "读取包 %s 的目录失败: %v",
 	CompactExtractFailed:   "解出包 %s 失败（原包未改动）: %v\n%s",
 	CompactExtractMismatch: "包 %s 里的 %s 没能原样解出来（大小不符），跳过这个包（原包未改动）",
@@ -1054,10 +1054,10 @@ Backup and restore:
   zinc compact <repo_name> [--pack <pack_name>] [--min-gain <threshold>] [--check]
                         [--notify] [--no-verify] [--password <password>]
 
-Verify and repair:
+Verify and fixmeta:
   zinc verify <repo_name|--all> [--sample <percent>] [--password-only|--hash-only]
   zinc status [--all] [<repo_name>]
-  zinc repair <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>]
+  zinc fixmeta <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>]
                         [--rehash] [--check] [--password <password>]
   zinc fixpack <repo_name> [--check] [--password <password>]
                         repair packs: salvage what is readable, find replacements, repack
@@ -1079,13 +1079,13 @@ Notes:
   - compression level 0 is always non-solid (one folder per file); with level >0 solid blocks default to 64M, and --solid off keeps one block per file
   - the header is encrypted by default (-mhe=on): file names stay out of plaintext, so a drive scanning names sees nothing; --mhe off trades that away so a damaged header still lists the pack
   - without --password the password comes from repo > settings > a prompt; schedule fails instead
-  - destructive commands (restore / compact / repair / schedule / remove) print the plan and ask y/N first; set confirm_tips to false to stop asking
+  - destructive commands (restore / compact / fixmeta / schedule / remove) print the plan and ask y/N first; set confirm_tips to false to stop asking
   - schedule stores the resolved password in plain text inside the task; recreate the task after changing the password (zinc unschedule <repo_name>, then schedule again)
   - restore overwrites same-name files by default; --no-overwrite keeps both; --dest is required (only --check may omit it)
   - restore into an empty directory and copy the result back by hand; restoring straight into the source puts your only copy at risk
   - restore also applies deletions recorded by later backups; --no-delete keeps those files
   - compact drops copies a newer version has superseded, so those old versions disappear; an emptied pack keeps only a placeholder
-  - a broken index or manifest is rebuilt by zinc repair; the packs themselves are the source of truth
+  - a broken index or manifest is rebuilt by zinc fixmeta; the packs themselves are the source of truth
   - output defaults to <root>\<repo_name>; set it with zinc root
   - run zinc init once after unzipping; then just type zinc in any terminal
   - use zinc-register.exe / zinc-unregister.exe from the tools folder for install and removal
@@ -1207,7 +1207,7 @@ Notes:
 	CorruptFile:        "[changed] %s\n",
 	VerifySummary:      "%s: passed %d, changed %d, missing %d\n",
 	VerifyCorruptWarn:  "If you never edited the packs in the output directory yourself, this one is probably damaged.\n",
-	VerifyCorruptFix:   "If the source files are still there: delete the changed pack and the repo's index.tsv, run zinc repair %[1]s to rebuild the ledger, then zinc backup %[1]s to pack them again.\n",
+	VerifyCorruptFix:   "If the source files are still there: delete the changed pack and the repo's index.tsv, run zinc fixmeta %[1]s to rebuild the ledger, then zinc backup %[1]s to pack them again.\n",
 
 	UsageFixpack:        "usage: zinc fixpack <repo_name> [--check] [--password <password>]",
 	FixNoPacks:          "no packs in the output directory: %s",
@@ -1382,10 +1382,10 @@ Notes:
 	ConfigAuto:          "(auto)",
 	ConfigEmpty:         "(empty)",
 
-	IndexBadHeader:        "index file %s does not start with %q; it may be corrupt - run zinc repair",
-	IndexLineBad:          "index file %s has a bad line %d; run zinc repair",
-	IndexTruncated:        "index file %s is incomplete (no end marker); run zinc repair",
-	IndexCountMismatch:    "index file %s count mismatch (recorded %d packs/%d files, found %d/%d); run zinc repair",
+	IndexBadHeader:        "index file %s does not start with %q; it may be corrupt - run zinc fixmeta",
+	IndexLineBad:          "index file %s has a bad line %d; run zinc fixmeta",
+	IndexTruncated:        "index file %s is incomplete (no end marker); run zinc fixmeta",
+	IndexCountMismatch:    "index file %s count mismatch (recorded %d packs/%d files, found %d/%d); run zinc fixmeta",
 	IndexWriteFailed:      "failed to write index: %w",
 	ManifestCorrupt:       "manifest %s is corrupt, renamed to %s; backup aborted: %v",
 	ManifestCorruptLocked: "manifest %s is corrupt and could not be renamed: %v",
@@ -1463,7 +1463,7 @@ Notes:
 	FlagPackStart:      "rebuild only from this pack name onwards",
 	FlagPackEnd:        "rebuild only up to this pack name",
 	FlagRehash:         "recompute every pack hash from what is on disk (fixes a compact that died mid-way)",
-	UsageRepair:        "usage: zinc repair <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>] [--rehash] [--check] [--password <password>]",
+	UsageFixmeta:       "usage: zinc fixmeta <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>] [--rehash] [--check] [--password <password>]",
 	RepairConfirmHead:  "Repair rewrites only index.tsv and manifest.json; no pack content is touched.\n",
 	RepairRehashPack:   "  [rehash] %s\n",
 	RepairRehashNone:   "[ok] pack hashes are unchanged\n",
@@ -1513,7 +1513,7 @@ Notes:
 	CompactNoPacks:         "no packs found: %s",
 	CompactPackFailed:      "failed to process pack %s: %v\n",
 	CompactPackNotFound:    "no such pack: %s",
-	CompactIndexStale:      "the index does not match the pack directory (index %d packs, directory %d packs): %s\nrun zinc repair %s to rebuild it completely first",
+	CompactIndexStale:      "the index does not match the pack directory (index %d packs, directory %d packs): %s\nrun zinc fixmeta %s to rebuild it completely first",
 	CompactPackListFailed:  "failed to list pack %s: %v",
 	CompactExtractFailed:   "failed to extract pack %s (original untouched): %v\n%s",
 	CompactExtractMismatch: "%s from pack %s did not extract intact (size mismatch); pack skipped (original untouched)",

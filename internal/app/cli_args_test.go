@@ -91,7 +91,7 @@ func TestCLIRejectsAmbiguousArgs(t *testing.T) {
 		{"remove 多余参数", []string{"remove", "demo", "extra"}, "多余的参数: extra"},
 		{"set 多余参数", []string{"set", "demo", "extra"}, "多余的参数: extra"},
 		{"restore 多余参数", []string{"restore", "demo", "extra", "--dest", dest}, "多余的参数: extra"},
-		{"repair 多余参数", []string{"repair", "demo", "extra"}, "多余的参数: extra"},
+		{"fixmeta 多余参数", []string{"fixmeta", "demo", "extra"}, "多余的参数: extra"},
 		{"compact 多余参数", []string{"compact", "demo", "extra"}, "多余的参数: extra"},
 		{"schedule 多余参数", []string{"schedule", "demo", "--daily", "--at", "20:00", "extra"}, "多余的参数: extra"},
 		{"schedule --list 带周期", []string{"schedule", "--list", "--daily"}, "只查询任务"},

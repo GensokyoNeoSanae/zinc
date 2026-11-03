@@ -108,11 +108,11 @@ F	笔记/semiconductor.md	2048	20261023T124138.9843416+0800	1
 头部不对、某行格式坏了、缺尾行、计数不符，都直接报错，绝不静默当成空索引。索引丢了只损失重建时间，不损失数据：
 
 ```powershell
-zinc repair 图片          # 只读归档头重建
-zinc repair 图片 --check    # 只看不写
+zinc fixmeta 图片          # 只读归档头重建
+zinc fixmeta 图片 --check    # 只看不写
 ```
 
-`repair` 重建索引走的是 `7za l -slt`，不解压任何内容。
+`fixmeta` 重建索引走的是 `7za l -slt`，不解压任何内容。
 
 ### 删除是怎么记下来的？
 
@@ -213,7 +213,7 @@ zinc restore pictures --check
 | `zinc config [get\|set\|unset\|path\|list\|show] [<key>] [<value>]` | 全局设置 |
 | `zinc backup <仓库名\|--all> [--password <密码>] [--notify] [--notify-empty] [--no-verify]` | 备份 |
 | `zinc restore <仓库名> --dest <路径> [--password <密码>] [--no-overwrite] [--no-delete] [--check] [--only <路径>] [--from <包名>]` | 恢复全量或单个路径 |
-| `zinc repair <仓库名> [--password <密码>] [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check]` | 重建索引与账本（`--rehash` 重算包哈希） |
+| `zinc fixmeta <仓库名> [--password <密码>] [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check]` | 重建索引与账本（`--rehash` 重算包哈希） |
 | `zinc hash-compare --source1 <路径> --source2 <路径>` | 逐文件比对两棵树/两个文件的 SHA-256 |
 | `zinc hash-compare --source <文件> --hash-value <SHA-256>` | 单个文件对期望哈希 |
 | `zinc compact <仓库名> [--pack <包名>] [--min-gain <5%\|8M>] [--check]` | 重写已有包，丢掉被新版取代的旧副本 |
@@ -256,7 +256,7 @@ zinc restore pictures --check
 | `compression_level` | `0` | 7z 压缩等级 0-9；`0` = 仅存储 |
 | `solid_block` | `64M` | 7z 固实块上限；`off` = 每文件独立块。块只在文件边界切分，单个大文件始终独占一块；开了压缩时块越小，单个坏字节连累的文件越少，压缩率略降。压缩等级 0 时恒为 `off`：Copy 模式下固实既不省空间也不改变损坏结果，7-Zip 自己也不建固实块 |
 | `header_encryption` | `true` | 加密 7z 头部（`-mhe=on`）：包内文件名也进 AES，网盘按文件名做内容审查时看不到；`false` 则不加密头部，代价是头一旦损坏整个包连目录都列不出来 |
-| `confirm_tips` | `true` | 危险操作（restore / compact / repair / schedule / remove）执行前询问 y/N；`false` 直接执行 |
+| `confirm_tips` | `true` | 危险操作（restore / compact / fixmeta / schedule / remove）执行前询问 y/N；`false` 直接执行 |
 | `7zip_path` | 安装时自动检测 | `7z.exe` / `7za.exe` 的路径；空 = 在 `PATH` 和常见安装目录里找 |
 | `lang` | 空 | `zh` 或 `en`；空 = 跟随 Windows |
 | `lock_timeout_minutes` | `30` | 仓库锁最长等待分钟数 |
@@ -430,7 +430,7 @@ zinc compact docs --min-gain 10%
 - **包名不变。** 夸克网盘这类支持「同名覆盖 + 历史版本」的网盘，重写的包会原地替换，旧包自动进历史版本，云端不会多留一份。
 - **包被腾空也不删包。** 删包会打乱「按名字顺序解压」这条恢复依据，所以空包里只留一个 0 字节的 `placeholder-Please_Delete_This`。恢复时 zinc 会把它排除掉（`-x!` 直接不解），手工 `7z x` 打开也一眼看得出该删。
 - **原包在最后一步之前一直不动。** 解压 → 重打 → `7za t` 自检 → 归档头对账，全部通过才原子替换（同卷 rename）；任何一步失败就跳过这个包，报错但不碰原包。
-- **索引和包目录必须对得上。** 对不上说明索引不完整（比如只重建过一段），这时 compact 会把别的包的内容误判成「已删除」，所以直接拒绝，让你先跑 `zinc repair`。
+- **索引和包目录必须对得上。** 对不上说明索引不完整（比如只重建过一段），这时 compact 会把别的包的内容误判成「已删除」，所以直接拒绝，让你先跑 `zinc fixmeta`。
 - **只认「当前版本」，旧版本真的会消失。** `restore --only <路径> --check` 之后能看到的版本会变少；想留几版历史，就别对这个仓库跑 compact。
 
 重写完成后要让网盘重新上传这些包——同名覆盖会让旧包进历史版本，这正是「本地裁掉的东西云端也裁掉」的关键。
@@ -501,7 +501,7 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
     20261024_110635_081.7z    ← 每个包都是完整归档，按名字升序恢复
     20261025_070012_334.7z
     20261025_070012_334.rm    ← 这一批删掉的文件（纯文本）
-    index.tsv                 ← 增量检测缓存，丢了用 zinc repair 重建
+    index.tsv                 ← 增量检测缓存，丢了用 zinc fixmeta 重建
     manifest.json             ← SHA-256 账本，verify 用
   videos\
 ```
@@ -510,12 +510,12 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 |---|---|---|---|
 | `*.7z` | `<output>/` | 是 | 数据本身，每个都是完整归档 |
 | `*.rm` | `<output>/` | 是 | 这一批的删除记录及其校验和；恢复要靠它删掉文件，必须跟包一起上传 |
-| `index.tsv` | `<output>/` | 是 | 增量检测缓存，丢了用 `zinc repair` 重建 |
+| `index.tsv` | `<output>/` | 是 | 增量检测缓存，丢了用 `zinc fixmeta` 重建 |
 | `manifest.json` | `<output>/` | 是 | 每个包的 SHA-256 账本（按批次分组），`verify` 用；必须随包上传，否则换机后没法校验旧包 |
 | `manifest.json.v1.bak` | `<output>/` | 否 | 旧格式账本升级到 v2 前的原样副本；只在第一次升级时生成 |
-| `manifest.json.bak` | `<output>/` | 否 | `repair` 写回前留的上一份账本 |
+| `manifest.json.bak` | `<output>/` | 否 | `fixmeta` 写回前留的上一份账本 |
 
-`manifest.json` 是**校验账本，不是数据本体**：备份和恢复都不读它，只有 `verify` 拿它比对包/删除记录的哈希。账本和磁盘对不上时（比如手动删过包），用 `zinc repair <仓库>` 对账——删掉已消失的条目、补登孤儿包，默认先打印计划再问一次，`--check` 只预演。
+`manifest.json` 是**校验账本，不是数据本体**：备份和恢复都不读它，只有 `verify` 拿它比对包/删除记录的哈希。账本和磁盘对不上时（比如手动删过包），用 `zinc fixmeta <仓库>` 对账——删掉已消失的条目、补登孤儿包，默认先打印计划再问一次，`--check` 只预演。
 
 运行时文件（程序目录，不同步）：
 
@@ -582,13 +582,13 @@ zinc 回答的是“这个目录每次备份时长什么样”，恢复能把它
 - **不导入旧的分卷布局。** `vol-*.7z.001` 这类归档不读取。请新建仓库，或把旧目录整体当归档留着。
 - **计划任务需要真实终端。** `schtasks` 在受限环境（如沙箱）里跑不了。
 - **任务里密码是明文。** 无人值守的必然代价；威胁模型是网盘内容扫描，不是定向攻击者。
-- **`manifest.json` 必须随包上传。** 它记录备份时算出的哈希，`verify` 靠它在换机后识别传输损坏；丢了可以用 `zinc repair <仓库> --rehash` 从盘上重算，但会失去「哪个包曾经在、现在没了」这条记录。
-- **`repair` 依赖本地时区。** `7za l` 打印的是本地时间且不带偏移，重建时按当前时区解释。
-- **`repair --pack-start` / `--pack-end` 会用子集覆盖整份索引。** 范围外的包下次备份会被当成新增重压一遍。这两个参数是灾难恢复用的，日常直接跑 `zinc repair <仓库>`。
+- **`manifest.json` 必须随包上传。** 它记录备份时算出的哈希，`verify` 靠它在换机后识别传输损坏；丢了可以用 `zinc fixmeta <仓库> --rehash` 从盘上重算，但会失去「哪个包曾经在、现在没了」这条记录。
+- **`fixmeta` 依赖本地时区。** `7za l` 打印的是本地时间且不带偏移，重建时按当前时区解释。
+- **`fixmeta --pack-start` / `--pack-end` 会用子集覆盖整份索引。** 范围外的包下次备份会被当成新增重压一遍。这两个参数是灾难恢复用的，日常直接跑 `zinc fixmeta <仓库>`。
 - **符号链接和 junction 不会被扫描。** 源目录本身是 junction 时扫描结果为空（表现为永远“无新增”），源目录内部的 junction 子树也不进索引。请把 `--source` 配成真实路径。
 - **空目录不备份。** 打包清单里只有文件，所以一个不含任何文件的目录恢复后不存在；有文件的目录会连文件一起重建。
 - **强杀后 `.lock` 残留。** 仓库锁不会自动接管。进程被强杀后要手动删掉 `<output>\.lock`，否则之后每次备份都会等满 `lock_timeout_minutes`（默认 30 分钟）再失败。
-- **索引缺失等于全量重压。** `index.tsv` 被删掉之后如果不去重建，下次备份会把它当空仓库，把所有文件重压一遍（不会漏数据，但会多传一遍）。丢了先跑一次 `zinc repair <仓库>`，这一次重压就省了。**损坏**的索引是另一回事：那是硬错误，备份会停下，直到你跑 `zinc repair`。
+- **索引缺失等于全量重压。** `index.tsv` 被删掉之后如果不去重建，下次备份会把它当空仓库，把所有文件重压一遍（不会漏数据，但会多传一遍）。丢了先跑一次 `zinc fixmeta <仓库>`，这一次重压就省了。**损坏**的索引是另一回事：那是硬错误，备份会停下，直到你跑 `zinc fixmeta`。
 - **换密码后旧包打不开。** 旧包仍用旧密码加密。
 - **只支持 Windows。** 64 位 Windows 10 或 11。
 

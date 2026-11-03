@@ -235,20 +235,20 @@ func runFixpack(name string, cfg *Config, set *Settings, password string, check 
 	// 真正重写：逐个坏包，把能提取的文件提出来、补上替代来源、重新打包
 	for _, p := range badPacks {
 		files := byPack[p]
-		repairable := make([]badFile, 0, len(files))
+		fixable := make([]badFile, 0, len(files))
 		unrecoverable := make([]badFile, 0)
 		for _, f := range files {
 			if f.found {
-				repairable = append(repairable, f)
+				fixable = append(fixable, f)
 			} else {
 				unrecoverable = append(unrecoverable, f)
 			}
 		}
-		if len(repairable) == 0 {
+		if len(fixable) == 0 {
 			printColored(M.FixPackSkip, p, len(unrecoverable))
 			continue
 		}
-		if err := rewritePackFixed(repo, set, p, repairable, password); err != nil {
+		if err := rewritePackFixed(repo, set, p, fixable, password); err != nil {
 			printColored(M.FixPackFail, p, err)
 			continue
 		}

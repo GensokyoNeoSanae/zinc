@@ -108,11 +108,11 @@ F	notes/semiconductor.md	2048	20261023T124138.9843416+0800	1
 A bad header, a malformed line, a missing footer or a count mismatch is a hard error, never a silent reset. Losing the file costs a rebuild, not the data:
 
 ```powershell
-zinc repair pictures         # rebuild by reading archive headers only
-zinc repair pictures --check   # print the plan, write nothing
+zinc fixmeta pictures         # rebuild by reading archive headers only
+zinc fixmeta pictures --check   # print the plan, write nothing
 ```
 
-`repair` rebuilds the index with `7za l -slt`; it never extracts content.
+`fixmeta` rebuilds the index with `7za l -slt`; it never extracts content.
 
 ### How are deletions recorded?
 
@@ -214,7 +214,7 @@ zinc restore pictures --check
 | `zinc config [get\|set\|unset\|path\|list\|show] [<key>] [<value>]` | global settings |
 | `zinc backup <repo_name\|--all> [--password <password>] [--notify] [--notify-empty] [--no-verify]` | back up |
 | `zinc restore <repo_name> --dest <path> [--password <password>] [--no-overwrite] [--no-delete] [--check] [--only <path>] [--from <pack_name>]` | restore everything or one path |
-| `zinc repair <repo_name> [--password <password>] [--pack-start <pack_name>] [--pack-end <pack_name>] [--rehash] [--check]` | rebuild the index and manifest (`--rehash` recomputes pack hashes) |
+| `zinc fixmeta <repo_name> [--password <password>] [--pack-start <pack_name>] [--pack-end <pack_name>] [--rehash] [--check]` | rebuild the index and manifest (`--rehash` recomputes pack hashes) |
 | `zinc hash-compare --source1 <path> --source2 <path>` | compare two trees/files file by file with SHA-256 |
 | `zinc hash-compare --source <file> --hash-value <SHA-256>` | compare one file against an expected hash |
 | `zinc compact <repo_name> [--pack <pack_name>] [--min-gain <5%\|8M>] [--check]` | rewrite existing packs, dropping copies a newer version superseded |
@@ -257,7 +257,7 @@ Global settings live in `<program dir>\settings.json`. They are **not** part of 
 | `compression_level` | `0` | 7z level 0-9; `0` = store only |
 | `solid_block` | `64M` | 7z solid block limit; `off` = one block per file. Blocks only split at file boundaries, so a single huge file always owns one block; with compression on, smaller blocks limit how many later files one bad byte can cost you, at a slight compression cost. Level 0 always forces `off`: under Copy, solid saves nothing and does not change the damage outcome, and 7-Zip does not build solid blocks there either |
 | `header_encryption` | `true` | encrypt the 7z header (`-mhe=on`): file names go through AES too, so a drive scanning names sees nothing. `false` skips header encryption, at the cost of losing the whole pack index when the header is damaged |
-| `confirm_tips` | `true` | ask y/N before destructive commands (restore, compact, repair, schedule, remove); `false` runs them without asking |
+| `confirm_tips` | `true` | ask y/N before destructive commands (restore, compact, fixmeta, schedule, remove); `false` runs them without asking |
 | `7zip_path` | detected at install | path to `7z.exe` / `7za.exe`; empty = search `PATH` and the usual install folders |
 | `lang` | empty | `zh` or `en`; empty = detect from Windows |
 | `lock_timeout_minutes` | `30` | longest wait for the repo lock |
@@ -431,7 +431,7 @@ Non-negotiables:
 - **The pack name never changes.** On cloud drives that overwrite same-name files and keep version history (Quark, for one), the rewritten pack replaces the old one in place and the old one moves into history — nothing extra is stored in the cloud.
 - **An emptied pack is not deleted.** Deleting a pack would break "extract in name order", which is the one thing restore relies on, so the pack keeps a single 0-byte `placeholder-Please_Delete_This`. Restore excludes it outright (`-x!`); a manual `7z x` makes it obvious what to delete.
 - **The original stays untouched until the last step.** Extract → repack → `7za t` self-check → archive-header reconciliation; only when all of that passes is it replaced atomically (same-volume rename). Any failure skips that pack and leaves it alone.
-- **The index must match the pack directory.** If it doesn't, the index is incomplete (a partial `repair`, say) and compact would mistake other packs' contents for deletions — so it refuses and tells you to run `zinc repair` first.
+- **The index must match the pack directory.** If it doesn't, the index is incomplete (a partial `fixmeta`, say) and compact would mistake other packs' contents for deletions — so it refuses and tells you to run `zinc fixmeta` first.
 - **Only the current version survives.** Older versions really do go away, so `restore --only <path> --check` will show fewer of them afterwards. If you want history depth, don't compact that repo.
 
 Afterwards, let the cloud drive re-upload those packs — the same-name overwrite pushes the old ones into version history, which is exactly how the cloud ends up no larger than the local folder.
@@ -502,7 +502,7 @@ Output root (sync this folder to your cloud drive):
     20261024_110635_081.7z    ← each pack is a complete archive; restore in name order
     20261025_070012_334.7z
     20261025_070012_334.rm    ← files deleted in that batch (plain text)
-    index.tsv                 ← incremental detection cache, rebuild with zinc repair
+    index.tsv                 ← incremental detection cache, rebuild with zinc fixmeta
     manifest.json             ← SHA-256 ledger for verify
   videos\
 ```
@@ -511,12 +511,12 @@ Output root (sync this folder to your cloud drive):
 |---|---|---|---|
 | `*.7z` | `<output>/` | yes | the data; every pack is a complete archive |
 | `*.rm` | `<output>/` | yes | deletions of that batch with their checksum; restore needs them to remove files, so upload them with the packs |
-| `index.tsv` | `<output>/` | yes | incremental detection cache; rebuild with `zinc repair` if lost |
+| `index.tsv` | `<output>/` | yes | incremental detection cache; rebuild with `zinc fixmeta` if lost |
 | `manifest.json` | `<output>/` | yes | per-pack SHA-256 ledger (grouped by batch) for `verify`; must be uploaded, otherwise a new machine cannot verify old packs |
 | `manifest.json.v1.bak` | `<output>/` | no | the old-format ledger as it was before the first upgrade to v2 |
-| `manifest.json.bak` | `<output>/` | no | previous ledger kept by `repair` before writing |
+| `manifest.json.bak` | `<output>/` | no | previous ledger kept by `fixmeta` before writing |
 
-`manifest.json` is a **verification ledger, not the data itself**: backup and restore never read it, only `verify` compares pack/deletion-record hashes against it. When the ledger and the disk disagree (say you deleted packs by hand), run `zinc repair <repo>`: it drops entries whose files are gone and registers orphan packs. It prints the plan and asks once before writing; `--check` only reports.
+`manifest.json` is a **verification ledger, not the data itself**: backup and restore never read it, only `verify` compares pack/deletion-record hashes against it. When the ledger and the disk disagree (say you deleted packs by hand), run `zinc fixmeta <repo>`: it drops entries whose files are gone and registers orphan packs. It prints the plan and asks once before writing; `--check` only reports.
 
 Runtime files (program directory, never synced):
 
@@ -583,13 +583,13 @@ zinc answers "what did this folder look like at each backup", and a restore repr
 - **No import from older volume layouts.** `vol-*.7z.001` archives are not read. Start a fresh repo, or keep the old tree as an archive.
 - **Scheduling needs a real terminal.** `schtasks` cannot run in restricted environments such as sandboxes.
 - **Plain-text password in tasks.** Unavoidable for unattended runs; the threat model is content scanning, not a targeted attacker.
-- **`manifest.json` must be uploaded with the packs.** It records hashes computed at backup time, so `verify` can detect transfer corruption on a new machine. If it is lost, `zinc repair <repo> --rehash` can recompute it from the packs, but the memory of "which pack used to be here and is now gone" is lost.
-- **`repair` trusts the local time zone.** `7za l` prints local time without an offset, so a rebuild interprets mtimes in the current zone.
-- **`repair --pack-start` / `--pack-end` replace the whole index with a slice.** Packs outside that range are then treated as new on the next backup and re-packed. Those flags exist for disaster recovery only; day to day, run a plain `zinc repair <repo>`.
+- **`manifest.json` must be uploaded with the packs.** It records hashes computed at backup time, so `verify` can detect transfer corruption on a new machine. If it is lost, `zinc fixmeta <repo> --rehash` can recompute it from the packs, but the memory of "which pack used to be here and is now gone" is lost.
+- **`fixmeta` trusts the local time zone.** `7za l` prints local time without an offset, so a rebuild interprets mtimes in the current zone.
+- **`fixmeta --pack-start` / `--pack-end` replace the whole index with a slice.** Packs outside that range are then treated as new on the next backup and re-packed. Those flags exist for disaster recovery only; day to day, run a plain `zinc fixmeta <repo>`.
 - **Symlinks and junctions are never scanned.** A `--source` that is itself a junction yields an empty scan (it will look like "nothing new" forever), and junction subtrees inside the source are not indexed. Point `--source` at the real path.
 - **Empty directories are not backed up.** The pack list contains files only, so a folder with no file in it does not exist after a restore; folders that do hold files are recreated with them.
 - **A stale `.lock` blocks future backups.** Locks are never taken over automatically. After a killed process, delete `<output>\.lock` by hand, otherwise every later backup waits the full `lock_timeout_minutes` (default 30) and then fails.
-- **A missing index means a full re-pack.** If `index.tsv` is deleted and you do not rebuild it, the next backup treats the repo as empty and compresses everything again (nothing is lost, but the upload is duplicated). Losing it is cheap if you run `zinc repair <repo>` first. A **corrupt** index behaves differently: that is a hard error, and the backup stops until you run `zinc repair`.
+- **A missing index means a full re-pack.** If `index.tsv` is deleted and you do not rebuild it, the next backup treats the repo as empty and compresses everything again (nothing is lost, but the upload is duplicated). Losing it is cheap if you run `zinc fixmeta <repo>` first. A **corrupt** index behaves differently: that is a hard error, and the backup stops until you run `zinc fixmeta`.
 - **Changing the password orphans old packs.** Old packs still use the old password.
 - **Windows only.** 64-bit Windows 10 or 11.
 

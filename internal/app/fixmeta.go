@@ -7,20 +7,20 @@ import (
 	"path/filepath"
 )
 
-// cmdRepair 是元数据修复的统一入口。原先的 reindex 和 remanifest 是同一个
+// cmdFixmeta 是元数据修复的统一入口。原先的 reindex 和 remanifest 是同一个
 // 问题的两半——「账本/索引」跟磁盘对不上——用户不该记住哪个文件坏了。
 //
 // 顺序是先对账 manifest（便宜，只 stat），再重建索引（贵，要读每个包的目录），
 // 最后按需重算包哈希（最贵，要读整个包）。
-func cmdRepair(args []string) {
-	fs := flag.NewFlagSet("repair", flag.ExitOnError)
+func cmdFixmeta(args []string) {
+	fs := flag.NewFlagSet("fixmeta", flag.ExitOnError)
 	password := fs.String("password", "", M.FlagPassword)
 	packStart := fs.String("pack-start", "", M.FlagPackStart)
 	packEnd := fs.String("pack-end", "", M.FlagPackEnd)
 	rehash := fs.Bool("rehash", false, M.FlagRehash)
 	check := fs.Bool("check", false, M.FlagCheck)
 	fs.Parse(reorderArgs(args))
-	requireArgs(fs, 1, 1, M.UsageRepair)
+	requireArgs(fs, 1, 1, M.UsageFixmeta)
 	name := fs.Arg(0)
 
 	cfg := mustConfig()
@@ -115,7 +115,7 @@ func runRehash(name string, cfg *Config, set *Settings, check bool) error {
 		printColored(M.RepairRehashDryRun, changed)
 		return nil
 	}
-	// 锁由 cmdRepair 统一持有
+	// 锁由 cmdFixmeta 统一持有
 	if err := writeManifestFile(repo.Output, m); err != nil {
 		return err
 	}

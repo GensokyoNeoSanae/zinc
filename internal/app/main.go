@@ -38,8 +38,8 @@ func Main() {
 		cmdBackup(rest)
 	case "restore":
 		cmdRestore(rest)
-	case "repair":
-		cmdRepair(rest)
+	case "fixmeta":
+		cmdFixmeta(rest)
 	case "fixpack":
 		cmdFixpack(rest)
 	case "compact":

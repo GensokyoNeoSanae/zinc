@@ -76,6 +76,11 @@ func wrapBlock(s, first, rest string, width int) string {
 	return b.String()
 }
 
+// isWordRune 判断字符是否属于一个英文单词（含点号，manifest.json 要当成一个整体）
+func isWordRune(r rune) bool {
+	return r < 128 && (r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_')
+}
+
 // noLineStart 是不能出现在行首的字符（中文排版禁则）。
 const noLineStart = "，。、；：？！）〕】」』’”%.,;:?!)"
 
@@ -101,6 +106,25 @@ func wrapLine(s string, limit int) []string {
 			rest := append([]rune(nil), cur[cut:]...)
 			if len(rest) > 0 && rest[0] == ' ' {
 				rest = rest[1:] // 断点处的空格不带到下一行开头
+			}
+			// 别把英文单词劈成两半（manifest.json 变成 manifest.j / son）。
+			// 新行的第一个字符如果是词字符，而上一行以词字符结尾，就把那半个词
+			// 整个挪到下一行。硬断时 rest 是空的，此时看的是即将写入的 r。
+			firstOfNext := r
+			if len(rest) > 0 {
+				firstOfNext = rest[0]
+			}
+			if isWordRune(firstOfNext) && len(out) > 0 {
+				last := []rune(out[len(out)-1])
+				k := len(last)
+				for k > 0 && isWordRune(last[k-1]) {
+					k--
+				}
+				if k < len(last) {
+					moved := []rune(string(last[k:]))
+					out[len(out)-1] = strings.TrimRight(string(last[:k]), " ")
+					rest = append(moved, rest...)
+				}
 			}
 			// 中文排版禁则：标点不落行首。宁可让上一行多占一格，
 			// 也不要出现「…大小」/「，不用打开文件」这种断法。
@@ -308,7 +332,7 @@ var zhHelp = map[string]HelpTopic{
 	},
 	"fixpack": {
 		Usage:   "fixpack <仓库名> [--check] [--password <密码>]",
-		Purpose: `修包。包坏掉之后，把还能读出来的文件捞出来，给读不出来的文件找一份替代来源，然后重新打包成同名文件。它只管包的内容，不碰账本——账本的问题是 repair 的事。`,
+		Purpose: `修包。包坏掉之后，把还能读出来的文件捞出来，给读不出来的文件找一份替代来源，然后重新打包成同名文件。它只管包的内容，不碰账本——账本的问题是 fixmeta 的事。`,
 		How:     `先对每个包跑一遍 7z t，拿到坏掉的文件名（非固实包下 7-Zip 会逐文件报出具体是哪个）。对每个坏文件按优先级找替代：先看源目录（还在且大小和时间与索引一致，就是那一份），再按从新到旧的顺序翻其他历史包，并且用 7z t 确认那份没坏。全都没有就标记为无法恢复。确认后逐个重写坏包：解压出好文件、补上替代来源、按原参数重新打包。`,
 		Params: []string{
 			"<仓库名>：要修哪个仓库。",
@@ -318,26 +342,20 @@ var zhHelp = map[string]HelpTopic{
 		Notes: []string{
 			"非固实包坏了不等于全废：7z t 只报真正坏掉的文件，其余文件仍能正常提取。",
 			"没有任何替代来源的文件会被跳过，那个包保留原样不动——它可能是你最后一份数据。",
-			"重打包后账本会重建，不需要再手动跑 repair。",
+			"重打包后账本会重建，不需要再手动跑 fixmeta。",
 			"zinc 只能确认源文件在、大小和时间对得上，不能确认它本身没坏。",
 		},
 	},
-	"repair": {
-		Usage: "repair <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check] [--password <密码>]",
-		Purpose: `修复「元数据」与「磁盘上的包」对不上的情况。它不碰包的内容，只重写两个记账文件：
+	"fixmeta": {
+		Usage: "fixmeta <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check] [--password <密码>]",
+		Purpose: `修复「元数据」与「磁盘上的包」对不上的情况。它不碰包的内容，只重写两个记账文件：index.tsv 记录每个文件当前在哪个包、多大、什么时间（增量备份靠它判断谁变了），manifest.json 记录每个包的 SHA-256 以及每次备份记下的删除清单。
 
-index.tsv      —— 每个文件当前在哪个包、多大、什么时间（增量备份靠它判断谁变了）  manifest.json  —— 每个包的 SHA-256，以及每次备份记下的删除清单
+常见的情况有这几种：你手动删掉了 verify 报更改的包、换机器后只从网盘下载了一部分包、compact 跑到一半被中断导致账本还是旧哈希、手动把包改了名或挪了位置、杀毒软件隔离了某个包、index.tsv 被误删或被截断。
 
-什么时候会需要它：
+包本身是唯一权威数据，这些元数据丢了都能从这个目录里重建出来。`,
+		How: `按「便宜到贵」的顺序做三件事。第一，对账 manifest：扫描输出目录里的包和 .rm 删除记录，删掉账本里已经不存在 的登记，补登盘上有、账上没有的孤儿包，这一步只做 stat，很快。第二，重建 index.tsv：逐个读包的归档头（不解压内容），重建「文件 → 当前状态」，并按删除记录划掉已经消失的文件，这一步要读每个包，包多时慢。第三，--rehash：把每个包的 SHA-256 按磁盘实际内容重算一遍，最慢，所以默认不做——它专治 compact 中断留下的旧哈希。
 
-- 你手动删掉了 verify 报更改的那个包，账本里还留着它的登记；  - 换机器/换目录，只从网盘下载了一部分包过来，账本却是全量的；  - compact 跑到一半被中断，包已经换新、manifest 还记着旧哈希，verify 从此一直报损坏；  - 手动把包改了名或挪了位置；  - 杀毒软件隔离了某个包，或者 chkdsk 动了文件；  - index.tsv 被误删、被截断。
-
-包本身是唯一权威数据。这些元数据丢了都能从这个目录里重建出来。`,
-		How: `按「便宜到贵」的顺序做三件事：
-
-1. 对账 manifest：扫描输出目录里的包和 .rm 删除记录，删掉账本里已经不存在     的登记，补登盘上有、账上没有的孤儿包。这一步只做 stat，很快。  2. 重建 index.tsv：逐个读包的归档头（不解压内容），重建「文件 → 当前状态」，     并按删除记录划掉已经消失的文件。这一步要读每个包，包多时慢。  3. --rehash：把每个包的 SHA-256 按磁盘实际内容重算一遍。这一步要读整个包，     最慢，所以默认不做——它专治 compact 中断留下的旧哈希。
-
-第 3 步是 repair 存在的核心理由：除了它，没有任何命令能把 manifest 里过时的哈希改回来，verify 会永远把那个包报成「更改」。`,
+第 3 步是 fixmeta 存在的核心理由：除了它，没有任何命令能把 manifest 里过时的哈希改回来，verify 会永远把那个包报成「更改」。`,
 		Params: []string{
 			"--pack-start <包名> / --pack-end <包名>：只重建这一段的索引，不全量读一遍。",
 			"--rehash：重算每个已登记包的哈希。修 compact 中途失败留下的旧哈希。",
@@ -347,7 +365,7 @@ index.tsv      —— 每个文件当前在哪个包、多大、什么时间（�
 		Notes: []string{
 			"它不修复包本身。包真的损坏了，只能靠别的副本或重新备份。",
 			"重建 index.tsv 时旧索引会备份成 index.tsv.bak，覆写前不会直接丢。",
-			"repair 会拿仓库锁，备份进行时无法同时修复。",
+			"fixmeta 会拿仓库锁，备份进行时无法同时修复。",
 		},
 	},
 	"backup": {
@@ -596,12 +614,12 @@ Several times can be given, comma separated, creating one task each. Days 29-31 
 		Notes: []string{
 			"A damaged non-solid pack is not a total loss: 7z t names the bad files, the rest still extract.",
 			"Files with no replacement are skipped and the pack is left alone — it may be the last copy of that data.",
-			"The ledger is rebuilt afterwards, so there is no need to run repair by hand.",
+			"The ledger is rebuilt afterwards, so there is no need to run fixmeta by hand.",
 			"zinc can confirm the source file exists with matching size and mtime; it cannot confirm the file itself is intact.",
 		},
 	},
-	"repair": {
-		Usage: "repair <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>] [--rehash] [--check] [--password <password>]",
+	"fixmeta": {
+		Usage: "fixmeta <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>] [--rehash] [--check] [--password <password>]",
 		Purpose: `Fix the case where the metadata no longer matches the packs on disk. It never touchespack content; it only rewrites two bookkeeping files:
 
 index.tsv      - which pack holds the current version of each file (incremental backup reads it)  manifest.json  - the SHA-256 of every pack, plus the deletion records written by each backup
@@ -625,7 +643,7 @@ Step 3 is the reason the command exists: nothing else can repair a stale manifes
 		Notes: []string{
 			"It does not repair a damaged pack. Only another copy or a fresh backup can do that.",
 			"The old index is kept as index.tsv.bak before being overwritten.",
-			"repair takes the repo lock, so it cannot run while a backup is in progress.",
+			"fixmeta takes the repo lock, so it cannot run while a backup is in progress.",
 		},
 	},
 	"backup": {
