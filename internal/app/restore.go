@@ -99,6 +99,13 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 	if _, serr := os.Stat(repo.Output); serr != nil {
 		return fmt.Errorf(M.NoPacksRestore, repo.Output)
 	}
+	// 恢复是只读仓库、写目标目录，但它读包的方式跟 compact 写包的方式会互相伤害：
+	// compact 改名覆盖时，正在被 7z 打开的包会改名失败。拿同一把锁最省事。
+	lock, lerr := acquireLock(repo.Output, set.lockTimeout())
+	if lerr != nil {
+		return lerr
+	}
+	defer lock.release()
 	// 先把所有删除记录读完并校验：坏记录要在动目标目录之前就暴露出来。
 	dels, derr := loadDelRecords(repo.Output)
 	if derr != nil {
@@ -390,6 +397,12 @@ func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, onl
 	if err != nil {
 		return err
 	}
+	// 同 runRestore：局部恢复也会逐个打开包，跟 compact 的改名覆盖互斥。
+	lock, lerr := acquireLock(repo.Output, set.lockTimeout())
+	if lerr != nil {
+		return lerr
+	}
+	defer lock.release()
 	spec := strings.TrimPrefix(filepath.ToSlash(strings.TrimSpace(only)), "./")
 	spec = strings.TrimPrefix(spec, "/")
 	if spec == "" {

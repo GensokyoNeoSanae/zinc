@@ -108,11 +108,11 @@ F	笔记/semiconductor.md	2048	20261023T124138.9843416+0800	1
 头部不对、某行格式坏了、缺尾行、计数不符，都直接报错，绝不静默当成空索引。索引丢了只损失重建时间，不损失数据：
 
 ```powershell
-zinc reindex 图片          # 只读归档头重建
-zinc reindex 图片 --yes    # 覆盖已有索引（旧文件会留一份 .bak）
+zinc repair 图片          # 只读归档头重建
+zinc repair 图片 --check    # 只看不写
 ```
 
-`reindex` 走的是 `7za l -slt`，不解压任何内容。
+`repair` 重建索引走的是 `7za l -slt`，不解压任何内容。
 
 ### 删除是怎么记下来的？
 
@@ -192,7 +192,7 @@ zinc status --all
 zinc restore pictures --dest D:\restore\pictures
 
 # 只看看会按什么顺序解压哪些包，不动文件
-zinc restore pictures --check-list
+zinc restore pictures --check
 ```
 
 ## 命令
@@ -200,29 +200,29 @@ zinc restore pictures --check-list
 | 命令 | 说明 |
 |---|---|
 | `zinc init [--force]` | 重新注册通知、把程序目录写进用户 `PATH`。安装包已经做过，只在通知失效、或 `zinc` 命令找不到时用；绿色版也靠它 |
-| `zinc root [<path>]` | 查看或设置全局输出根目录 |
+| `zinc root [<路径>]` | 查看或设置全局输出根目录 |
 | `zinc list [--names]` | 列出仓库；`--names` 每行一个名字，给脚本/补全用 |
-| `zinc add <name> --source <path> [--output <path>]` | 新建仓库 |
-| `zinc remove <name>` | 移除仓库（不删包） |
-| `zinc set <name> [--source <path>] [--output <path>] [--password <pw>] [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M\|off>] [--mhe on\|off>] [--exclude <glob>]` | 修改仓库（`--solid` 固实块上限、`--mhe` 头部加密，见下方设置表） |
-| `zinc config [get\|set\|unset\|path] [<key>] [<value>]` | 全局设置 |
-| `zinc backup <name\|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]` | 备份 |
-| `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <路径>] [--from <包>]` | 恢复全量或单个路径 |
-| `zinc reindex <name> [--password <pw>] [--pack-start <name>] [--pack-end <name>] [--yes]` | 从包重建索引 |
-| `zinc remanifest <name> [--password <pw>] [--yes]` | 对账 manifest：删掉盘上已消失的条目、补登孤儿包；默认预演 |
+| `zinc add <仓库名> --source <路径> [--output <路径>]` | 新建仓库 |
+| `zinc remove <仓库名>` | 移除仓库（不删包） |
+| `zinc set <仓库名> [--source <路径>] [--output <路径>] [--password <密码>] [--max-pack-byte <数量>] [--compress <0-9>] [--solid <64M\|off>] [--mhe on\|off>] [--exclude <glob>]` | 修改仓库（`--solid` 固实块上限、`--mhe` 头部加密，见下方设置表） |
+| `zinc config [get\|set\|unset\|path\|list\|show] [<key>] [<value>]` | 全局设置 |
+| `zinc backup <仓库名\|--all> [--password <密码>] [--notify] [--notify-empty] [--no-verify]` | 备份 |
+| `zinc restore <仓库名> --dest <路径> [--password <密码>] [--no-overwrite] [--no-delete] [--check] [--only <路径>] [--from <包名>]` | 恢复全量或单个路径 |
+| `zinc repair <仓库名> [--password <密码>] [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check]` | 重建索引与账本（`--rehash` 重算包哈希） |
 | `zinc hash-compare --source1 <路径> --source2 <路径>` | 逐文件比对两棵树/两个文件的 SHA-256 |
 | `zinc hash-compare --source <文件> --hash-value <SHA-256>` | 单个文件对期望哈希 |
-| `zinc compact <name> [--pack <包>] [--min-gain <5%\|8M>] [--yes]` | 重写已有包，丢掉被新版取代的旧副本 |
-| `zinc verify <name\|--all> [--sample <pct>] [--password-only\|--hash-only]` | 校验包与删除记录的 SHA-256，并用配置密码试开每个包；`--password-only` 只验密码，`--hash-only` 只算哈希 |
-| `zinc status [--all] [<name>]` | 查看状态；`--all` 一次展开所有仓库的详情 |
-| `zinc schedule <name\|--all> --daily --at HH:MM` | 每天定时 |
-| `zinc schedule <name\|--all> --weekly 1,3 --at HH:MM` | 每周定时（1 = 周一） |
-| `zinc schedule <name\|--all> --monthly 1,15 --at HH:MM [--yes]` | 每月定时 |
+| `zinc compact <仓库名> [--pack <包名>] [--min-gain <5%\|8M>] [--check]` | 重写已有包，丢掉被新版取代的旧副本 |
+| `zinc verify <仓库名\|--all> [--sample <百分比>] [--password-only\|--hash-only]` | 校验包与删除记录的 SHA-256，并用配置密码试开每个包；`--password-only` 只验密码，`--hash-only` 只算哈希 |
+| `zinc status [--all] [<仓库名>]` | 查看状态；`--all` 一次展开所有仓库的详情 |
+| `zinc schedule <仓库名\|--all> --daily --at HH:MM` | 每天定时 |
+| `zinc schedule <仓库名\|--all> --weekly 1,3 --at HH:MM` | 每周定时（1 = 周一） |
+| `zinc schedule <仓库名\|--all> --monthly 1,15 --at HH:MM` | 每月定时 |
 | `zinc schedule --list` | 列出当前所有计划任务（计划、下次运行、状态） |
-| `zinc unschedule <name>` | 删除该仓库的定时任务 |
+| `zinc unschedule <仓库名>` | 删除该仓库的定时任务 |
 | `zinc unschedule all` | 删除“备份全部”的汇总任务（`zinc-all-*`） |
 | `zinc unschedule --all` | 删除所有 zinc 任务（**慎用**） |
 | `zinc completion <powershell\|bash\|zsh\|fish> [--install]` | 生成 Tab 补全脚本 |
+| `zinc help <命令>` | 单条命令的详细说明：目的、原理、参数、注意事项 |
 | `zinc version` | 显示版本（`--version` / `-v` 等价）。不带任何参数运行也会先打一行版本 |
 
 `--lang zh|en` 放在子命令前后都行。`zinc verify --sample 20` 只随机抽查 20% 的包文件，而不是全部。
@@ -236,7 +236,7 @@ zinc restore pictures --check-list
 - `add` 和 `set` 统一存绝对路径，并拒绝源目录与输出目录互相包含的配置。
 - 两个仓库不能共用同一个输出目录。只有大小写不同的输出会给出警告，因为 Windows 上它们会落到同一个目录。
 - `restore --dest` 拒绝源目录、本仓库的输出目录（及其子目录）和盘根。
-- `remove` 时如果还有 `zinc-<name>-*` 计划任务，会提示残留。
+- `remove` 时如果还有 `zinc-<仓库名>-*` 计划任务，会提示残留。
 
 ## 配置
 
@@ -251,6 +251,7 @@ zinc restore pictures --check-list
 | `compression_level` | `0` | 7z 压缩等级 0-9；`0` = 仅存储 |
 | `solid_block` | `64M` | 7z 固实块上限；`off` = 每文件独立块。块只在文件边界切分，单个大文件始终独占一块；开了压缩时块越小，单个坏字节连累的文件越少，压缩率略降。压缩等级 0 时恒为 `off`：Copy 模式下固实既不省空间也不改变损坏结果，7-Zip 自己也不建固实块 |
 | `header_encryption` | `true` | 加密 7z 头部（`-mhe=on`）：包内文件名也进 AES，网盘按文件名做内容审查时看不到；`false` 则不加密头部，代价是头一旦损坏整个包连目录都列不出来 |
+| `confirm_tips` | `true` | 危险操作（restore / compact / repair / schedule / remove）执行前询问 y/N；`false` 直接执行 |
 | `7zip_path` | 安装时自动检测 | `7z.exe` / `7za.exe` 的路径；空 = 在 `PATH` 和常见安装目录里找 |
 | `lang` | 空 | `zh` 或 `en`；空 = 跟随 Windows |
 | `lock_timeout_minutes` | `30` | 仓库锁最长等待分钟数 |
@@ -319,13 +320,12 @@ zinc config set default_password -
 | 参数 | 行为 |
 |---|---|
 | 不填 | 按 `restore_overwrite`（默认 `true` = 覆盖） |
-| `--overwrite` | 强制覆盖 |
 | `--no-overwrite` | 保留两份，同名文件解压成 `_1`、`_2` |
 | `--no-delete` | 只恢复文件，不执行后续备份记下的删除 |
 | `--notify=false` | 不发“恢复不完整”的通知 |
-| `--check-list` | 只打印执行顺序和体积（包与删除记录），不动文件；此时可以不写 `--dest` |
+| `--check` | 只打印执行顺序和体积（包与删除记录），不动文件；此时可以不写 `--dest` |
 | `--only <路径>` | 只恢复这一个文件或目录，其他文件不动；按时间线执行该子树下的删除记录（`--from` 时不执行） |
-| `--from <包>` | 配合 `--only`，从指定的包恢复：完整包名、唯一前缀，或该仓库**全部包**里的 1 起序号；不是 `--check-list` 打印的那套编号 |
+| `--from <包>` | 配合 `--only`，从指定的包恢复：完整包名、唯一前缀，或该仓库**全部包**里的 1 起序号；不是 `--check` 打印的那套编号 |
 
 覆盖模式启动时会打印警告。恢复严格按包名顺序逐个解压，所以改名或手工拷入的包会改变最后胜出的版本——请保留 zinc 生成的包名。
 
@@ -360,9 +360,9 @@ zinc restore docs --only 'notes/archive' --dest D:\recovered
 zinc restore docs --only '*.md' --dest D:\recovered
 
 # 先看这个文件分布在哪些包里（不动文件）
-zinc restore docs --only 'notes/chapter1.md' --check-list
+zinc restore docs --only 'notes/chapter1.md' --check
 
-# 从某个旧版本里取（用 --check-list 打印出来的包名）
+# 从某个旧版本里取（用 --check 打印出来的包名）
 zinc restore docs --only 'notes/chapter1.md' --from 20261020_070012_334.7z --dest D:\old
 ```
 
@@ -371,7 +371,7 @@ zinc restore docs --only 'notes/chapter1.md' --from 20261020_070012_334.7z --des
 - 起点是**最早包含该路径的包**，然后按「包 → 删除记录」的时间线依次执行：包解压该子树，删除记录只处理这个子树下的路径；
 - 之所以能这么算，是因为一个路径不可能在它出现之前就被删除；起点之前的删除记录一定不涉及它；
 - `--from <包>` 是例外：只解那一个包，不套删除记录——你要的就是“那一版”；
-- `--check-list` 会把时间线里的删除记录也列出来；
+- `--check` 会把时间线里的删除记录也列出来；
 - 目录或通配符也一样走时间线，结果与整仓恢复后的对应子树一致。
 
 通配符按 7-Zip 的匹配语义，`*` 不保证跨目录：`--only '*.md'` 只命中根层文件。要恢复整棵子树就直接给目录路径（`--only 'notes/archive'`），别用通配符猜。
@@ -386,7 +386,7 @@ zinc hash-compare --source1 D:\notes\archive --source2 D:\recovered\notes\archiv
 zinc hash-compare --source D:\recovered\notes\chapter1.md --hash-value 9f86d0…
 ```
 
-`--only --check-list` 需要密码，因为列包内文件要读加密的归档头。
+`--only --check` 需要密码，因为列包内文件要读加密的归档头。
 
 ## 压缩（compact）
 
@@ -397,26 +397,26 @@ zinc hash-compare --source D:\recovered\notes\chapter1.md --hash-value 9f86d0…
 zinc compact docs
 
 # 真的做
-zinc compact docs --yes
+zinc compact docs
 
 # 只处理一个包
-zinc compact docs --pack 20261028_174343_907.7z --yes
+zinc compact docs --pack 20261028_174343_907.7z
 
 # 阈值调到 10%（默认 5%，且不低于 8 MiB）
-zinc compact docs --min-gain 10% --yes
+zinc compact docs --min-gain 10%
 ```
 
 判定规则很简单：索引里指向某个包的文件就是这个包的当前版本，留下；指向别的包（已被新版取代）或根本没有条目（已从源目录删除）的，丢掉。
 
 几条不肯让步的约定：
 
-- **默认只报告，加 `--yes` 才动手。** 重写一个包要读一遍、写一遍，网盘还要重传一遍，值不值得先看清楚。
+- **执行前会问一次。** 重写一个包要读一遍、写一遍，网盘还要重传一遍，值不值得先看清楚——只想看计划就加 `--check`。
 - **收益低于阈值就跳过。** 默认 5%，且不低于 8 MiB——为省 2 MB 重传 1 GB 不划算。`--min-gain 0` 表示不看阈值。
 - **包名不变。** 夸克网盘这类支持「同名覆盖 + 历史版本」的网盘，重写的包会原地替换，旧包自动进历史版本，云端不会多留一份。
 - **包被腾空也不删包。** 删包会打乱「按名字顺序解压」这条恢复依据，所以空包里只留一个 0 字节的 `placeholder-Please_Delete_This`。恢复时 zinc 会把它排除掉（`-x!` 直接不解），手工 `7z x` 打开也一眼看得出该删。
 - **原包在最后一步之前一直不动。** 解压 → 重打 → `7za t` 自检 → 归档头对账，全部通过才原子替换（同卷 rename）；任何一步失败就跳过这个包，报错但不碰原包。
-- **索引和包目录必须对得上。** 对不上说明索引不完整（比如只重建过一段），这时 compact 会把别的包的内容误判成「已删除」，所以直接拒绝，让你先跑 `zinc reindex`。
-- **只认「当前版本」，旧版本真的会消失。** `restore --only <路径> --check-list` 之后能看到的版本会变少；想留几版历史，就别对这个仓库跑 compact。
+- **索引和包目录必须对得上。** 对不上说明索引不完整（比如只重建过一段），这时 compact 会把别的包的内容误判成「已删除」，所以直接拒绝，让你先跑 `zinc repair`。
+- **只认「当前版本」，旧版本真的会消失。** `restore --only <路径> --check` 之后能看到的版本会变少；想留几版历史，就别对这个仓库跑 compact。
 
 重写完成后要让网盘重新上传这些包——同名覆盖会让旧包进历史版本，这正是「本地裁掉的东西云端也裁掉」的关键。
 
@@ -433,11 +433,11 @@ zinc schedule pictures --daily --at 10:00,20:00
 # 每周一、三 20:00
 zinc schedule pictures --weekly 1,3 --at 20:00
 
-# 每月 1 号、15 号 20:00（写 29–31 号要加 --yes，否则直接拒绝创建）
+# 每月 1 号、15 号 20:00（写 29–31 号会先问一次再创建）
 zinc schedule pictures --monthly 1,15 --at 20:00
 ```
 
-建完任务后再改密码，要删掉重建（`zinc unschedule <name>` 再 `zinc schedule ...`）。
+建完任务后再改密码，要删掉重建（`zinc unschedule <仓库名>` 再 `zinc schedule ...`）。
 
 计划任务通过任务计划程序创建，指向 `zincw.exe`（GUI 子系统）。它是 GUI 进程、没有控制台，所以拉起的 7-Zip、schtasks、PowerShell 全部以 `CREATE_NO_WINDOW` 启动——不设这个标志，Windows 会给每个子进程新建一个控制台，一次备份能闪几十个黑窗。通知规则：
 
@@ -486,7 +486,7 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
     20261024_110635_081.7z    ← 每个包都是完整归档，按名字升序恢复
     20261025_070012_334.7z
     20261025_070012_334.rm    ← 这一批删掉的文件（纯文本）
-    index.tsv                 ← 增量检测缓存，丢了用 zinc reindex 重建
+    index.tsv                 ← 增量检测缓存，丢了用 zinc repair 重建
     manifest.json             ← SHA-256 账本，verify 用
   videos\
 ```
@@ -495,12 +495,12 @@ zinc unschedule --all      # 删掉所有 zinc 任务，包括各仓库的
 |---|---|---|---|
 | `*.7z` | `<output>/` | 是 | 数据本身，每个都是完整归档 |
 | `*.rm` | `<output>/` | 是 | 这一批的删除记录及其校验和；恢复要靠它删掉文件，必须跟包一起上传 |
-| `index.tsv` | `<output>/` | 是 | 增量检测缓存，丢了用 `zinc reindex` 重建 |
+| `index.tsv` | `<output>/` | 是 | 增量检测缓存，丢了用 `zinc repair` 重建 |
 | `manifest.json` | `<output>/` | 是 | 每个包的 SHA-256 账本（按批次分组），`verify` 用；必须随包上传，否则换机后没法校验旧包 |
 | `manifest.json.v1.bak` | `<output>/` | 否 | 旧格式账本升级到 v2 前的原样副本；只在第一次升级时生成 |
-| `manifest.json.bak` | `<output>/` | 否 | `remanifest --yes` 写回前留的上一份账本 |
+| `manifest.json.bak` | `<output>/` | 否 | `repair` 写回前留的上一份账本 |
 
-`manifest.json` 是**校验账本，不是数据本体**：备份和恢复都不读它，只有 `verify` 拿它比对包/删除记录的哈希。账本和磁盘对不上时（比如手动删过包），用 `zinc remanifest <仓库>` 对账——删掉已消失的条目、补登孤儿包，默认只预演，`--yes` 才写回。
+`manifest.json` 是**校验账本，不是数据本体**：备份和恢复都不读它，只有 `verify` 拿它比对包/删除记录的哈希。账本和磁盘对不上时（比如手动删过包），用 `zinc repair <仓库>` 对账——删掉已消失的条目、补登孤儿包，默认先打印计划再问一次，`--check` 只预演。
 
 运行时文件（程序目录，不同步）：
 
@@ -567,13 +567,13 @@ zinc 回答的是“这个目录每次备份时长什么样”，恢复能把它
 - **不导入旧的分卷布局。** `vol-*.7z.001` 这类归档不读取。请新建仓库，或把旧目录整体当归档留着。
 - **计划任务需要真实终端。** `schtasks` 在受限环境（如沙箱）里跑不了。
 - **任务里密码是明文。** 无人值守的必然代价；威胁模型是网盘内容扫描，不是定向攻击者。
-- **`manifest.json` 必须随包上传。** 它记录备份时算出的哈希，`verify` 靠它在换机后识别传输损坏；丢了可以用 `zinc remanifest <仓库> --yes` 从盘上重算，但会失去「哪个包曾经在、现在没了」这条记录。
-- **`reindex` 依赖本地时区。** `7za l` 打印的是本地时间且不带偏移，重建时按当前时区解释。
-- **`reindex --pack-start` / `--pack-end` 会用子集覆盖整份索引。** 范围外的包下次备份会被当成新增重压一遍。这两个参数是灾难恢复用的，日常直接跑 `zinc reindex <仓库>`。
+- **`manifest.json` 必须随包上传。** 它记录备份时算出的哈希，`verify` 靠它在换机后识别传输损坏；丢了可以用 `zinc repair <仓库> --rehash` 从盘上重算，但会失去「哪个包曾经在、现在没了」这条记录。
+- **`repair` 依赖本地时区。** `7za l` 打印的是本地时间且不带偏移，重建时按当前时区解释。
+- **`repair --pack-start` / `--pack-end` 会用子集覆盖整份索引。** 范围外的包下次备份会被当成新增重压一遍。这两个参数是灾难恢复用的，日常直接跑 `zinc repair <仓库>`。
 - **符号链接和 junction 不会被扫描。** 源目录本身是 junction 时扫描结果为空（表现为永远“无新增”），源目录内部的 junction 子树也不进索引。请把 `--source` 配成真实路径。
 - **空目录不备份。** 打包清单里只有文件，所以一个不含任何文件的目录恢复后不存在；有文件的目录会连文件一起重建。
 - **强杀后 `.lock` 残留。** 仓库锁不会自动接管。进程被强杀后要手动删掉 `<output>\.lock`，否则之后每次备份都会等满 `lock_timeout_minutes`（默认 30 分钟）再失败。
-- **索引缺失等于全量重压。** `index.tsv` 被删掉之后如果不去重建，下次备份会把它当空仓库，把所有文件重压一遍（不会漏数据，但会多传一遍）。丢了先跑一次 `zinc reindex <仓库>`，这一次重压就省了。**损坏**的索引是另一回事：那是硬错误，备份会停下，直到你跑 `zinc reindex`。
+- **索引缺失等于全量重压。** `index.tsv` 被删掉之后如果不去重建，下次备份会把它当空仓库，把所有文件重压一遍（不会漏数据，但会多传一遍）。丢了先跑一次 `zinc repair <仓库>`，这一次重压就省了。**损坏**的索引是另一回事：那是硬错误，备份会停下，直到你跑 `zinc repair`。
 - **换密码后旧包打不开。** 旧包仍用旧密码加密。
 - **只支持 Windows。** 64 位 Windows 10 或 11。
 
@@ -586,8 +586,8 @@ zinc 回答的是“这个目录每次备份时长什么样”，恢复能把它
 | 提示 `[警告] 找不到 7z.exe / 7za.exe` | 7-Zip 不在 zinc 会去找的位置；装一个，或者 `zinc config set 7zip_path <7z.exe 路径>` |
 | 备份卡很久然后失败 | 残留的 `<output>\.lock`；手动删掉再跑一次 |
 | 通知突然不弹了 | 跑一次 `zinc init --force`，它会重建快捷方式、注册表项和标记文件 |
-| `restore --from` 说不认识这个包 | 用 `--check-list` 打印的包名；裸数字按整个仓库的包顺序编址，不是那个列表的编号 |
-| 恢复出来不是想要的版本 | 先 `zinc restore <仓库> --only <路径> --check-list` 看版本分布，再用 `--from` 指定 |
+| `restore --from` 说不认识这个包 | 用 `--check` 打印的包名；裸数字按整个仓库的包顺序编址，不是那个列表的编号 |
+| 恢复出来不是想要的版本 | 先 `zinc restore <仓库> --only <路径> --check` 看版本分布，再用 `--from` 指定 |
 | `restore` 报 `N 个包解压失败` | 这些包坏了（位翻转、上传中断、网盘同步只传了一半）。仓库其余部分已经恢复出来了。跑 `zinc verify` 看具体是哪些包，从输出目录删掉这几个文件、再从别的副本把同名文件取回来；实在不行手工解压能解的部分 |
 | 某个文件备份不进去 | 被独占打开（例如 Excel）。它会被跳过且**不写索引**，下次备份自动重试 |
 

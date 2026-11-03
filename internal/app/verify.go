@@ -24,6 +24,13 @@ func runVerify(name string, cfg *Config, set *Settings, samplePct int, doHash, d
 	if err != nil {
 		return err
 	}
+	// verify 本身是只读的，但 compact 会在「包已替换、manifest 未写」的窗口里
+	// 让哈希暂时对不上；不拿锁的话 verify 会把这个窗口报成永久损坏。
+	lock, lerr := acquireLock(repo.Output, set.lockTimeout())
+	if lerr != nil {
+		return lerr
+	}
+	defer lock.release()
 	m, err := loadManifest(repo.Output)
 	if err != nil {
 		if os.IsNotExist(err) {
