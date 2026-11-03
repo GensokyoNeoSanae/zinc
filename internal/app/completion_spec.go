@@ -92,7 +92,7 @@ var completionCommands = []CmdSpec{
 		{Name: "at", HasValue: true},
 		{Name: "password", HasValue: true},
 		{Name: "no-notify"},
-		{Name: "yes"},
+		{Name: "check"},
 	}, PositionalKind: "repo"},
 	{Name: "unschedule", Flags: []FlagSpec{{Name: "all"}}, PositionalKind: "repo"},
 	{Name: "completion", Flags: []FlagSpec{{Name: "install"}}, PositionalWords: []string{"powershell", "bash", "zsh", "fish"}},

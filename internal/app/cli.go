@@ -316,6 +316,10 @@ func cmdRemove(args []string) {
 	if _, exists := cfg.Repos[name]; !exists {
 		die(M.RepoNotFound, name)
 	}
+	if !askConfirm(mustSettings(), M.RemoveConfirm, name) {
+		fmt.Print(M.ConfirmCancelled)
+		return
+	}
 	delete(cfg.Repos, name)
 	if err := saveConfig(cfg); err != nil {
 		die(M.SaveConfigFailed, err)
@@ -940,7 +944,7 @@ func cmdSchedule(args []string) {
 	at := fs.String("at", "", M.FlagAt)
 	password := fs.String("password", "", M.FlagPassword)
 	noNotify := fs.Bool("no-notify", false, M.FlagNoNotify)
-	yes := fs.Bool("yes", false, M.FlagYes)
+	check := fs.Bool("check", false, M.FlagCheck)
 	fs.Parse(reorderArgs(args))
 
 	// --list 是只读查询，不需要仓库名、周期、时间，也不需要密码。
@@ -948,7 +952,7 @@ func cmdSchedule(args []string) {
 		if fs.NArg() > 0 {
 			die(M.TooManyArgs, fs.Arg(0))
 		}
-		if *daily || *weekly != "" || *monthly != "" || *at != "" || *password != "" || *noNotify || *yes {
+		if *daily || *weekly != "" || *monthly != "" || *at != "" || *password != "" || *noNotify || *check {
 			die(M.ListWithArgs)
 		}
 		if err := runListSchedules(); err != nil {
@@ -1014,7 +1018,7 @@ func cmdSchedule(args []string) {
 		fmt.Print(M.SchedulePwFromCLI)
 	}
 
-	if err := runSchedule(name, *all, kind, days, *at, pw, *noNotify, *yes); err != nil {
+	if err := runSchedule(name, *all, kind, days, *at, pw, *noNotify, *check, set); err != nil {
 		logf("schedule %s: failed: %v", name, err)
 		die("%v", err)
 	}

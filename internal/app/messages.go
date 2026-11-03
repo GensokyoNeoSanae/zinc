@@ -148,6 +148,7 @@ type Messages struct {
 	UnknownPeriod     string
 	TaskCreateFailed  string
 	TaskCreated       string
+	TaskWouldCreate   string
 	WeekdayInvalid    string
 	QueryFailed       string
 	Deleted           string
@@ -343,6 +344,7 @@ type Messages struct {
 	ConfirmPrompt      string
 	ConfirmCancelled   string
 	RestoreConfirmHead string
+	RemoveConfirm      string
 	PackOrderBroken    string
 	NoPacksRestore     string
 	FlagOnly           string
@@ -635,10 +637,11 @@ var zhMessages = &Messages{
 	UsageSchedule:     "用法: zinc schedule <name|--all> ...",
 	TimeInvalid:       "时间格式错误: %q（应为 HH:MM）",
 	MonthlyDayInvalid: "每月日期错误: %q（应为 1-31）",
-	MonthlyWarn:       "你设置了每月 %d 号备份，但 2 月没有 %d 号，4/6/9/11 月只有 30 天。\n这些月份将不会执行备份。\n继续创建任务请加 --yes",
+	MonthlyWarn:       "你设置了每月 %d 号备份，但 2 月没有 %d 号，4/6/9/11 月只有 30 天；这些月份不会执行备份。\n",
 	UnknownPeriod:     "未知周期: %s",
 	TaskCreateFailed:  "创建任务 %s 失败: %v\n%s",
 	TaskCreated:       "[任务] %s (%s %s %s)\n",
+	TaskWouldCreate:   "[预演] 将创建任务 %s (%s %s %s)\n",
 	WeekdayInvalid:    "周几错误: %q（应为 1-7，1=周一）",
 	QueryFailed:       "查询任务失败: %v\n%s",
 	Deleted:           "[删除] %s\n",
@@ -812,6 +815,7 @@ var zhMessages = &Messages{
 	ConfirmPrompt:        "继续吗？[y/N] ",
 	ConfirmCancelled:     "已取消，未做任何改动。\n",
 	RestoreConfirmHead:   "目标目录 %s 里已有文件，恢复可能覆盖或删除它们。\n",
+	RemoveConfirm:        "确定移除仓库「%s」？只删配置，输出目录里的包不会动。\n",
 	ModeOverwrite:        "覆盖",
 	ModeRename:           "不覆盖",
 	DestUnset:            "(未指定)",
@@ -1104,10 +1108,11 @@ Notes:
 	UsageSchedule:     "usage: zinc schedule <name|--all> ...",
 	TimeInvalid:       "invalid time: %q (expected HH:MM)",
 	MonthlyDayInvalid: "invalid day of month: %q (expected 1-31)",
-	MonthlyWarn:       "you set day %d of every month, but February has no day %d, and Apr/Jun/Sep/Nov only have 30 days.\nThose months will be skipped.\nAdd --yes to continue",
+	MonthlyWarn:       "you set day %d of every month, but February has no day %d, and Apr/Jun/Sep/Nov only have 30 days; those months will be skipped.\n",
 	UnknownPeriod:     "unknown period: %s",
 	TaskCreateFailed:  "failed to create task %s: %v\n%s",
 	TaskCreated:       "[task] %s (%s %s %s)\n",
+	TaskWouldCreate:   "[dry-run] would create task %s (%s %s %s)\n",
 	WeekdayInvalid:    "invalid weekday: %q (expected 1-7, 1=Monday)",
 	QueryFailed:       "failed to query tasks: %v\n%s",
 	Deleted:           "[deleted] %s\n",
@@ -1281,6 +1286,7 @@ Notes:
 	ConfirmPrompt:        "Continue? [y/N] ",
 	ConfirmCancelled:     "Cancelled; nothing changed.\n",
 	RestoreConfirmHead:   "The destination %s already has files; restoring may overwrite or delete them.\n",
+	RemoveConfirm:        "Remove repo \"%s\"? Only its config goes away; the packs in its output directory stay.\n",
 	ModeOverwrite:        "overwrite",
 	ModeRename:           "no-overwrite",
 	DestUnset:            "(not specified)",

@@ -48,8 +48,8 @@ func scheduledExePath() string {
 	return exe
 }
 
-// runSchedule 创建计划任务。kind 为 daily/weekly/monthly。
-func runSchedule(name string, all bool, kind, days, times, password string, noNotify, yes bool) error {
+// runSchedule 创建计划任务。kind 为 daily/weekly/monthly；check 为真时只报不建。
+func runSchedule(name string, all bool, kind, days, times, password string, noNotify, check bool, set *Settings) error {
 	var normTimes []string
 	for _, t := range strings.Split(times, ",") {
 		n, err := normalizeTime(t)
@@ -65,8 +65,10 @@ func runSchedule(name string, all bool, kind, days, times, password string, noNo
 			if err != nil || n < 1 || n > 31 {
 				return fmt.Errorf(M.MonthlyDayInvalid, d)
 			}
-			if n > 28 && !yes {
-				return fmt.Errorf(M.MonthlyWarn, n, n)
+			// 29-31 号在部分月份不存在，schtasks 会静默跳过那几个月，问一句再建
+			if n > 28 && !check && !askConfirm(set, M.MonthlyWarn, n, n) {
+				fmt.Print(M.ConfirmCancelled)
+				return nil
 			}
 		}
 	}
@@ -104,6 +106,10 @@ func runSchedule(name string, all bool, kind, days, times, password string, noNo
 			return fmt.Errorf(M.UnknownPeriod, kind)
 		}
 
+		if check {
+			fmt.Printf(M.TaskWouldCreate, taskName, kind, days, t)
+			continue
+		}
 		out, err := hiddenCmd("schtasks", args...).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf(M.TaskCreateFailed, taskName, err, string(out))
