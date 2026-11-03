@@ -86,6 +86,76 @@ func printHelp(args []string) {
 }
 
 var zhHelp = map[string]HelpTopic{
+	"repair": {
+		Usage: "repair <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check] [--password <密码>]",
+		Purpose: `修复「元数据」与「磁盘上的包」对不上的情况。它不碰包的内容，只重写两个记账文件：
+
+  index.tsv      —— 每个文件当前在哪个包、多大、什么时间（增量备份靠它判断谁变了）
+  manifest.json  —— 每个包的 SHA-256，以及每次备份记下的删除清单
+
+什么时候会需要它：
+
+  - 你手动删掉了 verify 报损坏的那个包，账本里还留着它的登记；
+  - 换机器/换目录，只从网盘下载了一部分包过来，账本却是全量的；
+  - compact 跑到一半被中断，包已经换新、manifest 还记着旧哈希，verify 从此一直报损坏；
+  - 手动把包改了名或挪了位置；
+  - 杀毒软件隔离了某个包，或者 chkdsk 动了文件；
+  - index.tsv 被误删、被截断。
+
+包本身是唯一权威数据。这些元数据丢了都能从这个目录里重建出来。`,
+		How: `按「便宜到贵」的顺序做三件事：
+
+  1. 对账 manifest：扫描输出目录里的包和 .rm 删除记录，删掉账本里已经不存在
+     的登记，补登盘上有、账上没有的孤儿包。这一步只做 stat，很快。
+  2. 重建 index.tsv：逐个读包的归档头（不解压内容），重建「文件 → 当前状态」，
+     并按删除记录划掉已经消失的文件。这一步要读每个包，包多时慢。
+  3. --rehash：把每个包的 SHA-256 按磁盘实际内容重算一遍。这一步要读整个包，
+     最慢，所以默认不做——它专治 compact 中断留下的旧哈希。
+
+第 3 步是 repair 存在的核心理由：除了它，没有任何命令能把 manifest 里过时的
+哈希改回来，verify 会永远报那个包损坏。`,
+		Params: []string{
+			"--pack-start <包名> / --pack-end <包名>：只重建这一段的索引，不全量读一遍。",
+			"--rehash：重算每个已登记包的哈希。修 compact 中途失败留下的旧哈希。",
+			"--check：只打印计划、不写盘。写之前想看一遍会改什么就用它。",
+			"--password <密码>：读归档头需要密码；不给时按「仓库 > settings」取。",
+		},
+		Notes: []string{
+			"它不修复包本身。包真的损坏了，只能靠别的副本或重新备份。",
+			"重建 index.tsv 时旧索引会备份成 index.tsv.bak，覆写前不会直接丢。",
+			"repair 会拿仓库锁，备份进行时无法同时修复。",
+		},
+	},
+	"backup": {
+		Usage: "backup <仓库名|--all> [--notify] [--notify-empty] [--no-verify] [--password <密码>]",
+		Purpose: `把源目录里「新增或改动过」的文件打成一个或多个独立的加密 7z 包。
+
+它不是镜像：仓库只增不减，每个包都是当时那一批变更的完整快照。删掉源目录里的
+文件不会让仓库变小（用 compact 处理旧副本），改过的文件会以新包的形式再存一份。`,
+		How: `先用 index.tsv 和磁盘实际状态对比，找出这个源目录里「新的、改过的、大小变了的」
+文件——所以没变化时它几乎不花时间，输出「无新增」。
+
+然后按 max_pack_byte（默认 4G）把这些文件切成若干包，逐包用 7za 打包、校验
+（默认跑一次 7za t 确认 CRC）、算 SHA-256，再更新 manifest 与索引。
+
+逐包提交是刻意的：每成功一个包就落账，后面的包出问题也不影响前面已经提交的。
+一次备份跑几小时，中断时你至少拿到了中间那部分。
+
+打包时读不到的文件（被占用、权限不足）会被跳过并在终端列出来，不算失败——下次
+备份会重试。被占用的行数不设上限，几次重跑就能把清单清干净。`,
+		Params: []string{
+			"--all：备份所有仓库，任何一个失败不影响其余。",
+			"--notify：完成后发 Windows 通知（默认取 settings.complete_notify）。",
+			"--notify-empty：没有新增也发通知，定时任务里用来确认它还活着。",
+			"--no-verify：跳过打包后的 7za t 自检。只建议在确认磁盘可靠时用，它能省掉一次全包读取。",
+			"--password <密码>：不给时按「仓库 > settings」取，取不到才交互询问。",
+		},
+		Notes: []string{
+			"备份是安全的：它只写输出目录，从不删改源目录里的东西。",
+			"包名就是打包时刻，恢复按名字升序重放，所以时钟回拨会被显式修正并提示。",
+			"源目录里的 junction 会被跳过（它会表现为「永远无新增」），这是已知限制。",
+		},
+	},
 	"compact": {
 		Usage: "compact <仓库名> [--pack <包名>] [--min-gain <阈值>] [--check] [--password <密码>]",
 		Purpose: `释放输出目录占用的空间。它删掉的是包里「已被新版取代」或「已从源目录消失」的副本，
@@ -157,6 +227,85 @@ var zhHelp = map[string]HelpTopic{
 }
 
 var enHelp = map[string]HelpTopic{
+	"repair": {
+		Usage: "repair <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>] [--rehash] [--check] [--password <password>]",
+		Purpose: `Fix the case where the metadata no longer matches the packs on disk. It never touches
+pack content; it only rewrites two bookkeeping files:
+
+  index.tsv      - which pack holds the current version of each file (incremental backup reads it)
+  manifest.json  - the SHA-256 of every pack, plus the deletion records written by each backup
+
+When you need it:
+
+  - you deleted a pack that verify reported as corrupt, and the manifest still lists it;
+  - you moved to another machine and only downloaded some of the packs from the cloud;
+  - a compact was interrupted after replacing a pack but before updating the manifest, so
+    verify has reported that pack as corrupt ever since;
+  - you renamed or moved a pack by hand;
+  - antivirus quarantined a pack, or chkdsk touched the directory;
+  - index.tsv was deleted or truncated.
+
+The packs are the only source of truth. Any of this metadata can be rebuilt from them.`,
+		How: `Three steps, cheapest first:
+
+  1. Reconcile the manifest: scan the packs and .rm deletion records in the output
+     directory, drop entries whose file is gone, register packs the manifest never saw.
+     This is just stat calls, so it is fast.
+  2. Rebuild index.tsv: read each pack's archive header (no extraction), rebuild
+     "file -> current state", and cross out files that the deletion records removed.
+     This reads every pack, so it is slow on a large repo.
+  3. --rehash: recompute each pack's SHA-256 from what is actually on disk. This reads
+     whole packs, so it is slow and off by default.
+
+Step 3 is the reason the command exists: nothing else can repair a stale manifest hash,
+and without it verify reports that pack as corrupt forever.`,
+		Params: []string{
+			"--pack-start <pack_name> / --pack-end <pack_name>: rebuild only that slice of the index.",
+			"--rehash: recompute every registered pack's hash; repairs a compact that died mid-way.",
+			"--check: print the plan, write nothing.",
+			"--password <password>: reading archive headers needs one; repo > settings, else prompt.",
+		},
+		Notes: []string{
+			"It does not repair a damaged pack. Only another copy or a fresh backup can do that.",
+			"The old index is kept as index.tsv.bak before being overwritten.",
+			"repair takes the repo lock, so it cannot run while a backup is in progress.",
+		},
+	},
+	"backup": {
+		Usage: "backup <repo_name|--all> [--notify] [--notify-empty] [--no-verify] [--password <password>]",
+		Purpose: `Pack the files that are new or changed in the source directory into one or more
+independent encrypted 7z archives.
+
+It is not a mirror: the repo only grows. Every pack is a complete snapshot of that
+batch of changes. Deleting a file from the source does not shrink the repo (compact
+handles old copies), and an edited file gets stored again as a new pack.`,
+		How: `It compares index.tsv against the source directory to find files that are new, edited
+or resized — so a run with nothing to do costs almost nothing and prints "no changes".
+
+Those files are split into packs by max_pack_byte (4G by default), and each pack is
+built with 7za, tested once (7za t, checking CRCs), hashed, then recorded in the
+manifest and the index.
+
+Committing pack by pack is deliberate: each finished pack is recorded immediately, so a
+failure later in the run does not throw away the packs already written. A backup can run
+for hours; you keep the middle part either way.
+
+Files that cannot be read while packing (locked, permission denied) are skipped and
+listed in the terminal instead of failing the run — the next backup retries them. The
+list is not truncated, so a couple of reruns clear it out.`,
+		Params: []string{
+			"--all: back up every repo; one failure does not stop the others.",
+			"--notify: toast when it finishes (default from settings.complete_notify).",
+			"--notify-empty: toast even when nothing changed, useful to see a scheduled task alive.",
+			"--no-verify: skip the post-pack 7za t test. It saves a full read of every pack; only use it when you trust the disk.",
+			"--password <password>: repo > settings, and only prompt if neither has one.",
+		},
+		Notes: []string{
+			"Backup is harmless: it only writes to the output directory, never to the source.",
+			"Pack names are timestamps and restore replays them in name order, which is why a clock rollback is corrected and reported.",
+			"Directory junctions inside the source are skipped (they look like \"nothing new\" forever); a known limitation.",
+		},
+	},
 	"compact": {
 		Usage: "compact <repo_name> [--pack <pack_name>] [--min-gain <threshold>] [--check] [--password <password>]",
 		Purpose: `Reclaim disk space in the output directory. It drops the copies a newer version has
