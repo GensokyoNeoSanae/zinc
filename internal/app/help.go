@@ -108,13 +108,9 @@ func wrapLine(s string, limit int) []string {
 				rest = rest[1:] // 断点处的空格不带到下一行开头
 			}
 			// 别把英文单词劈成两半（manifest.json 变成 manifest.j / son）。
-			// 新行的第一个字符如果是词字符，而上一行以词字符结尾，就把那半个词
-			// 整个挪到下一行。硬断时 rest 是空的，此时看的是即将写入的 r。
-			firstOfNext := r
-			if len(rest) > 0 {
-				firstOfNext = rest[0]
-			}
-			if isWordRune(firstOfNext) && len(out) > 0 {
+			// 只在硬断时需要处理：软断本来就落在空格上，词是完整的，再挪一次
+			// 反而会把它和下一行粘起来（disk.It）。
+			if len(rest) == 0 && isWordRune(r) && len(out) > 0 {
 				last := []rune(out[len(out)-1])
 				k := len(last)
 				for k > 0 && isWordRune(last[k-1]) {
@@ -123,7 +119,7 @@ func wrapLine(s string, limit int) []string {
 				if k < len(last) {
 					moved := []rune(string(last[k:]))
 					out[len(out)-1] = strings.TrimRight(string(last[:k]), " ")
-					rest = append(moved, rest...)
+					rest = moved
 				}
 			}
 			// 中文排版禁则：标点不落行首。宁可让上一行多占一格，
@@ -178,11 +174,9 @@ func printHelp(args []string) {
 
 var zhHelp = map[string]HelpTopic{
 	"add": {
-		Usage: "add <仓库名> --source <路径> [--output <路径>]",
-		Purpose: `新建一个备份仓库：登记要备份的源目录，和存放包的位置。
-
-仓库名是你之后所有命令用的代号，可以带中文。源目录必须是已存在的目录；输出目录不存在会自动创建。`,
-		How: `只写 repos.json，不碰磁盘上的任何数据。输出目录默认是 <root>\<仓库名>，root 由 zinc root 设置。源目录当前不存在只会警告，不会拒绝——挂载盘还没插上时也能先把仓库配好。`,
+		Usage:   "add <仓库名> --source <路径> [--output <路径>]",
+		Purpose: `新建一个备份仓库：登记要备份的源目录和存放包的位置。仓库名是之后所有命令用的代号，可带中文。源目录必须已存在，输出目录不存在时会自动创建。`,
+		How:     `只写 repos.json，不碰磁盘上的任何数据。输出目录默认是 <root>\<仓库名>，root 由 zinc root 设置。源目录当前不存在只会警告，不会拒绝——挂载盘还没插上时也能先把仓库配好。`,
 		Params: []string{
 			"--source <路径>：要备份哪个目录。",
 			"--output <路径>：包放哪儿。不给就用全局 root 下的同名子目录。",
@@ -204,7 +198,7 @@ var zhHelp = map[string]HelpTopic{
 	},
 	"set": {
 		Usage:   "set <仓库名> [--source <路径>] [--output <路径>] [--compress <0-9>] [--solid <块大小|off>] [--mhe on|off>] [--max-pack-byte <数量>] [--exclude <通配符>] [--password <密码>]",
-		Purpose: `修改某个仓库的参数。只给想改的那几项，其余保持原样。这些参数优先级高于config 里的同名全局设置。`,
+		Purpose: `修改某个仓库的参数，只改动给出的项。仓库参数优先于 config 里的同名全局设置。`,
 		How:     `写进 repos.json 的对应字段。压缩等级、固实块、头部加密只影响之后打的新包；已经存在的包不会被重打——compact 不做转换器，它只处理有旧副本可丢的包。`,
 		Params: []string{
 			"--compress <0-9>：7z 压缩等级，0=仅存储。默认 0，抗损最好也最快。",
@@ -228,7 +222,7 @@ var zhHelp = map[string]HelpTopic{
 	},
 	"root": {
 		Usage:   "root [<路径>]",
-		Purpose: `查看或设置全局输出根目录：新建仓库时没给 --output，包就放在<root>\<仓库名> 下。`,
+		Purpose: `查看或设置全局输出根目录。新建仓库没给 --output 时，包放在 <root>\<仓库名> 下。`,
 		How:     `写在 repos.json 的 root 字段。给路径时会先校验是不是目录。`,
 		Params:  []string{"<路径>：要设置的目录。不给就是查看当前值。"},
 		Notes:   []string{"已经存在的仓库不受影响，它们各自记着自己的输出目录。"},
@@ -244,13 +238,9 @@ var zhHelp = map[string]HelpTopic{
 		Notes: []string{"布尔键接受 on/off/true/false/yes/no。"},
 	},
 	"verify": {
-		Usage: "verify <仓库名|--all> [--sample <百分比>] [--password-only|--hash-only]",
-		Purpose: `检查每个包是否还和仓库中的 manifest.json 中记的一样：重算 SHA-256 比对，并用配置的密码试着打开它。
-
-它是「事后体检」，跟 backup 打包时的自检不是一回事：那个只证明写进去的那一刻是对的，verify 证明的是现在还是对的（磁盘位腐、网盘下载出错都靠它发现）。`,
-		How: `读 manifest 里每个包的最新哈希，逐个算文件 SHA-256 比对。默认还会用密码开一次包（只读归档头），确认密码没错、头没坏。
-
-删除记录（.rm 旁注）也一起校验——它坏了恢复时不是少删就是删错。`,
+		Usage:   "verify <仓库名|--all> [--sample <百分比>] [--password-only|--hash-only]",
+		Purpose: `检查每个包（包括.rm 文件，即删除记录）是否在创建后发生了更改或缺失，用于发现随机位翻转、网盘下载出错等意外情况。另外还检验包的密码是否与默认密码相同。`,
+		How:     `读 manifest 里每个包的最新哈希，逐个算文件 SHA-256 比对。默认还会用密码开一次包（只读归档头），确认密码没错、头没坏。`,
 		Params: []string{
 			"--all：验证所有仓库。",
 			"--sample <百分比>：只随机抽查这么多包，大仓库省时间。",
@@ -264,7 +254,7 @@ var zhHelp = map[string]HelpTopic{
 	},
 	"status": {
 		Usage:   "status [<仓库名>] [--expand] [--sort <字段>] [--asc|--desc]",
-		Purpose: `看仓库的整体状态。不带参数时每个仓库一行：文件数、批次、包数、源目录与输出目录的实际占用、最后备份时间。带仓库名时展开详情，包括待备份的新增/修改/删除数量。`,
+		Purpose: `查看仓库状态。不带参数时每行一个仓库，含文件数、批次、包数、源与输出目录的实际占用、最后备份时间；带仓库名时展开详情，含待备份的新增、修改、删除数量。`,
 		How:     `简表的数字来自索引和账本；「源」和「输出」是两边目录的真实遍历——目录项自带大小，不用打开文件，30 GB 量级也就百来毫秒。「输出比源多」是正常的：多出来的是历史版本、7z 头开销，以及 compact 还没清掉的旧副本。按名称排序走中文 collation（拼音），不是字节序；按大小排序默认大的在前。`,
 		Params: []string{
 			"<仓库名>：只看一个，展开成详情。",
@@ -280,7 +270,7 @@ var zhHelp = map[string]HelpTopic{
 	},
 	"schedule": {
 		Usage:   "schedule <仓库名|--all> --daily|--weekly <1-7>|--monthly <1-31> --at HH:MM[,HH:MM...] [--check] [--no-notify] [--password <密码>]",
-		Purpose: `给某个仓库（或全部）建一个 Windows 计划任务，到点自动跑 backup。`,
+		Purpose: `给某个仓库（或全部）创建 Windows 计划任务，到点自动执行 backup。`,
 		How: `调用 schtasks 创建任务，命令行里带的是 zinc backup 和你指定的密码。计划任务本身不联网、不需要你在场，所以密码必须能提前解析出来——解析不到直接报错，不会留一个到点才失败的坑。
 
 一次可以给多个时间，用逗号分隔，会建多个任务。每月 29-31 号在某些月份不存在，它会在创建前问你一次。`,
@@ -325,14 +315,14 @@ var zhHelp = map[string]HelpTopic{
 	},
 	"init": {
 		Usage:   "init [--force]",
-		Purpose: `一次性初始化：注册通知、把程序目录写进用户 PATH，让你在任意终端能直接敲zinc。绿色版和手动解压的用户需要跑一次；用安装包装过的已经做过了。`,
+		Purpose: `一次性初始化：注册通知，并把程序目录写进用户 PATH，使 zinc 能在任意终端直接运行。绿色版和手动解压的用户需要跑一次；安装包装过的已经做过。`,
 		How:     `写 HKCU 的 PATH 和通知注册，不碰任何备份数据。用 --force 可以重做一遍，适合通知失效或 PATH 被清掉的情况。`,
 		Params:  []string{"--force：即使已经注册过也重做。"},
 		Notes:   []string{"改完 PATH 要重开终端才生效。"},
 	},
 	"fixpack": {
 		Usage:   "fixpack <仓库名> [--check] [--password <密码>]",
-		Purpose: `修包。包坏掉之后，把还能读出来的文件捞出来，给读不出来的文件找一份替代来源，然后重新打包成同名文件。它只管包的内容，不碰账本——账本的问题是 fixmeta 的事。`,
+		Purpose: `修复损坏的包：保留还能读取的文件，为读不出来的文件找替代来源，然后重新打包成同名文件。它只处理包内容，不修改账本。`,
 		How:     `先对每个包跑一遍 7z t，拿到坏掉的文件名（非固实包下 7-Zip 会逐文件报出具体是哪个）。对每个坏文件按优先级找替代：先看源目录（还在且大小和时间与索引一致，就是那一份），再按从新到旧的顺序翻其他历史包，并且用 7z t 确认那份没坏。全都没有就标记为无法恢复。确认后逐个重写坏包：解压出好文件、补上替代来源、按原参数重新打包。`,
 		Params: []string{
 			"<仓库名>：要修哪个仓库。",
@@ -348,11 +338,9 @@ var zhHelp = map[string]HelpTopic{
 	},
 	"fixmeta": {
 		Usage: "fixmeta <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check] [--password <密码>]",
-		Purpose: `修复「元数据」与「磁盘上的包」对不上的情况。它不碰包的内容，只重写两个记账文件：index.tsv 记录每个文件当前在哪个包、多大、什么时间（增量备份靠它判断谁变了），manifest.json 记录每个包的 SHA-256 以及每次备份记下的删除清单。
+		Purpose: `修复元数据（index.tsv 与 manifest.json）与磁盘上的包不一致的情况。它不修改包内容。index.tsv 记录每个文件当前在哪个包、多大、什么时间；manifest.json 记录每个包的 SHA-256 以及每次备份记下的删除清单。
 
-常见的情况有这几种：你手动删掉了 verify 报更改的包、换机器后只从网盘下载了一部分包、compact 跑到一半被中断导致账本还是旧哈希、手动把包改了名或挪了位置、杀毒软件隔离了某个包、index.tsv 被误删或被截断。
-
-包本身是唯一权威数据，这些元数据丢了都能从这个目录里重建出来。`,
+常见原因：verify 报更改的包被手动删除、换机器后只下载了部分包、compact 中断导致账本仍是旧哈希、包被改名或移动、杀毒软件隔离、index.tsv 被删除或截断。这些元数据都能从输出目录重建。`,
 		How: `按「便宜到贵」的顺序做三件事。第一，对账 manifest：扫描输出目录里的包和 .rm 删除记录，删掉账本里已经不存在 的登记，补登盘上有、账上没有的孤儿包，这一步只做 stat，很快。第二，重建 index.tsv：逐个读包的归档头（不解压内容），重建「文件 → 当前状态」，并按删除记录划掉已经消失的文件，这一步要读每个包，包多时慢。第三，--rehash：把每个包的 SHA-256 按磁盘实际内容重算一遍，最慢，所以默认不做——它专治 compact 中断留下的旧哈希。
 
 第 3 步是 fixmeta 存在的核心理由：除了它，没有任何命令能把 manifest 里过时的哈希改回来，verify 会永远把那个包报成「更改」。`,
@@ -369,10 +357,8 @@ var zhHelp = map[string]HelpTopic{
 		},
 	},
 	"backup": {
-		Usage: "backup <仓库名|--all> [--notify] [--notify-empty] [--no-verify] [--password <密码>]",
-		Purpose: `把源目录里「新增或改动过」的文件打成一个或多个独立的加密 7z 包。
-
-它不是镜像：仓库只增不减，每个包都是当时那一批变更的完整快照。删掉源目录里的文件不会让仓库变小（用 compact 处理旧副本），改过的文件会以新包的形式再存一份。`,
+		Usage:   "backup <仓库名|--all> [--notify] [--notify-empty] [--no-verify] [--password <密码>]",
+		Purpose: `把源目录里新增或改动过的文件打成一批独立的加密 7z 包。这是增量备份：每个包只包含那一批变更，已备份且未改动的文件不会重复打包。删掉源目录里的文件不会让仓库变小，旧副本要靠 compact 清理。`,
 		How: `先用 index.tsv 和磁盘实际状态对比，找出这个源目录里「新的、改过的、大小变了的」文件——所以没变化时它几乎不花时间，输出「无新增」。
 
 然后按 max_pack_byte（默认 4G）把这些文件切成若干包，逐包用 7za 打包、校验（默认跑一次 7za t 确认 CRC）、算 SHA-256，再更新 manifest 与索引。
@@ -394,10 +380,8 @@ var zhHelp = map[string]HelpTopic{
 		},
 	},
 	"compact": {
-		Usage: "compact <仓库名> [--pack <包名>] [--min-gain <阈值>] [--check] [--password <密码>]",
-		Purpose: `释放输出目录占用的空间。它删掉的是包里「已被新版取代」或「已从源目录消失」的副本，那些旧版本随之消失，磁盘占用才会真正降下来。
-
-最典型的用法：你大批移动或重命名了图片、视频这类大体量文件之后。zinc 按路径追踪文件，不追踪「同一个文件换了位置」——移动之后，旧路径记为被删除、新路径记为新增，于是同一份内容在仓库里出现了两次（甚至更多）。备份没错，但空间被吃掉了。`,
+		Usage:   "compact <仓库名> [--pack <包名>] [--min-gain <阈值>] [--check] [--password <密码>]",
+		Purpose: `释放输出目录占用的空间：删掉包里已被新版取代、或对应文件已从源目录消失的副本，然后重写这些包。文件大批移动或重命名之后最有用——zinc 按路径追踪文件，移动后旧路径记为删除、新路径记为新增，同一份内容会在仓库里存两份。`,
 		How: `它扫描输出目录里的删除记录（.rm 旁注），找出「含有待删内容的包」，把这些包解压、删掉对应条目、再按同样的参数重新打包成同名压缩包。
 
 这里有两个刻意的设计：
@@ -423,11 +407,9 @@ var zhHelp = map[string]HelpTopic{
 	"restore": {
 		Usage: "restore <仓库名> <目标路径> [--only <相对路径>] [--from <包名>]\n" +
 			"                 [--no-overwrite] [--no-delete] [--check] [--password <密码>]",
-		Purpose: `把备份包里的内容还原到磁盘。默认还原整个仓库的全部文件，也可以只还原一个路径（--only），或从某个包开始还原（--from）。
+		Purpose: `把备份包里的内容还原到磁盘。默认还原整个仓库；--only 只还原一个路径，--from 从某个包开始。
 
-这是唯一会直接改动你磁盘上已有文件的命令，所以它在动手之前会把要做的事列一遍，目标位置已经有文件或有删除要被重放时，会停下来问一次。
-
-不建议直接恢复到源目录。更稳的做法是先恢复到一个空目录，用资源管理器逐项看一遍，确认没问题再手动覆盖回去——源目录在此期间始终保持完好，恢复逻辑万一有意外也不会伤到唯一的副本。`,
+这是唯一会直接改动目标目录的命令，执行前会列出计划，目标非空或要重放删除时会询问一次。不建议直接恢复到源目录：先恢复到空目录、确认无误后再手动覆盖回去，源目录在此期间保持完好。`,
 		How: `它按包名的时间顺序（升序）依次解压，后一个包覆盖前一个，最后得到「最新状态」。
 
 删除是单独一层语义：每次备份不仅记录「有哪些文件」，还记录「哪些文件不见了」（输出目录里的 .rm 旁注）。恢复时会按时间线重放这些删除——也就是说，如果你在10 月 5 日删过某个文件，10 月 10 日恢复时，目标目录里那份文件也会被删掉。这才是「还原到那个时间点」的完整含义。用 --no-delete 可以只补不删。`,
@@ -450,11 +432,9 @@ var zhHelp = map[string]HelpTopic{
 
 var enHelp = map[string]HelpTopic{
 	"add": {
-		Usage: "add <repo_name> --source <path> [--output <path>]",
-		Purpose: `Create a repo: register which directory to back up and where the packs go.
-
-The name is the handle every later command uses; it can contain any characters. Thesource must already exist; the output directory is created if missing.`,
-		How: `Writes repos.json only, touching nothing on disk. The output defaults to<root>\<repo_name>, where root comes from zinc root. A missing source is only awarning, not a refusal, so you can configure a repo before plugging the drive in.`,
+		Usage:   "add <repo_name> --source <path> [--output <path>]",
+		Purpose: `Create a repo: register which directory to back up and where the packs go. The repo name is the identifier every later command uses; it may contain Chinese. The source directory must exist; the output directory is created if missing.`,
+		How:     `Writes repos.json only, touching nothing on disk. The output defaults to<root>\<repo_name>, where root comes from zinc root. A missing source is only awarning, not a refusal, so you can configure a repo before plugging the drive in.`,
 		Params: []string{
 			"--source <path>: the directory to back up.",
 			"--output <path>: where the packs go; defaults to a subdirectory of the global root.",
@@ -466,7 +446,7 @@ The name is the handle every later command uses; it can contain any characters. 
 	},
 	"remove": {
 		Usage:   "remove <repo_name>",
-		Purpose: `Drop a repo definition. Only repos.json changes; the packs and index in the outputdirectory are left alone.`,
+		Purpose: `Drop a repo definition. Only repos.json changes; the packs and index in the output directory are left alone.`,
 		How:     `Asks once, then removes the entry. If scheduled tasks reference it, it tells you to unschedule them.`,
 		Params:  []string{"(none; the repo name is the only positional argument)"},
 		Notes: []string{
@@ -476,7 +456,7 @@ The name is the handle every later command uses; it can contain any characters. 
 	},
 	"set": {
 		Usage:   "set <repo_name> [--source <path>] [--output <path>] [--compress <0-9>] [--solid <block|off>] [--mhe on|off>] [--max-pack-byte <quantity>] [--exclude <glob>] [--password <password>]",
-		Purpose: `Change one repo's settings. Pass only what you want to change; the rest stays as it is.These override the same-named global settings in config.`,
+		Purpose: `Change one repo's settings, passing only what you want to change. Repo settings override the same-named global settings in config.`,
 		How:     `Written to repos.json. Compression level, solid blocks and header encryption only affectpacks built afterwards; existing packs are not rebuilt — compact is not a converter, itonly touches packs that have old copies to drop.`,
 		Params: []string{
 			"--compress <0-9>: 7z level, 0 = store only. Default 0, fastest and most damage-tolerant.",
@@ -500,14 +480,14 @@ The name is the handle every later command uses; it can contain any characters. 
 	},
 	"root": {
 		Usage:   "root [<path>]",
-		Purpose: `Show or set the global output root: a new repo without --output puts its packs in<root>\<repo_name>.`,
+		Purpose: `Show or set the global output root. A new repo without --output puts its packs in <root>\<repo_name>.`,
 		How:     `Stored in repos.json. A path argument is validated as a directory first.`,
 		Params:  []string{"<path>: the directory to set. Omit to just print the current one."},
 		Notes:   []string{"Existing repos keep their own output directories and are unaffected."},
 	},
 	"config": {
 		Usage:   "config [get|set|unset|path|list|show] [<key>] [<value>]",
-		Purpose: `Read and write global settings (settings.json): the defaults used when a repo does notoverride them.`,
+		Purpose: `Read and write global settings (settings.json): the defaults used when a repo does not override them.`,
 		How:     `get/set/unset work on one key; list prints every key and its current value; show prints thefile location. Precedence is always: command line > repo field > settings.json > built-in.`,
 		Params: []string{
 			"get <key>: read one key. set <key> <value>: write one. unset <key>: drop it, back to the built-in.",
@@ -516,10 +496,8 @@ The name is the handle every later command uses; it can contain any characters. 
 		Notes: []string{"Boolean keys accept on/off/true/false/yes/no."},
 	},
 	"verify": {
-		Usage: "verify <repo_name|--all> [--sample <percent>] [--password-only|--hash-only]",
-		Purpose: `Check that every pack still matches the manifest: recompute its SHA-256, and try to openit with the configured password.
-
-This is the after-the-fact check. backup's own 7za t only proves the pack was correctwhen written; verify proves it is correct now — which is how disk rot and a bad clouddownload get caught.`,
+		Usage:   "verify <repo_name|--all> [--sample <percent>] [--password-only|--hash-only]",
+		Purpose: `Check every pack (including the .rm deletion records) for changes or missing files since it was created, to catch bit rot, a bad cloud download and similar accidents. Also checks that each pack's password matches the configured one.`,
 		How: `Reads the latest hash for each pack from the manifest and compares it to the file ondisk. By default it also opens each pack (reading only the header) to confirm the passwordand the header are still fine.
 
 Deletion records (.rm sidecars) are checked too: a broken one makes restore delete thewrong things.`,
@@ -536,7 +514,7 @@ Deletion records (.rm sidecars) are checked too: a broken one makes restore dele
 	},
 	"status": {
 		Usage:   "status [<repo_name>] [--expand] [--sort <field>] [--asc|--desc]",
-		Purpose: `Show a repo at a glance. With no argument you get one line per repo: file count, batches, packs, the real footprint of the source and output directories, and the last backup. With a repo name it expands into details, including how many files are pending.`,
+		Purpose: `Show repo status. With no argument, one line per repo: file count, batches, packs, the real footprint of the source and output directories, and the last backup. With a repo name, the detail view, including how many files are pending.`,
 		How:     `The table numbers come from the index and the manifest; the source and output figures are real directory walks. Directory entries carry their size, so nothing is opened and 30 GB takes a few hundred milliseconds. Output being larger than the source is normal: it holds history, 7z headers, and old copies compact has not cleared yet. Sorting by name uses Chinese collation (pinyin), not byte order; sorting by size puts the largest first.`,
 		Params: []string{
 			"<repo_name>: show that repo alone, expanded.",
@@ -552,7 +530,7 @@ Deletion records (.rm sidecars) are checked too: a broken one makes restore dele
 	},
 	"schedule": {
 		Usage:   "schedule <repo_name|--all> --daily|--weekly <1-7>|--monthly <1-31> --at HH:MM[,HH:MM...] [--check] [--no-notify] [--password <password>]",
-		Purpose: `Create a Windows scheduled task that runs backup for a repo (or all of them) at fixedtimes.`,
+		Purpose: `Create Windows scheduled tasks that run backup for a repo (or all of them) at fixed times.`,
 		How: `Calls schtasks with a command line containing zinc backup and the password you resolved.A scheduled task cannot ask questions later, so the password must resolve now — if itcannot, this fails instead of leaving a task that breaks at 3 AM.
 
 Several times can be given, comma separated, creating one task each. Days 29-31 do notexist in every month, so it asks once before creating those.`,
@@ -597,14 +575,14 @@ Several times can be given, comma separated, creating one task each. Days 29-31 
 	},
 	"init": {
 		Usage:   "init [--force]",
-		Purpose: `One-time setup: register notifications and put the program directory on the user PATH sozinc works in any terminal. Needed for the portable zip; the installer already did it.`,
+		Purpose: `One-time setup: register notifications and put the program directory on the user PATH so zinc runs in any terminal. Needed for the portable zip; the installer has already done it.`,
 		How:     `Writes the HKCU PATH and the notification registration. It never touches backup data.--force redoes it, for when notifications stopped working or PATH was cleared.`,
 		Params:  []string{"--force: run the setup again even if it was already done."},
 		Notes:   []string{"Reopen the terminal after changing PATH."},
 	},
 	"fixpack": {
 		Usage:   "fixpack <repo_name> [--check] [--password <password>]",
-		Purpose: `Repair packs. When an archive is damaged, salvage the files that still read, find a replacement for the ones that do not, and repack under the same name. It only touches pack content, never the ledger — that is repair's job.`,
+		Purpose: `Repair damaged packs: keep the files that still read, find a replacement for the ones that do not, and repack under the same name. It only touches pack content, never the ledger.`,
 		How:     `Run 7z t on every pack first; on a non-solid archive 7-Zip reports each unreadable file by name. For every bad file, look for a replacement in order: the source directory first (still there, size and mtime matching the index = that copy), then other packs from newest to oldest, each confirmed with 7z t so a damaged history copy is skipped. Nothing found means unrecoverable. After confirmation each bad pack is rewritten: extract what reads, drop in the replacements, repack with the same settings.`,
 		Params: []string{
 			"<repo_name>: which repo to repair.",
@@ -620,15 +598,9 @@ Several times can be given, comma separated, creating one task each. Days 29-31 
 	},
 	"fixmeta": {
 		Usage: "fixmeta <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>] [--rehash] [--check] [--password <password>]",
-		Purpose: `Fix the case where the metadata no longer matches the packs on disk. It never touchespack content; it only rewrites two bookkeeping files:
+		Purpose: `Reconcile the metadata (index.tsv and manifest.json) with the packs on disk. It never modifies pack content. index.tsv records which pack holds the current version of each file, its size and time; manifest.json records the SHA-256 of every pack plus the deletion records written by each backup.
 
-index.tsv      - which pack holds the current version of each file (incremental backup reads it)  manifest.json  - the SHA-256 of every pack, plus the deletion records written by each backup
-
-When you need it:
-
-- you deleted a pack that verify reported as corrupt, and the manifest still lists it;  - you moved to another machine and only downloaded some of the packs from the cloud;  - a compact was interrupted after replacing a pack but before updating the manifest, so    verify has reported that pack as corrupt ever since;  - you renamed or moved a pack by hand;  - antivirus quarantined a pack, or chkdsk touched the directory;  - index.tsv was deleted or truncated.
-
-The packs are the only source of truth. Any of this metadata can be rebuilt from them.`,
+Typical causes: a pack reported as changed by verify was deleted by hand, only part of the repo was downloaded on a new machine, compact died mid-way leaving stale hashes, packs were renamed or moved, antivirus quarantined one, or index.tsv was deleted or truncated. All of it can be rebuilt from the output directory.`,
 		How: `Three steps, cheapest first:
 
 1. Reconcile the manifest: scan the packs and .rm deletion records in the output     directory, drop entries whose file is gone, register packs the manifest never saw.     This is just stat calls, so it is fast.  2. Rebuild index.tsv: read each pack's archive header (no extraction), rebuild     "file -> current state", and cross out files that the deletion records removed.     This reads every pack, so it is slow on a large repo.  3. --rehash: recompute each pack's SHA-256 from what is actually on disk. This reads     whole packs, so it is slow and off by default.
@@ -647,10 +619,8 @@ Step 3 is the reason the command exists: nothing else can repair a stale manifes
 		},
 	},
 	"backup": {
-		Usage: "backup <repo_name|--all> [--notify] [--notify-empty] [--no-verify] [--password <password>]",
-		Purpose: `Pack the files that are new or changed in the source directory into one or moreindependent encrypted 7z archives.
-
-It is not a mirror: the repo only grows. Every pack is a complete snapshot of thatbatch of changes. Deleting a file from the source does not shrink the repo (compacthandles old copies), and an edited file gets stored again as a new pack.`,
+		Usage:   "backup <repo_name|--all> [--notify] [--notify-empty] [--no-verify] [--password <password>]",
+		Purpose: `Pack the files that are new or changed in the source directory into a batch of independent encrypted 7z archives. This is incremental: a pack holds only that batch of changes, and files already backed up and unchanged are not packed again. Deleting a file from the source does not shrink the repo; old copies are reclaimed by compact.`,
 		How: `It compares index.tsv against the source directory to find files that are new, editedor resized — so a run with nothing to do costs almost nothing and prints "no changes".
 
 Those files are split into packs by max_pack_byte (4G by default), and each pack isbuilt with 7za, tested once (7za t, checking CRCs), hashed, then recorded in themanifest and the index.
@@ -672,10 +642,8 @@ Files that cannot be read while packing (locked, permission denied) are skipped 
 		},
 	},
 	"compact": {
-		Usage: "compact <repo_name> [--pack <pack_name>] [--min-gain <threshold>] [--check] [--password <password>]",
-		Purpose: `Reclaim disk space in the output directory. It drops the copies a newer version hassuperseded, and the copies of files that no longer exist in the source. Those oldversions disappear, and only then does the space actually come back.
-
-The typical case is moving or renaming a large batch of media files. zinc tracks filesby path, not by identity: after a move, the old path looks deleted and the new path looksnew, so the same content ends up stored twice (or more). The backup is correct, but thespace is doubled.`,
+		Usage:   "compact <repo_name> [--pack <pack_name>] [--min-gain <threshold>] [--check] [--password <password>]",
+		Purpose: `Reclaim space in the output directory: drop the copies a newer version has superseded, and the copies of files that no longer exist in the source, then rewrite those packs. Most useful after moving or renaming a large batch of files — zinc tracks files by path, so after a move the old path looks deleted and the new one looks new, and the same content ends up stored twice.`,
 		How: `It scans the deletion records (.rm sidecars) in the output directory, finds the packsthat contain the doomed entries, extracts each one, removes those entries, and repacks itas the same file name with the same packing parameters.
 
 Two details are deliberate:
@@ -701,11 +669,9 @@ The repack uses the exact same arguments as a backup (compression level, solid b
 	"restore": {
 		Usage: "restore <repo_name> <dest_path> [--only <rel_path>] [--from <pack_name>]\n" +
 			"                 [--no-overwrite] [--no-delete] [--check] [--password <password>]",
-		Purpose: `Put the contents of the packs back on disk. By default it restores everything in the repo;--only narrows it to one path, and --from starts at a given pack.
+		Purpose: `Put the contents of the packs back on disk. By default the whole repo; --only narrows it to one path, --from starts at a given pack.
 
-This is the only command that touches files you already have, so it prints what it isabout to do first, and stops to ask when the destination already has files or whendeletions are about to be replayed.
-
-Restoring straight into the source directory is not recommended. The safer route is torestore into an empty directory, look through it in Explorer, and then copy it back byhand — the source stays intact the whole time, so a surprise in the restore logic cannotdamage your only copy.`,
+This is the only command that modifies the destination, so it prints the plan first and asks when the destination is non-empty or deletions are about to be replayed. Restoring straight into the source directory is not recommended: restore into an empty directory, check it, then copy back by hand, keeping the source intact meanwhile.`,
 		How: `Packs are extracted in name order (ascending); each later pack overwrites the earlierone, which leaves you with the latest state.
 
 Deletion is a separate layer. Every backup records not just the files that exist but thefiles that vanished (as .rm sidecars in the output directory). A restore replays thosedeletions along the timeline: delete a file on Oct 5, restore on Oct 10, and that fileis removed from the destination as well. That is what "restore to that moment" means.--no-delete keeps those files instead.`,
