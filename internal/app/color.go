@@ -13,8 +13,8 @@ const (
 	ansiRed    = "\x1b[31m"
 	ansiGreen  = "\x1b[32m"
 	ansiYellow = "\x1b[33m"
-	ansiBlue   = "\x1b[34m"
 	ansiCyan   = "\x1b[36m"
+	ansiGuide  = "\x1b[38;2;124;228;224m" // #7CE4E0
 )
 
 const enableVirtualTerminalProcessing = 0x0004
@@ -87,8 +87,9 @@ func yellow(s string) string { return paint(ansiYellow, s) }
 func red(s string) string    { return paint(ansiRed, s) }
 func cyan(s string) string   { return paint(ansiCyan, s) }
 
-// blue 用于中性的「接下来该做什么」提示：不是状态，是指导。
-func blue(s string) string { return paint(ansiBlue, s) }
+// guide 用于中性的「接下来该做什么」提示：不是状态，是指导。
+// 7CE4E0 是浅青，深色终端上读起来舒服，也比纯蓝更像"信息"而不是"警告"。
+func guide(s string) string { return paint(ansiGuide, s) }
 
 // statusLineColor 按行首的方括号标记挑颜色。
 // 只染标记那一段，不染整行——长列表里整行上色非常刺眼，也会盖掉对齐。
