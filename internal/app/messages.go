@@ -482,6 +482,7 @@ var zhMessages = &Messages{
   zinc schedule <name|--all> --monthly 1,15 --at HH:MM [--yes]
   zinc schedule --list                 列出当前所有计划任务
   zinc unschedule [<name>|--all]
+  zinc version | --version | -v        显示版本
 
 说明:
   - 每个包都是独立完整的加密 7z，文件名就是打包时刻，恢复按名字升序
@@ -945,6 +946,7 @@ Usage:
   zinc schedule <name|--all> --monthly 1,15 --at HH:MM [--yes]
   zinc schedule --list                 list all scheduled tasks
   zinc unschedule [<name>|--all]
+  zinc version | --version | -v        show the version
 
 Notes:
   - every pack is a complete encrypted 7z; its name is the packing time, restore goes by name

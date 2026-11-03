@@ -44,8 +44,8 @@ if (-not $Iscc -or -not (Test-Path $Iscc)) {
     throw '找不到 Inno Setup 的 ISCC.exe。先安装 Inno Setup 6，或用 -Iscc <path> 指定。'
 }
 
-# 1. 先出主程序的四个 exe
-& (Join-Path $root 'build.ps1') -Go $Go
+# 1. 先出主程序的四个 exe（把去掉 v 的版本号传下去，由 build.ps1 统一补回 v）
+& (Join-Path $root 'build.ps1') -Go $Go -Version $Version
 
 # 2. 编译安装包（输出到 dist\zinc-<版本>-setup.exe）
 & $Iscc "/DAppVersion=$Version" "/DAppVersionNumeric=$numeric" (Join-Path $PSScriptRoot 'zinc.iss')

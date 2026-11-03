@@ -1,13 +1,18 @@
 package app
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 
 func Main() {
 	rotateLogs()
 	args := initLang(os.Args[1:])
 	if len(args) < 1 {
+		// 双击快捷方式时这是唯一一次能看到版本和用法的机会
+		fmt.Println(versionLine())
+		fmt.Println()
 		usage()
-		// 双击快捷方式时这是唯一一次能看到用法的机会；从终端里跑则不停
 		if startedFromExplorer() {
 			pauseUnless(false)
 		}
@@ -53,6 +58,12 @@ func Main() {
 		cmdHashCompare(rest)
 	case "help", "--help", "-h":
 		usage()
+	case "version", "--version", "-v":
+		// 跟其他命令一样，多余参数直接报错，不静默忽略
+		if len(rest) > 0 {
+			die(M.TooManyArgs, rest[0])
+		}
+		printVersion()
 	default:
 		usage()
 		os.Exit(1)

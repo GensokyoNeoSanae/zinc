@@ -204,7 +204,7 @@ zinc restore pictures --check-list
 | `zinc list [--names]` | list repos; `--names` prints one name per line for scripts and completion |
 | `zinc add <name> --source <path> [--output <path>]` | create a repo |
 | `zinc remove <name>` | remove a repo (keeps the packs) |
-| `zinc set <name> [--source <path>] [--output <path>] [--password <pw>] [--max-pack-byte <n>] [--compress <0-9>] [--exclude <glob>]` | modify a repo |
+| `zinc set <name> [--source <path>] [--output <path>] [--password <pw>] [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M\|off>] [--mhe on\|off>] [--exclude <glob>]` | modify a repo (`--solid` sets the solid block limit, `--mhe` the header encryption; see the settings table) |
 | `zinc config [get\|set\|unset\|path] [<key>] [<value>]` | global settings |
 | `zinc backup <name\|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]` | back up |
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <path>] [--from <pack>]` | restore everything or one path |
@@ -223,6 +223,7 @@ zinc restore pictures --check-list
 | `zinc unschedule all` | delete the "back up all" summary task (`zinc-all-*`) |
 | `zinc unschedule --all` | delete **all** zinc tasks (careful) |
 | `zinc completion <powershell\|bash\|zsh\|fish> [--install]` | generate a tab-completion script |
+| `zinc version` | show the version (`--version` / `-v` are aliases); running with no arguments prints it first |
 
 `--lang zh|en` is accepted before or after the subcommand. `zinc verify --sample 20` hashes a random 20% of the pack files instead of all of them.
 

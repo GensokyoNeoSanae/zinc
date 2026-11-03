@@ -204,7 +204,7 @@ zinc restore pictures --check-list
 | `zinc list [--names]` | 列出仓库；`--names` 每行一个名字，给脚本/补全用 |
 | `zinc add <name> --source <path> [--output <path>]` | 新建仓库 |
 | `zinc remove <name>` | 移除仓库（不删包） |
-| `zinc set <name> [--source <path>] [--output <path>] [--password <pw>] [--max-pack-byte <n>] [--compress <0-9>] [--exclude <glob>]` | 修改仓库 |
+| `zinc set <name> [--source <path>] [--output <path>] [--password <pw>] [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M\|off>] [--mhe on\|off>] [--exclude <glob>]` | 修改仓库（`--solid` 固实块上限、`--mhe` 头部加密，见下方设置表） |
 | `zinc config [get\|set\|unset\|path] [<key>] [<value>]` | 全局设置 |
 | `zinc backup <name\|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]` | 备份 |
 | `zinc restore <name> [--dest <path>] [--password <pw>] [--overwrite\|--no-overwrite] [--no-delete] [--check-list] [--only <路径>] [--from <包>]` | 恢复全量或单个路径 |
@@ -223,6 +223,7 @@ zinc restore pictures --check-list
 | `zinc unschedule all` | 删除“备份全部”的汇总任务（`zinc-all-*`） |
 | `zinc unschedule --all` | 删除所有 zinc 任务（**慎用**） |
 | `zinc completion <powershell\|bash\|zsh\|fish> [--install]` | 生成 Tab 补全脚本 |
+| `zinc version` | 显示版本（`--version` / `-v` 等价）。不带任何参数运行也会先打一行版本 |
 
 `--lang zh|en` 放在子命令前后都行。`zinc verify --sample 20` 只随机抽查 20% 的包文件，而不是全部。
 

@@ -40,6 +40,7 @@ var completionCommands = []CmdSpec{
 		{Name: "exclude", HasValue: true},
 	}, PositionalKind: "repo"},
 	{Name: "config", PositionalWords: []string{"get", "set", "unset", "path", "list", "show"}},
+	{Name: "version"},
 	{Name: "backup", Flags: []FlagSpec{
 		{Name: "all"},
 		{Name: "password", HasValue: true},
