@@ -19,7 +19,8 @@ type Settings struct {
 	RestoreWrapFolder  *bool    `json:"restore_wrap_folder,omitempty"`
 	MaxPackByte        int64    `json:"max_pack_byte,omitempty"`
 	CompressionLevel   *int     `json:"compression_level,omitempty"`
-	SolidBlock         *int64   `json:"solid_block,omitempty"` // 0 = 非固实（每文件独立块）
+	SolidBlock         *int64   `json:"solid_block,omitempty"`       // 0 = 非固实（每文件独立块）
+	HeaderCrypt        *bool    `json:"header_encryption,omitempty"` // nil = 开（-mhe=on）
 	SevenZipPath       string   `json:"7zip_path,omitempty"`
 	Lang               string   `json:"lang,omitempty"`
 	LockTimeoutMinutes int      `json:"lock_timeout_minutes,omitempty"`
@@ -117,6 +118,16 @@ func (s *Settings) solidBlock() int64 {
 	return *s.SolidBlock
 }
 
+// headerCrypt 返回是否加密 7z 头部（-mhe=on）。开着的唯一目的是让文件名
+// 也进 AES，网盘按文件名扫描内容时看不到包里有什么；关掉的好处是头部损坏
+// 时目录仍能被列出，抢救时能知道丢了哪些文件。
+func (s *Settings) headerCrypt() bool {
+	if s.HeaderCrypt == nil {
+		return defaultHeaderCrypt
+	}
+	return *s.HeaderCrypt
+}
+
 // sevenZipPath 返回可用的 7-Zip：显式配置优先，没配（或配了个不存在的文件）就在
 // PATH 和常见安装目录里现找。找不到时返回空串，由调用方决定怎么报错。
 // 配置的路径不做存在性检查就去 exec，用户只会看到一句“这个包解压报错”——那是在骗人。
@@ -187,7 +198,8 @@ var cfgKeys = []cfgKey{
 	{"restore_wrap_folder", kBool, "恢复时在外层包一个 restore-<仓库>-<时间> 文件夹（默认 true）"},
 	{"max_pack_byte", kSize, "单包上限，支持 4G / 50M / 纯字节"},
 	{"compression_level", kInt, "7z 压缩等级 0-9（0=仅存储）"},
-	{"solid_block", kSolid, "7z 固实块上限：64M / off（块越小越抗损，压缩率略降）"},
+	{"solid_block", kSolid, "7z 固实块上限：64M / off（块越小越抗损，压缩率略降；等级 0 时恒为非固实）"},
+	{"header_encryption", kBool, "7z 头部加密（默认 true）：连文件名一起加密，避免网盘按文件名审查；关掉后头损坏仍能列目录"},
 	{"7zip_path", kString, "7za.exe 路径"},
 	{"lang", kString, "界面语言 zh / en，空=自动"},
 	{"lock_timeout_minutes", kInt, "仓库锁最长等待分钟数"},
@@ -234,6 +246,8 @@ func cfgValueString(s *Settings, key string) string {
 			return fmt.Sprintf("%d (%s)", n, humanSize(n))
 		}
 		return "off"
+	case "header_encryption":
+		return strconv.FormatBool(s.headerCrypt())
 	case "7zip_path":
 		return s.sevenZipPath()
 	case "lang":
@@ -287,6 +301,8 @@ func cfgIsSet(s *Settings, key string) bool {
 		return s.CompressionLevel != nil
 	case "solid_block":
 		return s.SolidBlock != nil
+	case "header_encryption":
+		return s.HeaderCrypt != nil
 	case "7zip_path":
 		return s.SevenZipPath != ""
 	case "lang":
@@ -331,7 +347,7 @@ func cfgSet(s *Settings, key, val string) error {
 			s.CompactMinGain = val
 		}
 	case kBool:
-		b, err := strconv.ParseBool(strings.ToLower(val))
+		b, err := parseBoolLoose(val)
 		if err != nil {
 			return fmt.Errorf(M.ConfigBadValue, key, val)
 		}
@@ -340,8 +356,10 @@ func cfgSet(s *Settings, key, val string) error {
 			s.RestoreOverwrite = &b
 		case "restore_wrap_folder":
 			s.RestoreWrapFolder = &b
-		default:
+		case "complete_notify":
 			s.CompleteNotify = &b
+		case "header_encryption":
+			s.HeaderCrypt = &b
 		}
 	case kSize:
 		n, err := parseSize(val)
@@ -397,6 +415,8 @@ func cfgUnset(s *Settings, key string) error {
 		s.CompressionLevel = nil
 	case "solid_block":
 		s.SolidBlock = nil
+	case "header_encryption":
+		s.HeaderCrypt = nil
 	case "7zip_path":
 		s.SevenZipPath = ""
 	case "lang":
@@ -411,6 +431,18 @@ func cfgUnset(s *Settings, key string) error {
 		s.CompactMinGain = ""
 	}
 	return nil
+}
+
+// parseBoolLoose 在 strconv.ParseBool 之外多接受 on/off、yes/no：
+// 配置文件里写 on/off 比 true/false 自然，命令行也这么写。
+func parseBoolLoose(s string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "on", "yes", "y":
+		return true, nil
+	case "off", "no", "n":
+		return false, nil
+	}
+	return strconv.ParseBool(strings.TrimSpace(s))
 }
 
 // parseSolid 解析固实块上限：off 或 0 表示非固实（每文件独立块），

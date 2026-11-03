@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -87,17 +88,113 @@ func TestPackArgsSolid(t *testing.T) {
 	set := defaultSettings()
 	repo := &Repo{}
 
-	// 没配任何东西时用内置默认 64M。
+	// 压缩等级 0（默认）一律非固实：Copy 模式下 7-Zip 本来就不建固实块，
+	// 再传 -ms 只是改容器结构，实测对体积和损坏恢复都没有影响。
 	args := packArgs(repo, set, "pw", "x.7z.part", ".list-x.txt")
+	if !hasArg(args, "-ms=off") {
+		t.Errorf("level 0 should force -ms=off: %v", args)
+	}
+
+	// 就算显式配了固实块，等级 0 也不该把它传下去。
+	big := int64(64 << 20)
+	repo.SolidBlock = &big
+	args = packArgs(repo, set, "pw", "x.7z.part", ".list-x.txt")
+	if !hasArg(args, "-ms=off") {
+		t.Errorf("level 0 with solid_block set should still be off: %v", args)
+	}
+	repo.SolidBlock = nil
+
+	// 开了压缩才按配置走，默认 64M。
+	five := 5
+	repo.CompressLevel = &five
+	args = packArgs(repo, set, "pw", "x.7z.part", ".list-x.txt")
 	if !hasArg(args, "-ms=64m") {
-		t.Errorf("default pack args missing -ms=64m: %v", args)
+		t.Errorf("level 5 should use the default 64M blocks: %v", args)
 	}
 
 	off := int64(0)
 	repo.SolidBlock = &off
 	args = packArgs(repo, set, "pw", "x.7z.part", ".list-x.txt")
 	if !hasArg(args, "-ms=off") {
-		t.Errorf("off pack args missing -ms=off: %v", args)
+		t.Errorf("level 5 with solid off: %v", args)
+	}
+}
+
+func TestPackArgsHeaderCrypt(t *testing.T) {
+	set := defaultSettings()
+	repo := &Repo{}
+
+	// 默认加密头部。
+	args := packArgs(repo, set, "pw", "x.7z.part", ".list-x.txt")
+	if !hasArg(args, "-mhe=on") {
+		t.Errorf("default pack args missing -mhe=on: %v", args)
+	}
+
+	// 仓库级关掉优先于默认。
+	f := false
+	repo.HeaderCrypt = &f
+	args = packArgs(repo, set, "pw", "x.7z.part", ".list-x.txt")
+	if !hasArg(args, "-mhe=off") {
+		t.Errorf("repo header off should yield -mhe=off: %v", args)
+	}
+
+	// 仓库没设时回落到 settings。
+	repo.HeaderCrypt = nil
+	set.HeaderCrypt = &f
+	args = packArgs(repo, set, "pw", "x.7z.part", ".list-x.txt")
+	if !hasArg(args, "-mhe=off") {
+		t.Errorf("settings header off should yield -mhe=off: %v", args)
+	}
+}
+
+func TestCfgHeaderCrypt(t *testing.T) {
+	// 旧版 settings.json / repos.json 里没有 header_encryption 字段，
+	// 反序列化必须是 nil 并回落到「开」，否则老用户升级后包会突然变成明文头。
+	var oldSet Settings
+	if err := json.Unmarshal([]byte(`{"version":1,"compression_level":0}`), &oldSet); err != nil {
+		t.Fatalf("unmarshal old settings: %v", err)
+	}
+	if oldSet.HeaderCrypt != nil {
+		t.Fatal("old settings must leave HeaderCrypt nil")
+	}
+	if !oldSet.headerCrypt() {
+		t.Fatal("old settings without the key must default to header crypt on")
+	}
+	var oldRepo Repo
+	if err := json.Unmarshal([]byte(`{"source":"x","output":"y"}`), &oldRepo); err != nil {
+		t.Fatalf("unmarshal old repo: %v", err)
+	}
+	if !oldRepo.headerCrypt(&oldSet) {
+		t.Fatal("old repo without the key must inherit header crypt on")
+	}
+
+	s := defaultSettings()
+	if !s.headerCrypt() {
+		t.Fatal("header crypt should default to true")
+	}
+	if err := cfgSet(s, "header_encryption", "off"); err != nil {
+		t.Fatalf("cfgSet off: %v", err)
+	}
+	if s.headerCrypt() {
+		t.Fatal("header crypt should be off after set")
+	}
+	if got := cfgValueString(s, "header_encryption"); got != "false" {
+		t.Fatalf("cfgValueString = %q, want false", got)
+	}
+	if err := cfgSet(s, "header_encryption", "on"); err != nil {
+		t.Fatalf("cfgSet on: %v", err)
+	}
+	if !s.headerCrypt() {
+		t.Fatal("header crypt should be on after set on")
+	}
+	if err := cfgSet(s, "header_encryption", "wat"); err == nil {
+		t.Fatal("cfgSet wat should fail")
+	}
+	if err := cfgUnset(s, "header_encryption"); err != nil {
+		t.Fatalf("cfgUnset: %v", err)
+	}
+	if s.HeaderCrypt != nil {
+		t.Fatal("after unset the field should be nil")
 	}
 }
 

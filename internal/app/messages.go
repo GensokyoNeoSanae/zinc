@@ -422,6 +422,7 @@ type Messages struct {
 	FlagMaxPackByte string
 	FlagCompress    string
 	FlagSolid       string
+	FlagMhe         string
 	FlagExclude     string
 
 	// status
@@ -460,7 +461,7 @@ var zhMessages = &Messages{
   zinc remove <name>
   zinc set <name> [--source <path>] [--output <path>] [--password <pw>]
                   [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>]
-                  [--exclude <glob>]
+                  [--mhe on|off] [--exclude <glob>]
   zinc config [get|set|unset|path] [<key>] [<value>]      全局设置
   zinc backup <name|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]
   zinc restore <name> [--dest <path>] [--password <pw>]
@@ -484,8 +485,8 @@ var zhMessages = &Messages{
 
 说明:
   - 每个包都是独立完整的加密 7z，文件名就是打包时刻，恢复按名字升序
-  - 固实块默认 64M：块里坏一个字节，该块后续文件就解不出来；--solid off 改成每文件独立块
-  - 默认压缩等级 0（仅存储，不压缩）抗损最好；此时固实块大小对单文件抗损没有影响
+  - 压缩等级 0 时恒为非固实（每文件独立块）；等级 >0 时固实块默认 64M，块里坏一个字节该块后续文件就解不出来，--solid off 可改成每文件独立块
+  - 头部默认加密（-mhe=on）：文件名也不明文，网盘按文件名审查时看不到包里有什么；--mhe off 关掉，代价是头一旦损坏整个包连目录都列不出来
   - 不给 --password 时按「仓库 > settings」取；backup/restore 取不到才交互输入，schedule 取不到直接报错
   - schedule 会把解析到的密码明文写进计划任务，之后改了密码要重建任务（zinc unschedule <name> 再 schedule）
   - 恢复默认覆盖同名文件（--no-overwrite 则保留两份），--check-list 只列顺序不动手
@@ -539,8 +540,8 @@ var zhMessages = &Messages{
 	AddedRepo:          "已添加 %s\n  源:   %s\n  输出: %s\n",
 	UsageRemove:        "用法: zinc remove <name>",
 	RemovedRepo:        "已移除仓库 %s（包文件和索引未删除）\n",
-	UsageSet:           "用法: zinc set <name> [--source <path>] [--output <path>] [--password <pw>]\n                    [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>] [--exclude <glob>]",
-	NeedSourceOrOutput: "至少给一个设置项：--source / --output / --password / --max-pack-byte / --compress / --solid / --exclude",
+	UsageSet:           "用法: zinc set <name> [--source <path>] [--output <path>] [--password <pw>]\n                    [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>] [--mhe on|off] [--exclude <glob>]",
+	NeedSourceOrOutput: "至少给一个设置项：--source / --output / --password / --max-pack-byte / --compress / --solid / --mhe / --exclude",
 	UpdatedRepo:        "已更新 %s\n  源:   %s\n  输出: %s\n",
 	PathInvalid:        "路径无效: %s（%v）",
 	SourceOutputSame:   "源目录与输出目录不能相同: %s",
@@ -888,6 +889,7 @@ var zhMessages = &Messages{
 	FlagMaxPackByte: "单包上限，如 4G / 50M / 纯字节",
 	FlagCompress:    "压缩等级 0-9",
 	FlagSolid:       "固实块上限，如 64M / off（off = 每文件独立块；只在压缩等级 >0 时影响抗损）",
+	FlagMhe:         "7z 头部加密 on/off（on 连文件名一起加密，防网盘按文件名审查；off 则头坏了还能列出包内文件）",
 	FlagExclude:     "排除规则，可重复",
 
 	StatusPacks:   "  包: %d 批次 / %d 个包 / %s\n",
@@ -922,7 +924,7 @@ Usage:
   zinc remove <name>
   zinc set <name> [--source <path>] [--output <path>] [--password <pw>]
                   [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>]
-                  [--exclude <glob>]
+                  [--mhe on|off] [--exclude <glob>]
   zinc config [get|set|unset|path] [<key>] [<value>]      global settings
   zinc backup <name|--all> [--password <pw>] [--notify] [--notify-empty] [--no-verify]
   zinc restore <name> [--dest <path>] [--password <pw>]
@@ -947,7 +949,8 @@ Usage:
 Notes:
   - every pack is a complete encrypted 7z; its name is the packing time, restore goes by name
   - solid blocks default to 64M: one bad byte can cost the rest of that block; --solid off makes one block per file
-  - the default compression level 0 stores files uncompressed, the most damage-tolerant setup; solid block size then makes no difference to per-file damage tolerance
+  - compression level 0 is always non-solid (one folder per file); with level >0 solid blocks default to 64M, and --solid off keeps one block per file
+  - the header is encrypted by default (-mhe=on): file names stay out of plaintext, so a drive scanning names sees nothing; --mhe off trades that away so a damaged header still lists the pack
   - without --password the password comes from repo > settings; backup/restore prompt only if none exists, schedule fails instead
   - schedule stores the resolved password in plain text inside the task; recreate the task after changing the password (zinc unschedule <name>, then schedule again)
   - restore overwrites same-name files by default; --no-overwrite keeps both
@@ -1001,8 +1004,8 @@ Notes:
 	AddedRepo:          "added %s\n  source: %s\n  output: %s\n",
 	UsageRemove:        "usage: zinc remove <name>",
 	RemovedRepo:        "removed repo %s (packs and index are kept)\n",
-	UsageSet:           "usage: zinc set <name> [--source <path>] [--output <path>] [--password <pw>]\n                    [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>] [--exclude <glob>]",
-	NeedSourceOrOutput: "at least one setting is required: --source / --output / --password / --max-pack-byte / --compress / --solid / --exclude",
+	UsageSet:           "usage: zinc set <name> [--source <path>] [--output <path>] [--password <pw>]\n                    [--max-pack-byte <n>] [--compress <0-9>] [--solid <64M|off>] [--mhe on|off] [--exclude <glob>]",
+	NeedSourceOrOutput: "at least one setting is required: --source / --output / --password / --max-pack-byte / --compress / --solid / --mhe / --exclude",
 	UpdatedRepo:        "updated %s\n  source: %s\n  output: %s\n",
 	PathInvalid:        "invalid path: %s (%v)",
 	SourceOutputSame:   "source and output must differ: %s",
@@ -1350,6 +1353,7 @@ Notes:
 	FlagMaxPackByte: "pack size limit, e.g. 4G / 50M / bytes",
 	FlagCompress:    "compression level 0-9",
 	FlagSolid:       "solid block limit, e.g. 64M / off (off = one block per file; only affects damage tolerance when compression is on)",
+	FlagMhe:         "encrypt the 7z header on/off (on hides file names from name-based scanning; off keeps a damaged pack listable)",
 	FlagExclude:     "exclude pattern, repeatable",
 
 	StatusPacks:   "  packs: %d batches / %d packs / %s\n",

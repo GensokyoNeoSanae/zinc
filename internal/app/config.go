@@ -13,6 +13,7 @@ const (
 	defaultMaxPackByte = int64(4 * 1024 * 1024 * 1024) // 4 GB
 	defaultCompressLvl = 0                             // 存储模式
 	defaultSolidBlock  = int64(64 * 1024 * 1024)       // 固实块上限 64 MB
+	defaultHeaderCrypt = true                          // 头部加密（-mhe=on）
 )
 
 // Repo 是一个备份仓库的配置。字段留空表示回落到 settings.json。
@@ -21,7 +22,8 @@ type Repo struct {
 	Output        string   `json:"output"`
 	MaxPackByte   int64    `json:"max_pack_byte,omitempty"`
 	CompressLevel *int     `json:"compression_level,omitempty"`
-	SolidBlock    *int64   `json:"solid_block,omitempty"` // 0 = 非固实（每文件独立块）
+	SolidBlock    *int64   `json:"solid_block,omitempty"`       // 0 = 非固实（每文件独立块）
+	HeaderCrypt   *bool    `json:"header_encryption,omitempty"` // nil = 回落 settings；true = -mhe=on
 	SevenZipPath  string   `json:"7zip_path,omitempty"`
 	Password      string   `json:"password,omitempty"`
 	Exclude       []string `json:"exclude,omitempty"`
@@ -47,6 +49,15 @@ func (r *Repo) solidBlock(s *Settings) int64 {
 		return *r.SolidBlock
 	}
 	return s.solidBlock()
+}
+
+// headerCrypt 返回是否加密 7z 头部（-mhe=on）。默认开：文件表也被 AES 加密，
+// 网盘按文件名做内容审查时看不到包里有哪些文件。关掉则头部损坏时还能列出目录。
+func (r *Repo) headerCrypt(s *Settings) bool {
+	if r.HeaderCrypt != nil {
+		return *r.HeaderCrypt
+	}
+	return s.headerCrypt()
 }
 
 func (r *Repo) sevenZip(s *Settings) string {

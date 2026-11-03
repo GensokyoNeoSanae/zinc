@@ -428,20 +428,37 @@ func solidArg(n int64) string {
 	return fmt.Sprintf("-ms=%dm", mb)
 }
 
-// packArgs 组装 7z 打包命令行。-mx 和 -ms 都按仓库 > settings 的优先级取值；
+// packArgs 组装 7z 打包命令行。-mx / -ms / -mhe 都按仓库 > settings 的优先级取值；
 // 单拎出来是为了能脱离 7za 直接断言参数。
 func packArgs(repo *Repo, set *Settings, password, partPath, listfile string) []string {
+	level := repo.compressLevel(set)
+	solid := solidArg(repo.solidBlock(set))
+	if level == 0 {
+		// Copy 模式（-mx=0）下 7-Zip 本来就不建固实块：没有压缩可省，固实只是
+		// 把多个文件并进同一个 folder。实测（50 个文件、翻转中间 1 字节）固实
+		// 与非固实的恢复结果完全相同，都是只坏命中的那个文件、其余全好，所以
+		// 这里跟随 7-Zip 的默认，不做没有收益的容器改造。
+		solid = "-ms=off"
+	}
 	return []string{
 		"a", "-y", "-t7z",
 		"-p" + password,
-		"-mhe=on",
-		fmt.Sprintf("-mx=%d", repo.compressLevel(set)),
-		solidArg(repo.solidBlock(set)),
+		"-mhe=" + onOff(repo.headerCrypt(set)),
+		fmt.Sprintf("-mx=%d", level),
+		solid,
 		"-scsUTF-16LE",
 		"-sccUTF-8",
 		partPath,
 		"@" + listfile,
 	}
+}
+
+// onOff 把布尔值转成 7-Zip 的 on/off 写法
+func onOff(b bool) string {
+	if b {
+		return "on"
+	}
+	return "off"
 }
 
 // packOne 把一个 plan 打成独立的 .7z：先写 .part，自检通过再改名

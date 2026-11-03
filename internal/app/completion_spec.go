@@ -36,6 +36,7 @@ var completionCommands = []CmdSpec{
 		{Name: "max-pack-byte", HasValue: true},
 		{Name: "compress", HasValue: true},
 		{Name: "solid", HasValue: true},
+		{Name: "mhe", HasValue: true},
 		{Name: "exclude", HasValue: true},
 	}, PositionalKind: "repo"},
 	{Name: "config", PositionalWords: []string{"get", "set", "unset", "path", "list", "show"}},

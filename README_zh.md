@@ -248,7 +248,8 @@ zinc restore pictures --check-list
 | `restore_wrap_folder` | `true` | 整仓恢复时在外层包一个 `restore-<仓库>-<时间>` 文件夹 |
 | `max_pack_byte` | `4G` | 单包上限，支持 `4G`、`50M` 或纯字节 |
 | `compression_level` | `0` | 7z 压缩等级 0-9；`0` = 仅存储 |
-| `solid_block` | `64M` | 7z 固实块上限；`off` = 每文件独立块。块只在文件边界切分，单个大文件始终独占一块；块越小，单个坏字节连累的文件越少，压缩率略降 |
+| `solid_block` | `64M` | 7z 固实块上限；`off` = 每文件独立块。块只在文件边界切分，单个大文件始终独占一块；开了压缩时块越小，单个坏字节连累的文件越少，压缩率略降。压缩等级 0 时恒为 `off`：Copy 模式下固实既不省空间也不改变损坏结果，7-Zip 自己也不建固实块 |
+| `header_encryption` | `true` | 加密 7z 头部（`-mhe=on`）：包内文件名也进 AES，网盘按文件名做内容审查时看不到；`false` 则不加密头部，代价是头一旦损坏整个包连目录都列不出来 |
 | `7zip_path` | 安装时自动检测 | `7z.exe` / `7za.exe` 的路径；空 = 在 `PATH` 和常见安装目录里找 |
 | `lang` | 空 | `zh` 或 `en`；空 = 跟随 Windows |
 | `lock_timeout_minutes` | `30` | 仓库锁最长等待分钟数 |

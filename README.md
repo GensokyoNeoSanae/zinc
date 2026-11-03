@@ -248,7 +248,8 @@ Global settings live in `<program dir>\settings.json`. They are **not** part of 
 | `restore_wrap_folder` | `true` | wrap a full restore in `restore-<repo>-<time>` |
 | `max_pack_byte` | `4G` | pack size limit; accepts `4G`, `50M` or plain bytes |
 | `compression_level` | `0` | 7z level 0-9; `0` = store only |
-| `solid_block` | `64M` | 7z solid block limit; `off` = one block per file. Blocks only split at file boundaries, so a single huge file always owns one block; smaller blocks limit how many later files one bad byte can cost you, at a slight compression cost |
+| `solid_block` | `64M` | 7z solid block limit; `off` = one block per file. Blocks only split at file boundaries, so a single huge file always owns one block; with compression on, smaller blocks limit how many later files one bad byte can cost you, at a slight compression cost. Level 0 always forces `off`: under Copy, solid saves nothing and does not change the damage outcome, and 7-Zip does not build solid blocks there either |
+| `header_encryption` | `true` | encrypt the 7z header (`-mhe=on`): file names go through AES too, so a drive scanning names sees nothing. `false` skips header encryption, at the cost of losing the whole pack index when the header is damaged |
 | `7zip_path` | detected at install | path to `7z.exe` / `7za.exe`; empty = search `PATH` and the usual install folders |
 | `lang` | empty | `zh` or `en`; empty = detect from Windows |
 | `lock_timeout_minutes` | `30` | longest wait for the repo lock |

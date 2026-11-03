@@ -329,6 +329,7 @@ func cmdSet(args []string) {
 	maxPack := fs.String("max-pack-byte", "", M.FlagMaxPackByte)
 	compress := fs.Int("compress", -1, M.FlagCompress)
 	solid := fs.String("solid", "", M.FlagSolid)
+	mhe := fs.String("mhe", "", M.FlagMhe)
 	var excludes multiFlag
 	fs.Var(&excludes, "exclude", M.FlagExclude)
 	fs.Parse(reorderArgs(args))
@@ -339,7 +340,7 @@ func cmdSet(args []string) {
 	if err != nil {
 		die("%v", err)
 	}
-	if *source == "" && *output == "" && *password == "" && *maxPack == "" && *compress < 0 && *solid == "" && len(excludes) == 0 {
+	if *source == "" && *output == "" && *password == "" && *maxPack == "" && *compress < 0 && *solid == "" && *mhe == "" && len(excludes) == 0 {
 		die(M.NeedSourceOrOutput)
 	}
 	if *source != "" {
@@ -392,6 +393,13 @@ func cmdSet(args []string) {
 			die(M.ConfigBadValue, "solid_block", *solid)
 		}
 		repo.SolidBlock = &n
+	}
+	if *mhe != "" {
+		b, perr := parseBoolLoose(*mhe)
+		if perr != nil {
+			die(M.ConfigBadValue, "header_encryption", *mhe)
+		}
+		repo.HeaderCrypt = &b
 	}
 	if len(excludes) > 0 {
 		repo.Exclude = append(repo.Exclude, excludes...)
