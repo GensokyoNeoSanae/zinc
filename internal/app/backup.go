@@ -570,12 +570,12 @@ func packAll(repo *Repo, set *Settings, files []fileInfo, password string, noVer
 
 	for _, plan := range plans {
 		if len(plan.Files) == 1 && plan.Files[0].Size > limit {
-			fmt.Printf(M.PackTooBig, plan.Files[0].Rel, humanSize(plan.Files[0].Size), humanSize(limit))
+			printColored(M.PackTooBig, plan.Files[0].Rel, humanSize(plan.Files[0].Size), humanSize(limit))
 		}
 		ts := time.Now()
 		if !ts.After(last) {
 			ts = last.Add(time.Millisecond)
-			fmt.Printf(M.ClockRollback, ts.Format("2006-01-02 15:04:05.000"))
+			printColored(M.ClockRollback, ts.Format("2006-01-02 15:04:05.000"))
 		}
 		last = ts
 		name := uniquePackName(repo.Output, ts)
@@ -694,10 +694,10 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 	// 占用/跳过一律全列：用户要靠这份清单去逐个处理，截断只会让人
 	// 反复重跑 backup 挤牙膏，一轮下来还不一定凑齐。
 	for _, p := range scan.Skipped {
-		fmt.Printf(M.ScanSkipItem, p)
+		printColored(M.ScanSkipItem, p)
 	}
 	for _, p := range locked {
-		fmt.Printf(M.LockedItem, p)
+		printColored(M.LockedItem, p)
 	}
 
 	if len(ready) == 0 && len(del) == 0 {
@@ -745,7 +745,7 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 
 	// 打包时才读不到的文件同样全列，理由跟上面对 locked 一样。
 	for _, p := range packSkipped {
-		fmt.Printf(M.PackSkipItem, p)
+		printColored(M.PackSkipItem, p)
 	}
 
 	// 中途失败：已提交的包留下；删除记录一律不写 —— 下次扫描会重新发现这些「消失」，
@@ -797,11 +797,11 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 
 	filesPacked := len(ready) - len(packSkipped)
 	if len(packs) > 0 {
-		fmt.Printf(M.DetailLine+"\n", name, filesPacked, humanSize(total), len(packs),
+		printColored(M.DetailLine+"\n", name, filesPacked, humanSize(total), len(packs),
 			fmt.Sprintf(M.EncFrom, encFrom), res.ScanDur.Milliseconds(), shortHash(res.BatchHash))
 	}
 	if len(del) > 0 {
-		fmt.Printf(M.DeletedLine, name, len(del), rmName)
+		printColored(M.DeletedLine, name, len(del), rmName)
 	}
 	logf("backup %s: %d files, %d packs, %d deleted, %s, hash=%s",
 		name, filesPacked, len(packs), len(del), humanSize(total), res.BatchHash)

@@ -92,7 +92,7 @@ func runRehash(name string, cfg *Config, set *Settings, check bool) error {
 				continue
 			}
 			if m.Batches[i].Packs[pack] != h {
-				fmt.Printf(M.RepairRehashPack, pack)
+				printColored(M.RepairRehashPack, pack)
 				m.Batches[i].Packs[pack] = h
 				changed++
 			}
@@ -104,7 +104,7 @@ func runRehash(name string, cfg *Config, set *Settings, check bool) error {
 		return nil
 	}
 	if check {
-		fmt.Printf(M.RepairRehashDryRun, changed)
+		printColored(M.RepairRehashDryRun, changed)
 		return nil
 	}
 	lock, lerr := acquireLock(repo.Output, set.lockTimeout())
@@ -115,6 +115,6 @@ func runRehash(name string, cfg *Config, set *Settings, check bool) error {
 	if err := writeManifestFile(repo.Output, m); err != nil {
 		return err
 	}
-	fmt.Printf(M.RepairRehashDone, changed)
+	printColored(M.RepairRehashDone, changed)
 	return nil
 }

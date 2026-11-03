@@ -149,7 +149,7 @@ func runReindex(name string, cfg *Config, set *Settings, password, packStart, pa
 	if fileExists(p) {
 		if !yes {
 			// 预演模式：只说会覆盖，不动手也不报错
-			fmt.Printf(M.ReindexExists, p)
+			printColored(M.ReindexExists, p)
 			return nil
 		}
 		b, rerr := os.ReadFile(p)
@@ -161,7 +161,7 @@ func runReindex(name string, cfg *Config, set *Settings, password, packStart, pa
 		}
 	}
 
-	fmt.Printf(M.ReindexStart, len(keep))
+	printColored(M.ReindexStart, len(keep))
 	idx := newIndex()
 	gone := 0
 	for _, step := range timeline {
@@ -215,21 +215,21 @@ func runReindex(name string, cfg *Config, set *Settings, password, packStart, pa
 			idx.Files[filepath.ToSlash(e.Path)] = &FileEntry{Size: e.Size, MTime: e.MTime, Pack: id}
 			n++
 		}
-		fmt.Printf(M.ReindexPack, pk, n)
+		printColored(M.ReindexPack, pk, n)
 	}
 	if gone > 0 {
-		fmt.Printf(M.ReindexDeleted, gone)
+		printColored(M.ReindexDeleted, gone)
 	}
 
 	if !yes {
 		// 预演到此为止：上面已经读完包目录、把结果打在屏幕上，但不落盘
-		fmt.Printf(M.ReindexDryRun, len(idx.Packs), len(idx.Files))
+		printColored(M.ReindexDryRun, len(idx.Packs), len(idx.Files))
 		return nil
 	}
 	if err := saveIndex(repo.Output, idx); err != nil {
 		return err
 	}
-	fmt.Printf(M.ReindexDone, len(idx.Packs), len(idx.Files), indexPath(repo.Output))
+	printColored(M.ReindexDone, len(idx.Packs), len(idx.Files), indexPath(repo.Output))
 	logf("reindex %s: %d packs, %d files", name, len(idx.Packs), len(idx.Files))
 	return nil
 }

@@ -113,7 +113,7 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 			return derr
 		}
 		// 用户明确要求不动删除，那记录坏了也不该挡住恢复文件
-		fmt.Printf(M.DelSkipped, derr)
+		printColored(M.DelSkipped, derr)
 		dels = map[string][]string{}
 	}
 	delNames := make([]string, 0, len(dels))
@@ -153,7 +153,7 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 		var total int64
 		fmt.Printf(M.CheckListHeader, packCount, len(dels), mode, destText)
 		if opt.Dest != "" && opt.Wrap {
-			fmt.Printf(M.RestoreWrapLine, destText)
+			printColored(M.RestoreWrapLine, destText)
 		}
 		for i, e := range entries {
 			if e.Pack == "" {
@@ -198,7 +198,7 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 		fmt.Print(M.RestoreOverwriteWarn)
 	}
 	if opt.Wrap {
-		fmt.Printf(M.RestoreWrapLine, target)
+		printColored(M.RestoreWrapLine, target)
 	}
 
 	ao := "-aou"
@@ -224,7 +224,7 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 			if xerr != nil {
 				failedPacks = append(failedPacks, e.Pack)
 				failedStems[e.Stem] = true
-				fmt.Printf(M.PackFailed, e.Pack)
+				printColored(M.PackFailed, e.Pack)
 				if line := sevenZipErrorLine(string(out)); line != "" {
 					fmt.Printf(M.PackErrLine, line)
 					// 只有“整包都打不开”才像是密码问题；CRC 错误里也带 “Wrong password?”，别误报
@@ -245,7 +245,7 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 		// 这一批的包解压报错，源目录当时是什么状态就不知道了；
 		// 这时候照着记录删文件只会把损失叠上去，跳过不删。
 		if failedStems[e.Stem] {
-			fmt.Printf(M.DelSkippedAfterFail, e.Del)
+			printColored(M.DelSkippedAfterFail, e.Del)
 			continue
 		}
 		rels := dels[e.Del]
@@ -258,7 +258,7 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 		// 只计数，不中止，更不能把后面重新放回来的同名文件当成余党。
 		delMissingTotal += missing
 		if removed > 0 {
-			fmt.Printf(M.DeletingBatch, e.Del, removed)
+			printColored(M.DeletingBatch, e.Del, removed)
 			deletedTotal += removed
 			deletedPaths = append(deletedPaths, rels...)
 		}
@@ -267,7 +267,7 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 		pruneEmptyDirs(target, deletedPaths)
 	}
 	if deletedTotal > 0 {
-		fmt.Printf(M.RestoreDelSummary, deletedTotal)
+		printColored(M.RestoreDelSummary, deletedTotal)
 	}
 	if delMissingTotal > 0 {
 		fmt.Printf(M.RestoreDelMissing, delMissingTotal)
@@ -276,11 +276,11 @@ func runRestore(name string, cfg *Config, set *Settings, opt restoreOpts) error 
 	if n, perr := removePlaceholder(target); perr == nil && n > 0 {
 		fmt.Printf(M.PlaceholderRemoved, n, placeholderName)
 	}
-	fmt.Printf(M.RestoreDone, target)
+	printColored(M.RestoreDone, target)
 	logf("restore %s -> %s (%d packs, %d deleted, %d failed, overwrite=%v, wrap=%v)",
 		name, target, packCount, deletedTotal, len(failedPacks), opt.Overwrite, opt.Wrap)
 	if len(failedPacks) > 0 {
-		fmt.Printf(M.RestoreIncomplete, len(failedPacks))
+		printColored(M.RestoreIncomplete, len(failedPacks))
 		if opt.Notify {
 			if err := sendToast(M.ToastRestoreTitle, fmt.Sprintf(M.ToastRestoreBody, name, len(failedPacks))); err != nil {
 				fmt.Printf(M.NotifyFailed, err)
@@ -465,7 +465,7 @@ func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, onl
 		if err := extractOnlyPack(repo, set, pack, spec, dest, password, overwrite); err != nil {
 			return err
 		}
-		fmt.Printf(M.OnlyDone, spec, filepath.Join(dest, filepath.FromSlash(spec)))
+		printColored(M.OnlyDone, spec, filepath.Join(dest, filepath.FromSlash(spec)))
 		logf("restore-only %s: %s from pack %s -> %s", name, spec, pack, dest)
 		return nil
 	}
@@ -486,7 +486,7 @@ func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, onl
 	if err := applyOnlyTimeline(repo, set, timeline, spec, dest, password, overwrite); err != nil {
 		return err
 	}
-	fmt.Printf(M.OnlyDone, spec, filepath.Join(dest, filepath.FromSlash(spec)))
+	printColored(M.OnlyDone, spec, filepath.Join(dest, filepath.FromSlash(spec)))
 	logf("restore-only %s: %s from %d entries -> %s", name, spec, len(timeline), dest)
 	return nil
 }
@@ -626,12 +626,12 @@ func applyOnlyTimeline(repo *Repo, set *Settings, timeline []timeEntry, spec, de
 			return derr
 		}
 		if removed > 0 {
-			fmt.Printf(M.DeletingBatch, e.Del, removed)
+			printColored(M.DeletingBatch, e.Del, removed)
 			deletedTotal += removed
 		}
 	}
 	if deletedTotal > 0 {
-		fmt.Printf(M.RestoreDelSummary, deletedTotal)
+		printColored(M.RestoreDelSummary, deletedTotal)
 	}
 	return nil
 }

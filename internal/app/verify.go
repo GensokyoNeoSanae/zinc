@@ -82,15 +82,15 @@ func runVerify(name string, cfg *Config, set *Settings, samplePct int, doHash, d
 				switch {
 				case os.IsNotExist(herr):
 					rmMissing++
-					fmt.Printf(M.VerifyRmMissing, rm)
+					printColored(M.VerifyRmMissing, rm)
 				case herr != nil:
 					rmBad++
-					fmt.Printf(M.VerifyRmCorrupt, rm)
+					printColored(M.VerifyRmCorrupt, rm)
 				case want == "":
 					rmOK++ // 旧账本没记哈希，只能确认文件还在
 				case h != want:
 					rmBad++
-					fmt.Printf(M.VerifyRmCorrupt, rm)
+					printColored(M.VerifyRmCorrupt, rm)
 				default:
 					rmOK++
 				}
@@ -124,14 +124,14 @@ func runVerify(name string, cfg *Config, set *Settings, samplePct int, doHash, d
 		full := filepath.Join(repo.Output, p.name)
 		if _, statErr := os.Stat(full); statErr != nil {
 			missing++
-			fmt.Printf(M.MissingFile, p.name)
+			printColored(M.MissingFile, p.name)
 			continue
 		}
 		if doHash {
 			h, hashErr := sha256File(full)
 			if hashErr != nil || h != p.hash {
 				bad++
-				fmt.Printf(M.CorruptFile, p.name)
+				printColored(M.CorruptFile, p.name)
 				continue
 			}
 		}
@@ -140,7 +140,7 @@ func runVerify(name string, cfg *Config, set *Settings, samplePct int, doHash, d
 			if _, lerr := listPackContents(sz, full, pw); lerr != nil {
 				pwBad++
 				pwOK = false
-				fmt.Printf(M.VerifyPwBad, p.name)
+				printColored(M.VerifyPwBad, p.name)
 			}
 		}
 		if pwOK {
@@ -149,10 +149,10 @@ func runVerify(name string, cfg *Config, set *Settings, samplePct int, doHash, d
 	}
 
 	if doHash && rmOK+rmBad+rmMissing > 0 {
-		fmt.Printf(M.VerifyRmSummary, rmOK, rmBad, rmMissing)
+		printColored(M.VerifyRmSummary, rmOK, rmBad, rmMissing)
 	}
 	if doPw && pwBad > 0 {
-		fmt.Printf(M.VerifyPwSummary, pwBad)
+		printColored(M.VerifyPwSummary, pwBad)
 	}
 	if doHash {
 		fmt.Printf(M.VerifySummary, name, ok, bad, missing)

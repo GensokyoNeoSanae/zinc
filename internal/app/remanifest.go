@@ -93,9 +93,9 @@ func runRemanifest(name string, cfg *Config, set *Settings, password string, yes
 		return fmt.Errorf(M.ManifestReadFailed, rerr)
 	}
 	if !existed {
-		fmt.Printf(M.RemanifestNoManifest, manifestPath(repo.Output))
+		printColored(M.RemanifestNoManifest, manifestPath(repo.Output))
 	}
-	fmt.Printf(M.RemanifestHeader, name, len(m.Batches), manifestPackCount(m.Batches), len(packs), len(rms))
+	printColored(M.RemanifestHeader, name, len(m.Batches), manifestPackCount(m.Batches), len(packs), len(rms))
 
 	listedPacks := make(map[string]bool, len(packs))
 	listedRms := make(map[string]bool, len(rms))
@@ -107,7 +107,7 @@ func runRemanifest(name string, cfg *Config, set *Settings, password string, yes
 		nb := ManifestBatch{Time: b.Time}
 		for f, h := range b.Packs {
 			if !onDiskPack[f] {
-				fmt.Printf(M.RemanifestDropPack, f)
+				printColored(M.RemanifestDropPack, f)
 				dropped++
 				continue
 			}
@@ -119,7 +119,7 @@ func runRemanifest(name string, cfg *Config, set *Settings, password string, yes
 		}
 		for rm, h := range b.Rms {
 			if !onDiskRm[rm] {
-				fmt.Printf(M.RemanifestDropRm, rm)
+				printColored(M.RemanifestDropRm, rm)
 				dropped++
 				continue
 			}
@@ -142,7 +142,7 @@ func runRemanifest(name string, cfg *Config, set *Settings, password string, yes
 		}
 		if !yes {
 			// 预演不读包内容（也就不需要密码）；占位包要到执行时才认得出来
-			fmt.Printf(M.RemanifestAddPack, p)
+			printColored(M.RemanifestAddPack, p)
 			added++
 			continue
 		}
@@ -151,7 +151,7 @@ func runRemanifest(name string, cfg *Config, set *Settings, password string, yes
 			return fmt.Errorf(M.RemanifestListFailed, p, lerr)
 		}
 		if _, _, content := packDateRange(entries); !content {
-			fmt.Printf(M.RemanifestSkipPlaceholder, p)
+			printColored(M.RemanifestSkipPlaceholder, p)
 			continue
 		}
 		h, herr := sha256File(filepath.Join(repo.Output, p))
@@ -169,7 +169,7 @@ func runRemanifest(name string, cfg *Config, set *Settings, password string, yes
 			nb.Rms = map[string]string{rm: rh}
 			listedRms[rm] = true
 		}
-		fmt.Printf(M.RemanifestAddPack, p)
+		printColored(M.RemanifestAddPack, p)
 		added++
 		batches = append(batches, nb)
 	}
@@ -180,7 +180,7 @@ func runRemanifest(name string, cfg *Config, set *Settings, password string, yes
 			continue
 		}
 		if !yes {
-			fmt.Printf(M.RemanifestAddRm, rm)
+			printColored(M.RemanifestAddRm, rm)
 			added++
 			continue
 		}
@@ -188,7 +188,7 @@ func runRemanifest(name string, cfg *Config, set *Settings, password string, yes
 		if rerr != nil {
 			return rerr
 		}
-		fmt.Printf(M.RemanifestAddRm, rm)
+		printColored(M.RemanifestAddRm, rm)
 		added++
 		batches = append(batches, ManifestBatch{
 			Time: batchTimeOfEntry(rm),
@@ -219,7 +219,7 @@ func runRemanifest(name string, cfg *Config, set *Settings, password string, yes
 	if err := writeManifestFile(repo.Output, &Manifest{Version: manifestVersion, Repo: name, Batches: batches}); err != nil {
 		return err
 	}
-	fmt.Printf(M.RemanifestDone, dropped, added, manifestPath(repo.Output))
+	printColored(M.RemanifestDone, dropped, added, manifestPath(repo.Output))
 	logf("remanifest %s: dropped=%d added=%d batches=%d", name, dropped, added, len(batches))
 	return nil
 }

@@ -89,7 +89,6 @@ var zhHelp = map[string]HelpTopic{
 	"add": {
 		Usage: "add <仓库名> --source <路径> [--output <路径>]",
 		Purpose: `新建一个备份仓库：登记要备份的源目录，和存放包的位置。
-
 仓库名是你之后所有命令用的代号，可以带中文。源目录必须是已存在的目录；输出目录
 不存在会自动创建。`,
 		How: `只写 repos.json，不碰磁盘上的任何数据。输出目录默认是 <root>\<仓库名>，

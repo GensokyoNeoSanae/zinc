@@ -381,7 +381,7 @@ func runCompact(name string, cfg *Config, set *Settings, password, packSpec, min
 		packs = []string{one}
 	}
 
-	fmt.Printf(M.CompactStart, name, len(packs))
+	printColored(M.CompactStart, name, len(packs))
 	if check {
 		fmt.Print(M.CompactDryRunHead)
 	}
@@ -392,11 +392,11 @@ func runCompact(name string, cfg *Config, set *Settings, password, packSpec, min
 	for _, p := range packs {
 		plan, perr := buildCompactPlan(repo, set, idx, password, p)
 		if perr != nil {
-			fmt.Printf(M.CompactPackFailed, p, perr)
+			printColored(M.CompactPackFailed, p, perr)
 			continue
 		}
 		if len(plan.Drop) == 0 {
-			fmt.Printf(M.CompactSkipNone, p)
+			printColored(M.CompactSkipNone, p)
 			skippedNone++
 			continue
 		}
@@ -409,17 +409,17 @@ func runCompact(name string, cfg *Config, set *Settings, password, packSpec, min
 			pct = float64(plan.DropSz) / float64(plan.PackSz) * 100
 		}
 		if plan.DropSz < need {
-			fmt.Printf(M.CompactSkipSmall, p, len(plan.Drop), humanSize(plan.DropSz), pct, humanSize(need))
+			printColored(M.CompactSkipSmall, p, len(plan.Drop), humanSize(plan.DropSz), pct, humanSize(need))
 			skippedSmall++
 			continue
 		}
-		fmt.Printf(M.CompactPlanPack, p, len(plan.Drop), humanSize(plan.DropSz), pct)
+		printColored(M.CompactPlanPack, p, len(plan.Drop), humanSize(plan.DropSz), pct)
 		plans = append(plans, plan)
 		totalDrop += plan.DropSz
 	}
 
 	if len(plans) == 0 {
-		fmt.Printf(M.CompactNothing, skippedNone, skippedSmall)
+		printColored(M.CompactNothing, skippedNone, skippedSmall)
 		return nil
 	}
 
@@ -442,25 +442,25 @@ func runCompact(name string, cfg *Config, set *Settings, password, packSpec, min
 		if ferr == nil {
 			need := plan.KeepSz + plan.PackSz + (64 << 20)
 			if free < need {
-				fmt.Printf(M.CompactNoSpace, plan.Pack, humanSize(free), humanSize(need))
+				printColored(M.CompactNoSpace, plan.Pack, humanSize(free), humanSize(need))
 				failed++
 				continue
 			}
 		}
 		if len(plan.Keep) == 0 {
-			fmt.Printf(M.CompactEmptyDoing, plan.Pack, placeholderName)
+			printColored(M.CompactEmptyDoing, plan.Pack, placeholderName)
 		} else {
-			fmt.Printf(M.CompactDoing, plan.Pack, len(plan.Drop), humanSize(plan.DropSz))
+			printColored(M.CompactDoing, plan.Pack, len(plan.Drop), humanSize(plan.DropSz))
 		}
 		res, rerr := rewritePack(repo, set, plan, password, noVerify)
 		if rerr != nil {
-			fmt.Printf(M.CompactPackFailed, plan.Pack, rerr)
+			printColored(M.CompactPackFailed, plan.Pack, rerr)
 			logf("compact %s: %s failed: %v", name, plan.Pack, rerr)
 			failed++
 			continue
 		}
 		if err := updateManifestPackHash(repo.Output, name, res.Pack, res.Hash); err != nil {
-			fmt.Printf(M.CompactPackFailed, plan.Pack, err)
+			printColored(M.CompactPackFailed, plan.Pack, err)
 			logf("compact %s: manifest update failed for %s: %v", name, plan.Pack, err)
 			failed++
 			continue
@@ -474,7 +474,7 @@ func runCompact(name string, cfg *Config, set *Settings, password, packSpec, min
 				}
 			}
 		}
-		fmt.Printf(M.CompactPackDone, res.Pack, humanSize(res.OldSize), humanSize(res.NewSize))
+		printColored(M.CompactPackDone, res.Pack, humanSize(res.OldSize), humanSize(res.NewSize))
 		logf("compact %s: %s rewritten, %s -> %s, dropped %d file(s) / %s",
 			name, res.Pack, humanSize(res.OldSize), humanSize(res.NewSize),
 			len(plan.Drop), humanSize(plan.DropSz))

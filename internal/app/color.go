@@ -1,7 +1,9 @@
 package app
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -56,23 +58,36 @@ func yellow(s string) string { return paint(ansiYellow, s) }
 func red(s string) string    { return paint(ansiRed, s) }
 func cyan(s string) string   { return paint(ansiCyan, s) }
 
-// statusLineColor 按行首的方括号标记挑颜色：
-// [ok]/[完成] 绿、[警告]/[占用]/[跳过]/[预演] 黄、[错误]/[损坏]/[密码不符] 红，其余原样。
-// 只染标记那一段，不染整行——整行上色在长列表里非常刺眼。
+// statusLineColor 按行首的方括号标记挑颜色。
+// 只染标记那一段，不染整行——长列表里整行上色非常刺眼，也会盖掉对齐。
+// 中英标记都列在这里：这些字符串出现在装配好的输出里，拿不到当前语言。
+var colorRules = []struct {
+	prefixes []string
+	paint    func(string) string
+}{
+	{[]string{"[ok]", "[完成]", "[done]"}, green},
+	{[]string{
+		"[警告]", "[warn]", "[占用]", "[locked]", "[跳过]", "[skip]",
+		"[预演]", "[dry-run]", "[删除]", "[deleted]", "[提示]", "[note]",
+	}, yellow},
+	{[]string{
+		"[损坏]", "[corrupt]", "[密码不符]", "[错误]", "[error]", "[失败]", "[failed]",
+	}, red},
+}
+
 func statusLineColor(line string) string {
-	type rule struct {
-		tag   string
-		paint func(string) string
-	}
-	for _, r := range []rule{
-		{M.OkTag, green},
-		{M.WarnTag, yellow},
-		{M.ErrTag, red},
-	} {
-		if r.tag == "" || len(line) < len(r.tag) || line[:len(r.tag)] != r.tag {
-			continue
+	for _, r := range colorRules {
+		for _, p := range r.prefixes {
+			if strings.HasPrefix(line, p) {
+				return r.paint(p) + line[len(p):]
+			}
 		}
-		return r.paint(r.tag) + line[len(r.tag):]
 	}
 	return line
+}
+
+// printColored 打印一行并上色。只用在人读的输出上；
+// `--names` 这类给脚本吃的格式不要走这里。
+func printColored(format string, args ...any) {
+	fmt.Print(statusLineColor(fmt.Sprintf(format, args...)))
 }
