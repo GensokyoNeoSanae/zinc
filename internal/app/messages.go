@@ -506,9 +506,9 @@ var zhMessages = &Messages{
 	Usage: `zinc - 多仓库、文件级增量、加密独立包备份
 
 元:
-  zinc [--lang zh|en]                    切换界面语言（写入设置，之后一直生效）
-  zinc version | --version | -v          显示版本
   zinc help [<命令>]                     显示用法；给命令名时展开该命令的详细说明
+  zinc version | --version | -v          显示版本
+  zinc [--lang zh|en]                    切换界面语言（写入设置，之后一直生效）
   zinc init [--force]                    一次性初始化：注册通知 + 把本目录加入用户 PATH
 
 全局设置:
@@ -1036,9 +1036,9 @@ var enMessages = &Messages{
 	Usage: `zinc - multi-repo, file-level incremental, encrypted independent packs
 
 Meta:
-  zinc [--lang zh|en]                    switch the UI language (saved; applies to later runs)
-  zinc version | --version | -v          show the version
   zinc help [<command>]                  show usage; with a command, expand its details
+  zinc version | --version | -v          show the version
+  zinc [--lang zh|en]                    switch the UI language (saved; applies to later runs)
   zinc init [--force]                    one-time setup: notifications + this dir on user PATH
 
 Settings:
