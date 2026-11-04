@@ -177,6 +177,10 @@ Register-ArgumentCompleter -Native -CommandName zinc -ScriptBlock {
         return New-ZincResult $script:ZincWords[$sub] $wordToComplete ParameterValue '取值'
     }
     $positional = @($done | Where-Object { $_ -notlike '-*' } | Select-Object -Skip 1)
+    # help 后面补的是命令名（zinc help status）
+    if ($sub -eq 'help' -and $positional.Count -eq 0) {
+        return New-ZincResult $script:ZincCommands $wordToComplete ParameterValue '命令名'
+    }
     if ($script:ZincRepoCmds -contains $sub -and $positional.Count -eq 0) {
         return New-ZincResult @(Get-ZincRepoNames) $wordToComplete ParameterValue '仓库名'
     }
@@ -219,6 +223,10 @@ _zinc() {
 {{.BashWordCase}}
     esac
 
+    if [[ "$sub" == "help" && $COMP_CWORD -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "{{.CommandsSh}}" -- "$cur") ); return
+    fi
+
     if [[ $COMP_CWORD -eq 2 ]]; then
         case "$sub" in
             {{.RepoBashPipe}}) COMPREPLY=( $(compgen -W "$(zinc list --names 2>/dev/null)" -- "$cur") ); return ;;
@@ -245,6 +253,10 @@ _zinc() {
         _describe 'flag' flags
         return
     fi
+    if [[ "$sub" == "help" && CURRENT -eq 3 ]]; then
+        _describe 'command' commands
+        return
+    fi
     case "$sub" in
 {{.ZshWordCase}}
         {{.RepoZshPipe}}) compadd -- ${(f)"$(zinc list --names 2>/dev/null)"}; return ;;
@@ -259,6 +271,7 @@ complete -c zinc -l lang -r -a 'zh en'
 complete -c zinc -l help
 {{.FishFlagLines}}
 {{.FishWordLines}}
+complete -c zinc -n '__fish_seen_subcommand_from help' -a '{{.CommandsSh}}'
 complete -c zinc -n '__fish_seen_subcommand_from {{.RepoFish}}' -a '(zinc list --names 2>/dev/null)'
 `
 

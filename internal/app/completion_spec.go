@@ -108,7 +108,7 @@ var completionCommands = []CmdSpec{
 		{Name: "source", HasValue: true},
 		{Name: "hash-value", HasValue: true},
 	}},
-	{Name: "help"},
+	{Name: "help", PositionalKind: "topic"},
 }
 
 // repoCommands 返回需要补仓库名的子命令。

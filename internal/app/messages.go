@@ -19,6 +19,8 @@ type Messages struct {
 	ConfirmUnscheduleAll string
 	UnscheduleAllAborted string
 	LangInvalid          string
+	LangSaved            string
+	LangSaveFailed       string
 
 	// index
 	LoadIndexFailed  string
@@ -226,6 +228,7 @@ type Messages struct {
 	StatusSource          string
 	StatusOutput          string
 	StatusSizes           string
+	StatusRow             string
 	SizeUnknown           string
 	SizeSame              string
 	SortInvalid           string
@@ -503,7 +506,7 @@ var zhMessages = &Messages{
 	Usage: `zinc - 多仓库、文件级增量、加密独立包备份
 
 元:
-  zinc [--lang zh|en] <命令> ...
+  zinc [--lang zh|en]                    切换界面语言（写入设置，之后一直生效）
   zinc version | --version | -v          显示版本
   zinc help [<命令>]                     显示用法；给命令名时展开该命令的详细说明
   zinc init [--force]                    一次性初始化：注册通知 + 把本目录加入用户 PATH
@@ -578,6 +581,8 @@ var zhMessages = &Messages{
 	ConfirmUnscheduleAll: "这会删除所有 zinc 计划任务，确定吗？[y/n]: ",
 	UnscheduleAllAborted: "已取消",
 	LangInvalid:          "[警告] 未知语言 %q，已回退到 %s",
+	LangSaved:            "[ok] 语言已设为 %s，之后的命令都用它。",
+	LangSaveFailed:       "[警告] 语言设置没能保存: %v",
 
 	LoadIndexFailed:  "读取索引失败: %w",
 	ParseIndexFailed: "解析索引失败: %w",
@@ -772,6 +777,7 @@ var zhMessages = &Messages{
 	StatusSource:          "  源:   %s\n",
 	StatusOutput:          "  输出: %s\n",
 	StatusSizes:           "  占用: 源 %s，输出 %s（%s）\n",
+	StatusRow:             "%s %s 文件 · %s 批次 / %s 包 · 源 %s，输出 %s%s · 最后备份 %s\n",
 	SizeUnknown:           "—",
 	SizeSame:              "与源相当",
 	SortInvalid:           "未知的排序字段: %s（可用 name / src / out / backup）",
@@ -1030,7 +1036,7 @@ var enMessages = &Messages{
 	Usage: `zinc - multi-repo, file-level incremental, encrypted independent packs
 
 Meta:
-  zinc [--lang zh|en] <command> ...
+  zinc [--lang zh|en]                    switch the UI language (saved; applies to later runs)
   zinc version | --version | -v          show the version
   zinc help [<command>]                  show usage; with a command, expand its details
   zinc init [--force]                    one-time setup: notifications + this dir on user PATH
@@ -1105,6 +1111,8 @@ Notes:
 	ConfirmUnscheduleAll: "this deletes every zinc task, continue? [y/n]: ",
 	UnscheduleAllAborted: "cancelled",
 	LangInvalid:          "[warn] unknown language %q, fell back to %s",
+	LangSaved:            "[ok] language set to %s for all later commands.",
+	LangSaveFailed:       "[warn] could not save the language setting: %v",
 
 	LoadIndexFailed:  "failed to read index: %w",
 	ParseIndexFailed: "failed to parse index: %w",
@@ -1299,6 +1307,7 @@ Notes:
 	StatusSource:          "  source: %s\n",
 	StatusOutput:          "  output: %s\n",
 	StatusSizes:           "  footprint: source %s, output %s (%s)\n",
+	StatusRow:             "%s %s files · %s batches / %s packs · source %s, output %s%s · last backup %s\n",
 	SizeUnknown:           "—",
 	SizeSame:              "same as source",
 	SortInvalid:           "unknown sort field: %s (use name / src / out / backup)",

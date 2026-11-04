@@ -8,6 +8,16 @@ import (
 func Main() {
 	rotateLogs()
 	args := initLang(os.Args[1:])
+	// --lang 就是「把语言改掉」：写进 settings.json，之后一直是它。
+	// 不存在「这次用英文、下次用中文」的场景，别为它留开关。
+	// 非法语言已经在 initLang 里回退并警告，这里不写进配置。
+	if n := normalizeLang(cliLang); n == "zh" || n == "en" {
+		if err := persistLang(n); err != nil {
+			fmt.Fprintf(os.Stderr, M.LangSaveFailed+"\n", err)
+		} else {
+			fmt.Printf(M.LangSaved+"\n", n)
+		}
+	}
 	if len(args) < 1 {
 		// 双击快捷方式时这是唯一一次能看到版本和用法的机会
 		fmt.Println(versionLine())

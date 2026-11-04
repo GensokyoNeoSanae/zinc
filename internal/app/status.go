@@ -175,8 +175,9 @@ func sortStatus(list []repoStatus, by string, desc bool) {
 
 // printStatusTable 按显示宽度对齐每一列再输出
 func printStatusTable(list []repoStatus) {
-	wName, wFiles, wBatches, wPacks, wSize := 0, 0, 0, 0, 0
-	for _, st := range list {
+	wName, wFiles, wBatches, wPacks, wSize, wDelta := 0, 0, 0, 0, 0, 0
+	deltas := make([]string, len(list))
+	for i, st := range list {
 		if w := displayWidth(st.name); w > wName {
 			wName = w
 		}
@@ -194,16 +195,21 @@ func printStatusTable(list []repoStatus) {
 				wSize = w
 			}
 		}
+		// 差值那段也要定宽，否则「最后备份」会被长度不同的括号推来推去
+		deltas[i] = "(" + sizeDelta(st.srcSize, st.outSize) + ")"
+		if w := displayWidth(deltas[i]); w > wDelta {
+			wDelta = w
+		}
 	}
-	for _, st := range list {
-		fmt.Printf("%s %s 文件 · %s 批次 / %s 包 · 源 %s，输出 %s(%s) · 最后备份 %s\n",
+	for i, st := range list {
+		fmt.Printf(M.StatusRow,
 			padRight(st.name, wName),
 			padLeft(commaInt(st.files), wFiles),
 			padLeft(strconv.Itoa(st.batches), wBatches),
 			padLeft(strconv.Itoa(st.packs), wPacks),
 			padLeft(humanSize(st.srcSize), wSize),
 			padLeft(humanSize(st.outSize), wSize),
-			sizeDelta(st.srcSize, st.outSize),
+			padRight(deltas[i], wDelta),
 			st.last)
 	}
 }

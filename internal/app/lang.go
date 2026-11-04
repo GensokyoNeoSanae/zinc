@@ -10,6 +10,11 @@ import (
 // defaultLang 可通过 -ldflags "-X main.defaultLang=zh|en" 在编译时指定
 var defaultLang = "auto"
 
+// cliLang 是命令行显式给出的 --lang 值，空表示没给。
+// 单独使用（`zinc --lang en`，不带子命令）时它表示「改设置」而不是「临时看一眼」，
+// 由 Main 负责写进 settings.json。
+var cliLang string
+
 // initLang 提取并剥离 --lang 参数，选定全局 M，返回剩余参数
 func initLang(args []string) []string {
 	// 先给 M 一个默认值：读 settings.json 时可能要报错，M 不能是 nil
@@ -34,6 +39,7 @@ func initLang(args []string) []string {
 		}
 		rest = append(rest, a)
 	}
+	cliLang = lang
 
 	if lang == "" {
 		lang = os.Getenv("ZINC_LANG")
@@ -60,15 +66,37 @@ func initLang(args []string) []string {
 }
 
 func setLang(lang string) bool {
-	switch strings.ToLower(strings.TrimSpace(lang)) {
-	case "zh", "zh-cn", "zh-hans", "chinese":
+	switch normalizeLang(lang) {
+	case "zh":
 		M = zhMessages
 		return true
-	case "en", "en-us", "english":
+	case "en":
 		M = enMessages
 		return true
 	}
 	return false
+}
+
+// normalizeLang 把各种写法收敛成 zh / en，认不出来就原样返回
+func normalizeLang(lang string) string {
+	switch strings.ToLower(strings.TrimSpace(lang)) {
+	case "zh", "zh-cn", "zh-hans", "chinese":
+		return "zh"
+	case "en", "en-us", "english":
+		return "en"
+	}
+	return lang
+}
+
+// persistLang 把语言写进 settings.json。只在 `zinc --lang en` 单独使用时调用：
+// 带子命令的写法仍然是「这次用这个语言跑」。
+func persistLang(lang string) error {
+	s, err := loadSettings()
+	if err != nil {
+		return err
+	}
+	s.Lang = normalizeLang(lang)
+	return saveSettings(s)
 }
 
 // systemLang 读 Windows UI 语言（LANG_CHINESE = 0x04）
