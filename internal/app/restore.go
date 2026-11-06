@@ -392,7 +392,7 @@ func resolvePackSpec(output, spec string) string {
 
 // runRestoreOnly 只恢复一个相对路径（文件或目录），不动其他文件。
 // 不给 --from 时取索引里记录的最新版本；checkList 则列出包含它的所有包。
-func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, only, from string, overwrite, checkList bool) error {
+func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, only, from string, overwrite, wrap, checkList bool) error {
 	repo, err := cfg.repo(name)
 	if err != nil {
 		return err
@@ -447,8 +447,17 @@ func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, onl
 	if err := checkRestoreDest(repo, dest); err != nil {
 		return err
 	}
+	// 单个文件的恢复也套同一层壳，别让「整仓恢复」和「只恢复一个文件」
+	// 在落点上长得不一样——套壳之后 target 是新目录，所以下面不会问。
+	target, terr := restoreDest(name, dest, wrap)
+	if terr != nil {
+		return terr
+	}
+	if wrap {
+		printColored(M.RestoreWrapLine, target)
+	}
 	// 跟整仓恢复同一个判定：目标目录非空才问一句。
-	if dirHasEntries(dest) && !askConfirm(set, fmt.Sprintf(M.RestoreConfirmHead, dest)) {
+	if dirHasEntries(target) && !askConfirm(set, fmt.Sprintf(M.RestoreConfirmHead, target)) {
 		fmt.Print(M.ConfirmCancelled)
 		return nil
 	}
@@ -459,14 +468,19 @@ func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, onl
 		if pack == "" {
 			return fmt.Errorf(M.PackNotSpecified, from)
 		}
-		if err := os.MkdirAll(dest, 0755); err != nil {
+		if err := os.MkdirAll(target, 0755); err != nil {
 			return fmt.Errorf(M.CreateDestFailed, err)
 		}
-		if err := extractOnlyPack(repo, set, pack, spec, dest, password, overwrite); err != nil {
+		if err := extractOnlyPack(repo, set, pack, spec, target, password, overwrite); err != nil {
 			return err
 		}
-		printColored(M.OnlyDone, spec, filepath.Join(dest, filepath.FromSlash(spec)))
-		logf("restore-only %s: %s from pack %s -> %s", name, spec, pack, dest)
+		// 包里没有这个路径时 7z 会安静地什么都不解，不能把「目标没出现」
+		// 当成成功——那是最坏的一种错：用户以为恢复了，其实什么都没有。
+		if _, statErr := os.Stat(filepath.Join(target, filepath.FromSlash(spec))); statErr != nil {
+			return fmt.Errorf(M.FromPackNoSuchPath, pack, spec)
+		}
+		printColored(M.OnlyDone, spec, filepath.Join(target, filepath.FromSlash(spec)))
+		logf("restore-only %s: %s from pack %s -> %s", name, spec, pack, target)
 		return nil
 	}
 
@@ -480,14 +494,14 @@ func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, onl
 	if len(timeline) == 0 {
 		return fmt.Errorf(M.PathNotBackedUp, spec)
 	}
-	if err := os.MkdirAll(dest, 0755); err != nil {
+	if err := os.MkdirAll(target, 0755); err != nil {
 		return fmt.Errorf(M.CreateDestFailed, err)
 	}
-	if err := applyOnlyTimeline(repo, set, timeline, spec, dest, password, overwrite); err != nil {
+	if err := applyOnlyTimeline(repo, set, timeline, spec, target, password, overwrite); err != nil {
 		return err
 	}
-	printColored(M.OnlyDone, spec, filepath.Join(dest, filepath.FromSlash(spec)))
-	logf("restore-only %s: %s from %d entries -> %s", name, spec, len(timeline), dest)
+	printColored(M.OnlyDone, spec, filepath.Join(target, filepath.FromSlash(spec)))
+	logf("restore-only %s: %s from %d entries -> %s", name, spec, len(timeline), target)
 	return nil
 }
 

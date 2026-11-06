@@ -388,6 +388,7 @@ type Messages struct {
 	CheckListTotal       string
 	// 危险操作确认（confirm_tips=on 时生效）
 	ConfirmPrompt      string
+	ConfirmAgain       string
 	ConfirmCancelled   string
 	RestoreConfirmHead string
 	RemoveConfirm      string
@@ -399,6 +400,7 @@ type Messages struct {
 	RestorePartial     string
 	MissingOnly        string
 	PathNotBackedUp    string
+	FromPackNoSuchPath string
 	PackNotSpecified   string
 	OnlyOrigin         string
 	OnlyDone           string
@@ -924,6 +926,7 @@ var zhMessages = &Messages{
 	FlagNoOverwrite:      "恢复时不覆盖，同名文件重命名为 _1",
 	FlagCheck:            "只打印计划，不执行、不询问",
 	ConfirmPrompt:        "继续吗？[y/N] ",
+	ConfirmAgain:         "[请输入 y 或 n] ",
 	ConfirmCancelled:     "已取消，未做任何改动。\n",
 	RestoreConfirmHead:   "目标目录 %s 里已有文件，恢复可能覆盖或删除它们。\n",
 	RemoveConfirm:        "确定移除仓库「%s」？只删配置，输出目录里的包不会动。\n",
@@ -943,6 +946,7 @@ var zhMessages = &Messages{
 	RestorePartial:       "[警告] 恢复已中止，目标目录可能只完成了一部分\n",
 	MissingOnly:          "--only 的路径不能为空",
 	PathNotBackedUp:      "索引和所有包里都没找到这个路径: %s",
+	FromPackNoSuchPath:   "--from 指定的包 %s 里没有这个路径: %s（什么都没恢复）",
 	PackNotSpecified:     "找不到包: %s",
 	OnlyOrigin:           "[来自] %s\n",
 	OnlyDone:             "[完成] %s → %s\n",
@@ -1460,6 +1464,7 @@ Notes:
 	FlagNoOverwrite:      "keep both: same-name files are restored as _1",
 	FlagCheck:            "print the plan only; do not run or ask",
 	ConfirmPrompt:        "Continue? [y/N] ",
+	ConfirmAgain:         "[please answer y or n] ",
 	ConfirmCancelled:     "Cancelled; nothing changed.\n",
 	RestoreConfirmHead:   "The destination %s already has files; restoring may overwrite or delete them.\n",
 	RemoveConfirm:        "Remove repo \"%s\"? Only its config goes away; the packs in its output directory stay.\n",
@@ -1479,6 +1484,7 @@ Notes:
 	RestorePartial:       "[warn] restore aborted; the destination may be partially restored\n",
 	MissingOnly:          "--only requires a non-empty path",
 	PathNotBackedUp:      "path not found in the index or in any pack: %s",
+	FromPackNoSuchPath:   "the pack named by --from (%s) does not contain this path: %s (nothing was restored)",
 	PackNotSpecified:     "pack not found: %s",
 	OnlyOrigin:           "[from] %s\n",
 	OnlyDone:             "[done] %s → %s\n",

@@ -666,8 +666,10 @@ func cmdRestore(args []string) {
 	if *only != "" {
 		// --check-list 也要密码：列包内文件需要读加密的归档头
 		pw := restorePassword(name, cfg, set, *password)
+		// 单个文件也套和整仓一样的外层壳
+		wrap := set.restoreWrapFolder()
 		if *checkList {
-			if err := runRestoreOnly(name, cfg, set, "", pw, *only, *from, ow, true); err != nil {
+			if err := runRestoreOnly(name, cfg, set, "", pw, *only, *from, ow, wrap, true); err != nil {
 				die("%v", err)
 			}
 			return
@@ -675,7 +677,7 @@ func cmdRestore(args []string) {
 		if *dest == "" {
 			die(M.MissingDest)
 		}
-		if err := runRestoreOnly(name, cfg, set, *dest, pw, *only, *from, ow, false); err != nil {
+		if err := runRestoreOnly(name, cfg, set, *dest, pw, *only, *from, ow, wrap, false); err != nil {
 			die("%v", err)
 		}
 		return

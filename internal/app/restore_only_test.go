@@ -55,7 +55,7 @@ func TestRestoreOnlyAppliesDeletions(t *testing.T) {
 	}
 
 	dest := filepath.Join(dir, "restore")
-	if err := runRestoreOnly("t", cfg, set, dest, "PW", "A", "", true, false); err != nil {
+	if err := runRestoreOnly("t", cfg, set, dest, "PW", "A", "", true, false, false); err != nil {
 		t.Fatalf("restore-only: %v", err)
 	}
 	if !fileExists(filepath.Join(dest, "A", "a.txt")) || !fileExists(filepath.Join(dest, "A", "c.txt")) {
@@ -67,7 +67,7 @@ func TestRestoreOnlyAppliesDeletions(t *testing.T) {
 
 	// --from 指定旧包时不套删除记录：应该能拿回 b.txt
 	destOld := filepath.Join(dir, "restore-old")
-	if err := runRestoreOnly("t", cfg, set, destOld, "PW", "A", r1.Packs[0], true, false); err != nil {
+	if err := runRestoreOnly("t", cfg, set, destOld, "PW", "A", r1.Packs[0], true, false, false); err != nil {
 		t.Fatalf("restore-only --from: %v", err)
 	}
 	if !fileExists(filepath.Join(destOld, "A", "b.txt")) {
@@ -98,7 +98,7 @@ func TestRestoreOnlyNoDeletions(t *testing.T) {
 		t.Fatalf("backup: %v", r.Err)
 	}
 	dest := filepath.Join(dir, "restore")
-	if err := runRestoreOnly("t", cfg, set, dest, "PW", "A", "", true, false); err != nil {
+	if err := runRestoreOnly("t", cfg, set, dest, "PW", "A", "", true, false, false); err != nil {
 		t.Fatalf("restore-only: %v", err)
 	}
 	if !fileExists(filepath.Join(dest, "A", "x.txt")) {
