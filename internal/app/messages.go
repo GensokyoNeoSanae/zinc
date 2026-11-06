@@ -117,17 +117,19 @@ type Messages struct {
 	RestoreDestInOutput string
 
 	// verify
-	FlagAllVerify     string
-	FlagSample        string
-	UsageVerify       string
-	NoManifest        string
-	ManifestBroken    string
-	SampleInvalid     string
-	MissingFile       string
-	CorruptFile       string
-	VerifySummary     string
-	VerifyCorruptWarn string
-	VerifyCorruptFix  string
+	FlagAllVerify        string
+	FlagSample           string
+	UsageVerify          string
+	NoManifest           string
+	ManifestBroken       string
+	SampleInvalid        string
+	MissingFile          string
+	CorruptFile          string
+	VerifySummary        string
+	VerifyNothingChecked string
+	VerifySomeSkipped    string
+	VerifyCorruptWarn    string
+	VerifyCorruptFix     string
 	// fixpack：修包（剔坏文件、找替代、重打包）
 	UsageFixpack        string
 	FixNoPacks          string
@@ -401,6 +403,7 @@ type Messages struct {
 	MissingOnly        string
 	PathNotBackedUp    string
 	FromPackNoSuchPath string
+	OnlyPasswordBad    string
 	PackNotSpecified   string
 	OnlyOrigin         string
 	OnlyDone           string
@@ -538,7 +541,7 @@ var zhMessages = &Messages{
 
 校验与维护:
   zinc verify <仓库名|--all> [--sample <百分比>] [--password-only|--hash-only]
-  zinc status [--all] [<仓库名>]
+  zinc status [--expand] [<仓库名>]
   zinc fixmeta <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash]
                         [--check] [--password <密码>]
   zinc fixpack <仓库名> [--check] [--password <密码>]
@@ -607,7 +610,7 @@ var zhMessages = &Messages{
 
 	RootUnset:          "(未设置)",
 	UsageList:          "用法: zinc list [--names]",
-	UsageStatus:        "用法: zinc status [--all] [<仓库名>]（--all 不能和仓库名一起用）",
+	UsageStatus:        "用法: zinc status [--expand] [<仓库名>]（--expand 不能和仓库名一起用）",
 	UsageRoot:          "用法: zinc root [<路径>]",
 	RootNotDir:         "root 路径已存在且不是目录: %s",
 	NoRepos:            "还没有仓库，先 zinc add",
@@ -679,21 +682,23 @@ var zhMessages = &Messages{
 	RestoreDestSource:   "拒绝恢复到源目录（会覆盖源文件）: %s",
 	RestoreDestInOutput: "拒绝恢复到输出目录或其中: %s（输出目录 %s）",
 
-	FlagAllVerify:      "校验全部仓库",
-	FlagSample:         "抽样百分比 1-100",
-	FlagPasswordOnly:   "只验密码，不做 SHA-256",
-	FlagHashOnly:       "只算 SHA-256，不验密码",
-	VerifyFlagConflict: "--password-only 和 --hash-only 不能同时用",
-	VerifyNoPassword:   "没有可用密码：先设置仓库密码或 settings.default_password",
-	UsageVerify:        "用法: zinc verify <仓库名|--all> [--sample <百分比>] [--password-only|--hash-only]",
-	NoManifest:         "没有 manifest（%s），无法校验",
-	ManifestBroken:     "manifest %s 损坏或无法读取: %v",
-	SampleInvalid:      "--sample 必须在 1-100 之间: %d",
-	MissingFile:        "[缺失] %s\n",
-	CorruptFile:        "[更改] %s\n",
-	VerifySummary:      "%s: 通过 %d, 更改 %d, 缺失 %d\n",
-	VerifyCorruptWarn:  "如果你确定没有手动修改过输出目录里的压缩包，那它很可能已经损坏了。\n",
-	VerifyCorruptFix:   "如果原文件还在，可以这样补救：删掉被改动的包和该仓库的 index.tsv，执行 zinc fixmeta %[1]s 重建账本，再跑一次 zinc backup %[1]s 把文件重新打包。\n",
+	FlagAllVerify:        "校验全部仓库",
+	FlagSample:           "抽样百分比 1-100",
+	FlagPasswordOnly:     "只验密码，不做 SHA-256",
+	FlagHashOnly:         "只算 SHA-256，不验密码",
+	VerifyFlagConflict:   "--password-only 和 --hash-only 不能同时用",
+	VerifyNoPassword:     "没有可用密码：先设置仓库密码或 settings.default_password",
+	UsageVerify:          "用法: zinc verify <仓库名|--all> [--sample <百分比>] [--password-only|--hash-only]",
+	NoManifest:           "没有 manifest（%s），无法校验",
+	ManifestBroken:       "manifest %s 损坏或无法读取: %v",
+	SampleInvalid:        "--sample 必须在 1-100 之间: %d",
+	MissingFile:          "[缺失] %s\n",
+	CorruptFile:          "[不一致] %s\n",
+	VerifySummary:        "%s: 通过 %d, 不一致 %d, 缺失 %d\n",
+	VerifyNothingChecked: "%s: 没有包参与校验——%d 个包无法解密（密码不对，不是损坏）\n",
+	VerifySomeSkipped:    "另有 %d 个包因密码不对未参与校验\n",
+	VerifyCorruptWarn:    "如果你确定没有手动修改过输出目录里的压缩包，那它很可能已经损坏了。\n",
+	VerifyCorruptFix:     "如果原文件还在，可以这样补救：删掉被改动的包和该仓库的 index.tsv，执行 zinc fixmeta %[1]s 重建账本，再跑一次 zinc backup %[1]s 把文件重新打包。\n",
 
 	UsageFixpack:        "用法: zinc fixpack <仓库名> [--check] [--password <密码>]",
 	FixNoPacks:          "输出目录里没有包: %s",
@@ -806,7 +811,7 @@ var zhMessages = &Messages{
 	StatusManifestMissing: "  manifest: 缺失\n",
 
 	RegisterFailed: "注册 AUMID 失败: %v\n%s",
-	ToastFailed:    "toast 失败: %v",
+	ToastFailed:    "调用系统通知失败: %v",
 
 	UsageInit:       "用法: zinc init [--force]",
 	FlagForce:       "即使已注册也重建通知快捷方式（换图标/通知坏了时用）",
@@ -920,8 +925,8 @@ var zhMessages = &Messages{
 	DelRecordWriteFailed: "写入删除记录失败: %w",
 	DelRemoveFailed:      "删除 %s 失败: %v",
 	VerifyRmMissing:      "[缺失] 删除记录 %s\n",
-	VerifyRmCorrupt:      "[更改] 删除记录 %s\n",
-	VerifyRmSummary:      "删除记录: 通过 %d, 更改 %d, 缺失 %d\n",
+	VerifyRmCorrupt:      "[不一致] 删除记录 %s\n",
+	VerifyRmSummary:      "删除记录: 通过 %d, 不一致 %d, 缺失 %d\n",
 
 	FlagNoOverwrite:      "恢复时不覆盖，同名文件重命名为 _1",
 	FlagCheck:            "只打印计划，不执行、不询问",
@@ -947,6 +952,7 @@ var zhMessages = &Messages{
 	MissingOnly:          "--only 的路径不能为空",
 	PathNotBackedUp:      "索引和所有包里都没找到这个路径: %s",
 	FromPackNoSuchPath:   "--from 指定的包 %s 里没有这个路径: %s（什么都没恢复）",
+	OnlyPasswordBad:      "有 %d 个包无法用当前密码打开，没法判断这些包里有没有你要的路径（这是密码不对，不是路径不存在）",
 	PackNotSpecified:     "找不到包: %s",
 	OnlyOrigin:           "[来自] %s\n",
 	OnlyDone:             "[完成] %s → %s\n",
@@ -1027,7 +1033,7 @@ var zhMessages = &Messages{
 	FlagMhe:         "7z 头部加密 on/off（on 连文件名一起加密，防网盘按文件名审查；off 则头坏了还能列出包内文件）",
 	FlagExclude:     "排除规则，可重复",
 
-	StatusPacks:   "  包: %d 批次 / %d 个包 / %s\n",
+	StatusPacks:   "  包: %d 批次 / %d 个包 · 输出目录 %s\n",
 	StatusContent: "  内容日期: %s ~ %s\n",
 
 	UsageHashCompare:    "用法: zinc hash-compare --source1 <路径> --source2 <路径>\n       zinc hash-compare --source <文件> --hash-value <SHA-256>",
@@ -1076,7 +1082,7 @@ Backup and restore:
 
 Verify and fixmeta:
   zinc verify <repo_name|--all> [--sample <percent>] [--password-only|--hash-only]
-  zinc status [--all] [<repo_name>]
+  zinc status [--expand] [<repo_name>]
   zinc fixmeta <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>]
                         [--rehash] [--check] [--password <password>]
   zinc fixpack <repo_name> [--check] [--password <password>]
@@ -1145,7 +1151,7 @@ Notes:
 
 	RootUnset:          "(not set)",
 	UsageList:          "usage: zinc list [--names]",
-	UsageStatus:        "usage: zinc status [--all] [<repo_name>] (--all cannot be combined with a repo name)",
+	UsageStatus:        "usage: zinc status [--expand] [<repo_name>] (--expand cannot be combined with a repo name)",
 	UsageRoot:          "usage: zinc root [<path>]",
 	RootNotDir:         "root path exists and is not a directory: %s",
 	NoRepos:            "no repos yet, run zinc add first",
@@ -1217,21 +1223,23 @@ Notes:
 	RestoreDestSource:   "refusing to restore into the source directory (it would overwrite source files): %s",
 	RestoreDestInOutput: "refusing to restore into the output directory or below it: %s (output %s)",
 
-	FlagAllVerify:      "verify all repos",
-	FlagSample:         "sample percentage 1-100",
-	FlagPasswordOnly:   "check the password only, skip SHA-256",
-	FlagHashOnly:       "check SHA-256 only, skip the password",
-	VerifyFlagConflict: "--password-only and --hash-only cannot be combined",
-	VerifyNoPassword:   "no password available: set a repo password or settings.default_password",
-	UsageVerify:        "usage: zinc verify <repo_name|--all> [--sample <percent>] [--password-only|--hash-only]",
-	NoManifest:         "no manifest (%s), cannot verify",
-	ManifestBroken:     "manifest %s is corrupt or unreadable: %v",
-	SampleInvalid:      "--sample must be between 1 and 100: %d",
-	MissingFile:        "[missing] %s\n",
-	CorruptFile:        "[changed] %s\n",
-	VerifySummary:      "%s: passed %d, changed %d, missing %d\n",
-	VerifyCorruptWarn:  "If you never edited the packs in the output directory yourself, this one is probably damaged.\n",
-	VerifyCorruptFix:   "If the source files are still there: delete the changed pack and the repo's index.tsv, run zinc fixmeta %[1]s to rebuild the ledger, then zinc backup %[1]s to pack them again.\n",
+	FlagAllVerify:        "verify all repos",
+	FlagSample:           "sample percentage 1-100",
+	FlagPasswordOnly:     "check the password only, skip SHA-256",
+	FlagHashOnly:         "check SHA-256 only, skip the password",
+	VerifyFlagConflict:   "--password-only and --hash-only cannot be combined",
+	VerifyNoPassword:     "no password available: set a repo password or settings.default_password",
+	UsageVerify:          "usage: zinc verify <repo_name|--all> [--sample <percent>] [--password-only|--hash-only]",
+	NoManifest:           "no manifest (%s), cannot verify",
+	ManifestBroken:       "manifest %s is corrupt or unreadable: %v",
+	SampleInvalid:        "--sample must be between 1 and 100: %d",
+	MissingFile:          "[missing] %s\n",
+	CorruptFile:          "[inconsistent] %s\n",
+	VerifySummary:        "%s: passed %d, inconsistent %d, missing %d\n",
+	VerifyNothingChecked: "%s: nothing was verified — %d pack(s) cannot be decrypted (wrong password, not damage)\n",
+	VerifySomeSkipped:    "another %d pack(s) were skipped because the password is wrong\n",
+	VerifyCorruptWarn:    "If you never edited the packs in the output directory yourself, this one is probably damaged.\n",
+	VerifyCorruptFix:     "If the source files are still there: delete the changed pack and the repo's index.tsv, run zinc fixmeta %[1]s to rebuild the ledger, then zinc backup %[1]s to pack them again.\n",
 
 	UsageFixpack:        "usage: zinc fixpack <repo_name> [--check] [--password <password>]",
 	FixNoPacks:          "no packs in the output directory: %s",
@@ -1344,7 +1352,7 @@ Notes:
 	StatusManifestMissing: "  manifest: missing\n",
 
 	RegisterFailed: "failed to register AUMID: %v\n%s",
-	ToastFailed:    "toast failed: %v",
+	ToastFailed:    "failed to show a system notification: %v",
 
 	UsageInit:       "usage: zinc init [--force]",
 	FlagForce:       "rebuild the notification shortcut even if it is already registered",
@@ -1458,8 +1466,8 @@ Notes:
 	DelRecordWriteFailed: "failed to write deletion record: %w",
 	DelRemoveFailed:      "failed to remove %s: %v",
 	VerifyRmMissing:      "[missing] deletion record %s\n",
-	VerifyRmCorrupt:      "[changed] deletion record %s\n",
-	VerifyRmSummary:      "deletion records: %d ok, %d changed, %d missing\n",
+	VerifyRmCorrupt:      "[inconsistent] deletion record %s\n",
+	VerifyRmSummary:      "deletion records: %d ok, %d inconsistent, %d missing\n",
 
 	FlagNoOverwrite:      "keep both: same-name files are restored as _1",
 	FlagCheck:            "print the plan only; do not run or ask",
@@ -1485,6 +1493,7 @@ Notes:
 	MissingOnly:          "--only requires a non-empty path",
 	PathNotBackedUp:      "path not found in the index or in any pack: %s",
 	FromPackNoSuchPath:   "the pack named by --from (%s) does not contain this path: %s (nothing was restored)",
+	OnlyPasswordBad:      "%d pack(s) cannot be opened with the current password, so it is unknown whether they contain the path (the password is wrong, the path may exist)",
 	PackNotSpecified:     "pack not found: %s",
 	OnlyOrigin:           "[from] %s\n",
 	OnlyDone:             "[done] %s → %s\n",
@@ -1565,7 +1574,7 @@ Notes:
 	FlagMhe:         "encrypt the 7z header on/off (on hides file names from name-based scanning; off keeps a damaged pack listable)",
 	FlagExclude:     "exclude pattern, repeatable",
 
-	StatusPacks:   "  packs: %d batches / %d packs / %s\n",
+	StatusPacks:   "  packs: %d batches / %d packs · output %s\n",
 	StatusContent: "  content dates: %s ~ %s\n",
 
 	UsageHashCompare:    "usage: zinc hash-compare --source1 <path> --source2 <path>\n       zinc hash-compare --source <path> --hash-value <SHA-256>",

@@ -181,7 +181,7 @@ func printHelp(args []string) {
 var zhHelp = map[string]HelpTopic{
 	"add": {
 		Usage:   "add <仓库名> --source <路径> [--output <路径>]",
-		Purpose: `新建一个备份仓库：登记要备份的源目录和存放包的位置。仓库名是之后所有命令用的代号，可带中文。源目录必须已存在，输出目录不存在时会自动创建。`,
+		Purpose: `新建一个备份仓库：登记要备份的源目录和存放包的位置。它只是登记，不会产生任何包——真正备份要跑 zinc backup <仓库名>。仓库名是之后所有命令用的代号，可带中文。输出目录不存在时会自动创建。`,
 		How:     `只写 repos.json，不碰磁盘上的任何数据。输出目录默认是 <root>\<仓库名>，root 由 zinc root 设置。源目录当前不存在只会警告，不会拒绝——挂载盘还没插上时也能先把仓库配好。`,
 		Params: []string{
 			"--source <路径>：要备份哪个目录。",
@@ -260,7 +260,7 @@ var zhHelp = map[string]HelpTopic{
 	},
 	"verify": {
 		Usage:   "verify <仓库名|--all> [--sample <百分比>] [--password-only|--hash-only]",
-		Purpose: `检查每个包（包括.rm 文件，即删除记录）是否在创建后发生了更改或缺失，用于发现随机位翻转、网盘下载出错等意外情况。另外还检验包的密码是否与默认密码相同。`,
+		Purpose: `检查每个包（包括.rm 文件，即删除记录）是否在创建后变得不一致或缺失，用于发现随机位翻转、网盘下载出错等意外情况。另外还检验包的密码是否与默认密码相同。`,
 		How:     `读 manifest.json（账本）里每个包的最新哈希，逐个算文件 SHA-256 比对。默认还会用密码开一次包（只读归档头），确认密码没错、头没坏。`,
 		Params: []string{
 			"--all：验证所有仓库。",
@@ -269,7 +269,7 @@ var zhHelp = map[string]HelpTopic{
 			"--hash-only：只算哈希，不试密码。",
 		},
 		Notes: []string{
-			"报「更改」只说明哈希变了，不一定真坏——但复算哈希不通过就不能信任它。",
+			"报「不一致」只说明包内容和账本记的哈希对不上，不一定真坏——但复算哈希不通过就不能信任它。",
 			"verify 不改任何东西，是安全的只读操作。",
 		},
 	},
@@ -361,10 +361,10 @@ var zhHelp = map[string]HelpTopic{
 		Usage: "fixmeta <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash] [--check] [--password <密码>]",
 		Purpose: `修复两个记账文件和磁盘上的包对不上的情况。index.tsv（索引）记录每个文件当前在哪个包、多大、什么时间；manifest.json（账本）记录每个包的 SHA-256 以及每次备份记下的删除清单。它不修改包内容。
 
-常见原因：verify 报更改的包被手动删除、换机器后只下载了部分包、compact 中断导致账本仍是旧哈希、包被改名或移动、杀毒软件隔离、index.tsv 被删除或截断。这些元数据都能从输出目录重建。`,
+常见原因：verify 报不一致的包被手动删除、换机器后只下载了部分包、compact 中断导致账本仍是旧哈希、包被改名或移动、杀毒软件隔离、index.tsv 被删除或截断。这些元数据都能从输出目录重建。`,
 		How: `按「便宜到贵」的顺序做三件事。第一，对账 manifest：扫描输出目录里的包和 .rm 删除记录，删掉账本里已经不存在 的登记，补登盘上有、账上没有的孤儿包，这一步只做 stat，很快。第二，重建 index.tsv：逐个读包的归档头（不解压内容），重建「文件 → 当前状态」，并按删除记录划掉已经消失的文件，这一步要读每个包，包多时慢。第三，--rehash：把每个包的 SHA-256 按磁盘实际内容重算一遍，最慢，所以默认不做——它专治 compact 中断留下的旧哈希。
 
-第 3 步是 fixmeta 存在的核心理由：除了它，没有任何命令能把 manifest 里过时的哈希改回来，verify 会永远把那个包报成「更改」。`,
+第 3 步是 fixmeta 存在的核心理由：除了它，没有任何命令能把 manifest 里过时的哈希改回来，verify 会永远把那个包报成「不一致」。`,
 		Params: []string{
 			"--pack-start <包名> / --pack-end <包名>：只重建这一段的索引，不全量读一遍。",
 			"--rehash：重算每个已登记包的哈希。修 compact 中途失败留下的旧哈希。",
@@ -413,9 +413,9 @@ var zhHelp = map[string]HelpTopic{
 		Params: []string{
 			"--pack <包名>：只处理指定的包，可给包名或序号。不给就是全仓库范围。",
 			"--min-gain <阈值>：收益低于这个值就跳过重打，避免为一个包来回解压又打包。\n" +
-				"  支持两种写法：百分比（5%）表示「能省下这个包大小的 5% 才动手」；\n" +
-				"  绝对大小（8M）表示「至少省 8 MB 才动手」，K/M/G/T 都可以。\n" +
-				"  不给就用 config 里的 compact_min_gain（默认 5%）。",
+				"  裸数字表示百分比：5 = 至少省下这个包大小的 5% 才动手。\n" +
+				"  带单位表示绝对大小：8M = 至少省 8 MB 才动手，K/M/G/T 都可以。\n" +
+				"  百分号不认，写成 5% 会被当成绝对值。不给就用 config 里的 compact_min_gain（默认 5%）。",
 			"--check：只打印计划、不执行。想先看看会重打哪些包时用它。",
 			"--password <密码>：不给时按「仓库 > settings」取，取不到会交互询问。",
 		},
@@ -456,7 +456,7 @@ var zhHelp = map[string]HelpTopic{
 var enHelp = map[string]HelpTopic{
 	"add": {
 		Usage:   "add <repo_name> --source <path> [--output <path>]",
-		Purpose: `Create a repo: register which directory to back up and where the packs go. The repo name is the identifier every later command uses; it may contain Chinese. The source directory must exist; the output directory is created if missing.`,
+		Purpose: `Create a repo: register which directory to back up and where the packs go. This only registers paths and produces no packs — run zinc backup <repo_name> to actually back things up. The repo name is the identifier every later command uses; it may contain Chinese. The output directory is created if missing.`,
 		How:     `Writes repos.json only, touching nothing on disk. The output defaults to<root>\<repo_name>, where root comes from zinc root. A missing source is only awarning, not a refusal, so you can configure a repo before plugging the drive in.`,
 		Params: []string{
 			"--source <path>: the directory to back up.",

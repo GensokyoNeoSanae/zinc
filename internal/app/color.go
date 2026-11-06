@@ -103,7 +103,7 @@ var colorRules = []struct {
 		"[预演]", "[dry-run]", "[删除]", "[deleted]", "[提示]", "[note]",
 	}, yellow},
 	{[]string{
-		"[更改]", "[changed]", "[损坏]", "[corrupt]",
+		"[不一致]", "[inconsistent]", "[损坏]", "[corrupt]",
 		"[密码不符]", "[错误]", "[error]", "[失败]", "[failed]",
 	}, red},
 }

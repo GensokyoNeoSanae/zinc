@@ -155,7 +155,16 @@ func runVerify(name string, cfg *Config, set *Settings, samplePct int, doHash, d
 		printColored(M.VerifyPwSummary, pwBad)
 	}
 	if doHash {
-		fmt.Printf(M.VerifySummary, name, ok, bad, missing)
+		// 有包因为密码打不开时，「通过 0 / 不一致 0 / 缺失 0」是句废话——
+		// 那些包根本没参与校验，要把它说出来。
+		if pwBad > 0 && ok+bad+missing == 0 {
+			fmt.Printf(M.VerifyNothingChecked, name, pwBad)
+		} else {
+			fmt.Printf(M.VerifySummary, name, ok, bad, missing)
+			if pwBad > 0 {
+				fmt.Printf(M.VerifySomeSkipped, pwBad)
+			}
+		}
 	} else {
 		fmt.Printf(M.VerifyPwOnlySummary, name, ok, pwBad, missing)
 	}

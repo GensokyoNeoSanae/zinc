@@ -524,9 +524,15 @@ func onlyTimeline(repo *Repo, set *Settings, spec, password string) ([]timeEntry
 	}
 	sz := repo.sevenZip(set)
 	var hits []timeEntry
+	pwFailed := 0
 	for _, p := range packs {
 		ok, e := packHasPath(sz, filepath.Join(repo.Output, p), password, spec)
 		if e != nil {
+			// 打不开的包不能当成「里面没有这个路径」——密码错和文件不存在
+			// 是两件事，混成一句"路径不存在"会让人去翻目录结构。
+			if isPasswordError(e.Error()) {
+				pwFailed++
+			}
 			continue
 		}
 		if ok {
@@ -535,6 +541,9 @@ func onlyTimeline(repo *Repo, set *Settings, spec, password string) ([]timeEntry
 		}
 	}
 	if len(hits) == 0 {
+		if pwFailed > 0 {
+			return nil, fmt.Errorf(M.OnlyPasswordBad, pwFailed)
+		}
 		return nil, nil
 	}
 	start := hits[0]

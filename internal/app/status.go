@@ -284,7 +284,7 @@ func printStatusDetail(name string, cfg *Config, set *Settings, st repoStatus) e
 	fmt.Printf(M.StatusOutput, repo.Output)
 	fmt.Printf(M.StatusBacked, len(idx.Files))
 	fmt.Printf(M.StatusPending, newCnt, modCnt, delCnt, skipCnt)
-	fmt.Printf(M.StatusPacks, st.batches, st.packs, st.outSize)
+	fmt.Printf(M.StatusPacks, st.batches, st.packs, humanSize(st.outSize))
 	fmt.Printf(M.StatusSizes, humanSize(st.srcSize), humanSize(st.outSize), sizeDelta(st.srcSize, st.outSize))
 	if from == "" && to == "" {
 		from, to = "-", "-"
