@@ -19,13 +19,44 @@ type packEntry struct {
 	IsDir bool
 }
 
-// listPackContents 只读归档头（不解压内容），列出包内文件
+// isPasswordError 判断 7-Zip 的失败是不是密码问题。
+// 这个区分很重要：密码不对和包损坏在 7z 眼里都是「退出码非 0」，
+// 但对用户是两件完全不同的事——前者改密码就行，后者要修包。
+//
+// 注意 7-Zip 的措辞有坑：CRC 校验失败时它也会补一句 "Wrong password?"，
+// 因为它分不清。但那种情况下它已经算出了 CRC，说明解密是成功的，
+// 所以只要出现 "CRC Failed" 就必须按损坏处理，不能按密码处理。
+func isPasswordError(output string) bool {
+	s := strings.ToLower(output)
+	if strings.Contains(s, "crc failed") || strings.Contains(s, "data error") {
+		return false
+	}
+	for _, marker := range []string{
+		"cannot open encrypted",
+		"can not open encrypted",
+		"wrong password",
+		"incorrect password",
+		"enter password",
+	} {
+		if strings.Contains(s, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// listPackContents 只读归档头（不解压内容），列出包内文件。
+// 失败时把 7z 的原话一起带回去：调用方要靠它区分「密码不对」和「包坏了」。
 func listPackContents(sevenZip, pack, password string) ([]packEntry, error) {
 	cmd := hiddenCmd(sevenZip, "l", "-slt", "-sccUTF-8", "-p"+password, pack)
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("%v", err)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		detail := strings.TrimSpace(stderr.String() + "\n" + stdout.String())
+		return nil, fmt.Errorf("%v: %s", err, detail)
 	}
+	out := stdout.Bytes()
 
 	var entries []packEntry
 	var cur packEntry

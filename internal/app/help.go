@@ -411,18 +411,20 @@ var zhHelp = map[string]HelpTopic{
 		},
 	},
 	"restore": {
-		Usage: "restore <仓库名> <目标路径> [--only <相对路径>] [--from <包名>]\n" +
+		Usage: "restore <仓库名> --dest <路径> [--only <相对路径>] [--from <包名>]\n" +
 			"                 [--no-overwrite] [--no-delete] [--check] [--password <密码>]",
-		Purpose: `把备份包里的内容还原到磁盘。默认还原整个仓库；--only 只还原一个路径，--from 从某个包开始。
+		Purpose: `把备份包里的内容还原到磁盘。默认还原整个仓库；--only 只还原一个路径，--from 只解压指定的那一个包。
 
-这是唯一会直接改动目标目录的命令，执行前会列出计划，目标非空或要重放删除时会询问一次。不建议直接恢复到源目录：先恢复到空目录、确认无误后再手动覆盖回去，源目录在此期间保持完好。`,
-		How: `它按包名的时间顺序（升序）依次解压，后一个包覆盖前一个，最后得到「最新状态」。
+这是唯一会直接改动目标目录的命令。目标目录非空、或要重放删除记录时会询问一次；但如果 restore_wrap_folder 为 true（默认），zinc 会在目标下多套一层 restore-<仓库名>-<时间戳>，写进新目录没有覆盖风险，就不再询问。不建议直接恢复到源目录：先恢复到空目录、确认无误后再手动覆盖回去，源目录在此期间保持完好。`,
+		How: `默认按包名的时间顺序（升序）依次解压，后一个包覆盖前一个，最后得到「最新状态」。
 
-删除是单独一层语义：每次备份不仅记录「有哪些文件」，还记录「哪些文件不见了」（输出目录里与包同名的 .rm 文件）。恢复时会按时间线重放这些删除——也就是说，如果你在10 月 5 日删过某个文件，10 月 10 日恢复时，目标目录里那份文件也会被删掉。这才是「还原到那个时间点」的完整含义。用 --no-delete 可以只补不删。`,
+--from 是这条规则的例外：它只解压指定的那一个包，既不往后累积，也不重放删除记录。所以它表达的是「从历史里取某个时刻的那一份」，不是「从这个包开始往后恢复」。它必须配合 --only 使用。
+
+删除是单独一层语义：每次备份不仅记录「有哪些文件」，还记录「哪些文件不见了」（输出目录里与包同名的 .rm 文件）。恢复时会按时间线重放这些删除——也就是说，如果你在 10 月 5 日删过某个文件，10 月 10 日恢复时，目标目录里那份文件也会被删掉。这才是「还原到那个时间点」的完整含义。用 --no-delete 可以只补不删。`,
 		Params: []string{
-			"--only <相对路径>：只恢复这一个文件或目录。它同样会重放与该路径相关的删除记录，\n" +
-				"  所以恢复出来的结果与整仓恢复一致，只是范围小。",
-			"--from <包名>：只从这个包开始恢复，不给就从第一个包开始。",
+			"--dest <路径>：恢复到哪个目录。必填，只有 --check 时可以省。",
+			"--only <相对路径>：只恢复这一个文件或目录。它同样会重放与该路径相关的删除记录，所以结果与整仓恢复一致，只是范围小。",
+			"--from <包名>：只解压指定的这一个包，不往后累积，也不重放删除记录。必须配合 --only 使用。",
 			"--no-overwrite：目标已存在同名文件时保留它，不覆盖。",
 			"--no-delete：不执行删除记录，目标目录里多出来的旧文件统统保留。",
 			"--check：只打印将要执行的清单，不询问、不写盘；此时可以不写目标路径。",
@@ -673,18 +675,20 @@ The repack uses the exact same arguments as a backup (compression level, solid b
 		},
 	},
 	"restore": {
-		Usage: "restore <repo_name> <dest_path> [--only <rel_path>] [--from <pack_name>]\n" +
+		Usage: "restore <repo_name> --dest <path> [--only <rel_path>] [--from <pack_name>]\n" +
 			"                 [--no-overwrite] [--no-delete] [--check] [--password <password>]",
-		Purpose: `Put the contents of the packs back on disk. By default the whole repo; --only narrows it to one path, --from starts at a given pack.
+		Purpose: `Put the contents of the packs back on disk. By default the whole repo; --only narrows it to one path, --from extracts that single pack only.
 
-This is the only command that modifies the destination, so it prints the plan first and asks when the destination is non-empty or deletions are about to be replayed. Restoring straight into the source directory is not recommended: restore into an empty directory, check it, then copy back by hand, keeping the source intact meanwhile.`,
-		How: `Packs are extracted in name order (ascending); each later pack overwrites the earlierone, which leaves you with the latest state.
+This is the only command that modifies the destination. It asks when the destination is non-empty or deletions are about to be replayed — unless restore_wrap_folder is true (the default), in which case zinc nests a restore-<repo_name>-<timestamp> directory inside the destination; writing into a fresh directory has no overwrite risk, so it does not ask. Restoring straight into the source directory is not recommended: restore into an empty directory, check it, then copy back by hand, keeping the source intact meanwhile.`,
+		How: `By default packs are extracted in name order (ascending); each later pack overwrites the earlier one, which leaves you with the latest state.
 
-Deletion is a separate layer. Every backup records not just the files that exist but the files that vanished (thes .rm sidecars in the output directory). A restore replays thosedeletions along the timeline: delete a file on Oct 5, restore on Oct 10, and that fileis removed from the destination as well. That is what "restore to that moment" means.--no-delete keeps those files instead.`,
+--from is the exception: it extracts only that one pack — it does not continue forward and does not replay deletions. Its meaning is "take the copy from that moment in history", not "start restoring from this pack onward". It must be combined with --only.
+
+Deletion is a separate layer. Every backup records not just the files that exist but the files that vanished (the .rm files sitting next to each pack in the output directory). A restore replays those deletions along the timeline: delete a file on Oct 5, restore on Oct 10, and that file is removed from the destination as well. That is what "restore to that moment" means. --no-delete keeps those files instead.`,
 		Params: []string{
-			"--only <rel_path>: restore just this file or directory. It still replays the deletions\n" +
-				"  related to that path, so the result matches a full restore, only narrower.",
-			"--from <pack_name>: start at this pack instead of the first one.",
+			"--dest <path>: destination directory. Required; only --check may omit it.",
+			"--only <rel_path>: restore just this file or directory. It still replays the deletions related to that path, so the result matches a full restore, only narrower.",
+			"--from <pack_name>: extract only that one pack — no forward accumulation, no deletion replay. Must be combined with --only.",
 			"--no-overwrite: keep an existing same-name file instead of overwriting it.",
 			"--no-delete: do not replay deletions; keep the extra old files in the destination.",
 			"--check: print the plan, ask nothing, write nothing; the destination may be omitted.",

@@ -50,8 +50,10 @@ func parseBadFiles(out string) []string {
 
 // packTestResult 是 `7z t` 的一次结果，带缓存：同一个包在一次 fixpack 里只测一次
 type packTestResult struct {
-	ok      bool
-	badFile []string
+	ok          bool
+	passwordBad bool   // 打不开是因为密码不对，不是因为包坏了
+	output      string // 7z 的原话，用于报告
+	badFile     []string
 }
 
 func testPackCached(sz, pack, password string, cache map[string]packTestResult) packTestResult {
@@ -60,9 +62,15 @@ func testPackCached(sz, pack, password string, cache map[string]packTestResult) 
 	}
 	cmd := hiddenCmd(sz, "t", "-sccUTF-8", "-p"+password, pack)
 	out, err := cmd.CombinedOutput()
-	r := packTestResult{ok: err == nil}
+	r := packTestResult{ok: err == nil, output: string(out)}
 	if err != nil {
-		r.badFile = parseBadFiles(string(out))
+		// 密码不对不是损坏：这时候 7z 也会退回 0，但一个文件都读不出来，
+		// 按「损坏」报给用户会把人引到错误的方向去。
+		if isPasswordError(string(out)) {
+			r.passwordBad = true
+		} else {
+			r.badFile = parseBadFiles(string(out))
+		}
 	}
 	cache[pack] = r
 	return r
@@ -191,6 +199,7 @@ func runFixpack(name string, cfg *Config, set *Settings, password string, check 
 	cache := make(map[string]packTestResult)
 	badPacks := make([]string, 0)
 	byPack := make(map[string][]badFile, 0)
+	skipped := 0
 
 	for _, p := range packs {
 		full := filepath.Join(repo.Output, p)
@@ -198,6 +207,19 @@ func runFixpack(name string, cfg *Config, set *Settings, password string, check 
 		r := testPackCached(sz, full, password, cache)
 		if r.ok {
 			printColored(M.FixPackOK, p)
+			continue
+		}
+		// 密码不对：包可能完好，只是打不开。不能算「需要修复」，
+		// 更不能去剔它的文件——那样会把好数据扔掉。
+		if r.passwordBad {
+			printColored(M.FixPackLocked, p)
+			skipped++
+			continue
+		}
+		// 打不开但 7z 没指出哪个文件坏了（通常是头部坏了）：也无从修复。
+		if len(r.badFile) == 0 {
+			printColored(M.FixPackUnreadable, p)
+			skipped++
 			continue
 		}
 		badPacks = append(badPacks, p)
@@ -218,6 +240,11 @@ func runFixpack(name string, cfg *Config, set *Settings, password string, check 
 	}
 
 	if len(badPacks) == 0 {
+		if skipped > 0 {
+			// 「有包打不开」和「所有包都完好」是两件事，别混着报
+			printColored(M.FixNothingFixable, skipped)
+			return nil
+		}
 		printColored(M.FixAllOK, name)
 		return nil
 	}

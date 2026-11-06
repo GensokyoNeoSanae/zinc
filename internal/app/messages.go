@@ -134,10 +134,14 @@ type Messages struct {
 	FixTesting          string
 	FixPackOK           string
 	FixPackBad          string
+	FixPackLocked       string
+	FixPackUnreadable   string
+	PackPasswordBad     string
 	FixLooking          string
 	FixFound            string
 	FixNotFound         string
 	FixAllOK            string
+	FixNothingFixable   string
 	FixSummary          string
 	FixDryRun           string
 	FixConfirm          string
@@ -559,10 +563,12 @@ var zhMessages = &Messages{
   - schedule 会把解析到的密码明文写进计划任务，之后改了密码要重建任务（zinc unschedule <仓库名> 再 schedule）
   - 恢复默认覆盖同名文件（--no-overwrite 则保留两份）；--dest 必填，只有 --check 时可以省
   - 建议恢复到空目录、检查无误后再手动覆盖回源目录；直接往源目录恢复等于拿唯一的副本冒险
-  - 恢复会执行之后备份记下的删除（--no-delete 保留这些文件）；删除记录是输出目录里的 .rm 旁注
+  - 恢复会执行之后备份记下的删除（--no-delete 保留这些文件）；删除记录是输出目录里与包同名的 .rm 文件，在下次备份时写入
   - compact 删掉的是「已被新版取代 / 已从源目录删除」的副本，那些旧版本随之消失；包被腾空后只留一个占位文件
-  - 索引与账本坏了用 zinc fixmeta 重建；包本身是权威数据
-  - 输出默认落在 <根目录>\<仓库名>，用 zinc root 设置
+  - 备份日志里的 enc✓ 表示这个包有密码（密码强制非空，所以恒为 ✓）；括号里是这次密码的来源：cli = --password，repo = zinc set --password，settings = 全局 default_password
+  - 批次 = 执行了几次备份（只记录删除、不产包的批次也算）；包 = 实际生成的 .7z 文件
+  - 索引 index.tsv 与账本 manifest.json 坏了，用 zinc fixmeta 重建；包本身是权威数据
+  - 没装 7-Zip 或者用的是便携版：用 zinc config set 7zip_path <7z.exe 路径> 指定
   - 解压后先跑一次 zinc init，之后在任意终端直接敲 zinc
   - 安装/卸载用 tools\ 下的 zinc-register.exe / zinc-unregister.exe
   - unschedule <仓库名> 删该仓库的任务；unschedule --all 删所有 zinc 任务；unschedule all 只删 --all 建的那个总任务
@@ -692,10 +698,14 @@ var zhMessages = &Messages{
 	FixTesting:          "[检查] %s\n",
 	FixPackOK:           "[ok] %s 完好\n",
 	FixPackBad:          "[损坏] %s · %d 个文件读不出来\n",
+	FixPackLocked:       "[密码不符] %s 打不开，但这是密码不对，不是包坏了——跳过，它的文件一概不动\n",
+	FixPackUnreadable:   "[无法读取] %s 打不开，7z 也没指出具体哪个文件坏了（多半是文件头坏了）\n",
+	PackPasswordBad:     "包 %s 无法用当前密码打开（包本身可能没坏，是密码不对）\n",
 	FixLooking:          "  查找 %s 的替代来源\n",
 	FixFound:            "[ok] 找到 %s ← %s\n",
 	FixNotFound:         "[丢失] %s 没有可用的替代来源\n",
 	FixAllOK:            "[ok] %s 的所有包都完好，不需要修复\n",
+	FixNothingFixable:   "[汇总] 有 %d 个包打不开（原因见上），没有可以修复的包",
 	FixSummary:          "[汇总] %d / %d 个包需要修复\n",
 	FixDryRun:           "[预演] 给了 --check，没有改动任何文件\n",
 	FixConfirm:          "将重写 %d 个包（解压、补文件、重新打包、同名覆盖）。\n",
@@ -816,7 +826,7 @@ var zhMessages = &Messages{
 	InstallHeader:    "zinc 安装\n程序目录: %s\n\n",
 	Install7zipOK:    "[ok] 7-Zip: %s\n",
 	PromptSevenZip:   "没有找到 7-Zip。请先安装（https://www.7-zip.org/），或输入 7z.exe / 7za.exe 的完整路径（留空退出）: ",
-	SevenZipMissing:  "没有可用的 7-Zip。zinc 依赖 7z.exe 或 7za.exe；装好后重跑 zinc-register.exe，或用 --7zip <路径> 指定。",
+	SevenZipMissing:  "没有可用的 7-Zip。zinc 用 7z.exe 或 7za.exe 打包。装好 7-Zip 后，用 zinc config set 7zip_path <7z.exe 路径> 指定；也可以重跑安装目录下的 tools\\zinc-register.exe 让它重新检测。",
 	SevenZipNotFound: "7-Zip 路径不可用: %s",
 	InstallDone:      "\n完成。新开一个终端就能直接敲 zinc；接下来设置备份根目录：\n  zinc root D:\\Backup\\zinc\n",
 	PressEnter:       "\n按 Enter 关闭窗口……",
@@ -1089,10 +1099,12 @@ Notes:
   - schedule stores the resolved password in plain text inside the task; recreate the task after changing the password (zinc unschedule <repo_name>, then schedule again)
   - restore overwrites same-name files by default; --no-overwrite keeps both; --dest is required (only --check may omit it)
   - restore into an empty directory and copy the result back by hand; restoring straight into the source puts your only copy at risk
-  - restore also applies deletions recorded by later backups; --no-delete keeps those files
+  - restore also applies deletions recorded by later backups; --no-delete keeps those files; the records are .rm files sitting next to the packs, written by the following backup
   - compact drops copies a newer version has superseded, so those old versions disappear; an emptied pack keeps only a placeholder
-  - a broken index or manifest is rebuilt by zinc fixmeta; the packs themselves are the source of truth
-  - output defaults to <root>\<repo_name>; set it with zinc root
+  - enc✓ in the backup log means the pack has a password (always ✓, since one is required); the bracket shows where it came from: cli = --password, repo = zinc set --password, settings = the global default_password
+  - batch = how many backups have run (a run that only records deletions counts too); pack = an actual .7z file
+  - a broken index.tsv or manifest.json is rebuilt by zinc fixmeta; the packs themselves are the source of truth
+  - no 7-Zip installed, or using a portable build: point zinc at it with zinc config set 7zip_path <path to 7z.exe>
   - run zinc init once after unzipping; then just type zinc in any terminal
   - use zinc-register.exe / zinc-unregister.exe from the tools folder for install and removal
   - unschedule <repo_name> removes that repo's tasks; unschedule --all removes every zinc task; unschedule all removes only the --all summary task
@@ -1222,10 +1234,14 @@ Notes:
 	FixTesting:          "[check] %s\n",
 	FixPackOK:           "[ok] %s is intact\n",
 	FixPackBad:          "[damaged] %s · %d file(s) unreadable\n",
+	FixPackLocked:       "[wrong password] %s cannot be opened, but that is a password problem, not damage — skipping, its files are left alone\n",
+	FixPackUnreadable:   "[unreadable] %s cannot be opened and 7z did not name a bad file (the header is probably damaged)\n",
+	PackPasswordBad:     "pack %s cannot be opened with the current password (the pack may be fine; the password is wrong)\n",
 	FixLooking:          "  looking for a replacement of %s\n",
 	FixFound:            "[ok] %s <- %s\n",
 	FixNotFound:         "[lost] %s has no usable replacement\n",
 	FixAllOK:            "[ok] every pack in %s is intact; nothing to fix\n",
+	FixNothingFixable:   "[summary] %d pack(s) could not be opened (see above); nothing here is fixable",
 	FixSummary:          "[summary] %d / %d pack(s) need repair\n",
 	FixDryRun:           "[dry-run] --check given, nothing was changed\n",
 	FixConfirm:          "About to rewrite %d pack(s): extract, patch, repack, overwrite by name.\n",
@@ -1346,7 +1362,7 @@ Notes:
 	InstallHeader:    "zinc install\nprogram dir: %s\n\n",
 	Install7zipOK:    "[ok] 7-Zip: %s\n",
 	PromptSevenZip:   "7-Zip was not found. Install it first (https://www.7-zip.org/), or type the full path to 7z.exe / 7za.exe (empty to abort): ",
-	SevenZipMissing:  "no usable 7-Zip. zinc needs 7z.exe or 7za.exe; install it and re-run zinc-register.exe, or pass --7zip <path>.",
+	SevenZipMissing:  "no usable 7-Zip. zinc packs with 7z.exe or 7za.exe. After installing 7-Zip, point zinc at it with zinc config set 7zip_path <path to 7z.exe>; or re-run tools\\zinc-register.exe in the install directory to detect it again.",
 	SevenZipNotFound: "not a usable 7-Zip path: %s",
 	InstallDone:      "\nDone. Open a new terminal and type zinc. Next, pick a backup root:\n  zinc root D:\\Backup\\zinc\n",
 	PressEnter:       "\nPress Enter to close this window...",

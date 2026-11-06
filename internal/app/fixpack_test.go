@@ -34,6 +34,31 @@ func TestParseBadFilesIgnoresNoise(t *testing.T) {
 	}
 }
 
+// 密码不对和包损坏必须分开：7-Zip 在 CRC 失败时也会补一句 "Wrong password?"，
+// 如果照单全收，坏包会被当成"密码问题"放过，而密码错会被当成"损坏"去删数据。
+func TestIsPasswordError(t *testing.T) {
+	// CRC 失败 = 数据坏了，即使 7z 自己也在猜密码
+	crc := "ERROR: CRC Failed in encrypted file. Wrong password? : f1.txt"
+	if isPasswordError(crc) {
+		t.Error("CRC failure must not be classified as a password problem")
+	}
+	dataErr := "ERROR: Data Error in encrypted file. Wrong password? : f2.txt"
+	if isPasswordError(dataErr) {
+		t.Error("data error must not be classified as a password problem")
+	}
+	// 打不开加密包 = 密码不对
+	if !isPasswordError("ERROR: Cannot open encrypted archive. Wrong password?") {
+		t.Error("cannot-open-encrypted should be a password problem")
+	}
+	if !isPasswordError("Enter password (will not be echoed):") {
+		t.Error("password prompt should be a password problem")
+	}
+	// 正常输出不算
+	if isPasswordError("Everything is Ok\n") {
+		t.Error("clean output must not be a password problem")
+	}
+}
+
 func TestSrcFileMatches(t *testing.T) {
 	src := t.TempDir()
 	repo := &Repo{Source: src}

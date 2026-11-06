@@ -133,6 +133,10 @@ func buildCompactPlan(repo *Repo, set *Settings, idx *Index, password, pack stri
 	full := filepath.Join(repo.Output, pack)
 	entries, err := listPackContents(sz, full, password)
 	if err != nil {
+		// 密码不对和包坏了是两件事，别混成一句「读取失败」
+		if isPasswordError(err.Error()) {
+			return compactPlan{}, fmt.Errorf(M.PackPasswordBad, pack)
+		}
 		return compactPlan{}, fmt.Errorf(M.CompactPackListFailed, pack, err)
 	}
 
