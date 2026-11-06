@@ -97,8 +97,8 @@ func TestSrcFileMatches(t *testing.T) {
 	}
 }
 
-// 端到端：造一个坏包，fixpack 之后 verify 必须通过
-func TestFixpackEndToEnd(t *testing.T) {
+// 端到端：造一个坏包，fixrepo 之后 verify 必须通过
+func TestFixrepoEndToEnd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("short mode")
 	}
@@ -140,11 +140,11 @@ func TestFixpackEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := runFixpack("t", cfg, set, "PW", false); err != nil {
-		t.Fatalf("fixpack: %v", err)
+	if err := runFixrepo("t", cfg, set, "PW", false); err != nil {
+		t.Fatalf("fixrepo: %v", err)
 	}
 	// 修完必须能通过哈希校验
 	if err := runVerify("t", cfg, set, 100, true, false); err != nil {
-		t.Fatalf("verify after fixpack: %v", err)
+		t.Fatalf("verify after fixrepo: %v", err)
 	}
 }

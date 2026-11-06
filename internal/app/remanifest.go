@@ -58,7 +58,7 @@ func runRemanifest(name string, cfg *Config, set *Settings, password string, yes
 	if _, statErr := os.Stat(repo.Output); statErr != nil {
 		return fmt.Errorf(M.CreateOutputFailed, statErr)
 	}
-	// 仓库锁由调用方（repair / fixpack）统一持有：在这里再拿一次会自己等自己
+	// 仓库锁由调用方（repair / fixrepo）统一持有：在这里再拿一次会自己等自己
 	packs, err := sortedPacks(repo.Output)
 	if err != nil {
 		return err

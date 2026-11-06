@@ -669,7 +669,7 @@ func cmdRestore(args []string) {
 		// 单个文件也套和整仓一样的外层壳
 		wrap := set.restoreWrapFolder()
 		if *checkList {
-			if err := runRestoreOnly(name, cfg, set, "", pw, *only, *from, ow, wrap, true); err != nil {
+			if err := runRestoreOnly(name, cfg, set, *dest, pw, *only, *from, ow, wrap, true); err != nil {
 				die("%v", err)
 			}
 			return

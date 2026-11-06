@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// fixpack 修的是「包」，fixmeta 修的是「账」。这里只关心包内容：
+// fixrepo 修的是「包」，fixmeta 修的是「账」。这里只关心包内容：
 // 找出坏掉的包、列出坏掉的文件、给每个文件找一份可用的替代来源、重打包。
 //
 // 一条重要的边界：非固实包坏了不等于全废。7z t 只会报出真正坏掉的文件，
@@ -48,7 +48,7 @@ func parseBadFiles(out string) []string {
 	return bad
 }
 
-// packTestResult 是 `7z t` 的一次结果，带缓存：同一个包在一次 fixpack 里只测一次
+// packTestResult 是 `7z t` 的一次结果，带缓存：同一个包在一次 fixrepo 里只测一次
 type packTestResult struct {
 	ok          bool
 	passwordBad bool   // 打不开是因为密码不对，不是因为包坏了
@@ -140,13 +140,13 @@ func findReplacement(repo *Repo, set *Settings, idx *Index, packs []string, rel,
 	return "", "", false
 }
 
-// cmdFixpack 入口：默认预演，--check 以外的写法都会真的动手
-func cmdFixpack(args []string) {
-	fs := flag.NewFlagSet("fixpack", flag.ExitOnError)
+// cmdFixrepo 入口：默认预演，--check 以外的写法都会真的动手
+func cmdFixrepo(args []string) {
+	fs := flag.NewFlagSet("fixrepo", flag.ExitOnError)
 	password := fs.String("password", "", M.FlagPassword)
 	check := fs.Bool("check", false, M.FlagCheck)
 	fs.Parse(reorderArgs(args))
-	requireArgs(fs, 1, 1, M.UsageFixpack)
+	requireArgs(fs, 1, 1, M.UsageFixrepo)
 	name := fs.Arg(0)
 
 	cfg := mustConfig()
@@ -162,13 +162,13 @@ func cmdFixpack(args []string) {
 	if pw == "" {
 		pw = promptPassword(false)
 	}
-	if err := runFixpack(name, cfg, set, pw, *check); err != nil {
+	if err := runFixrepo(name, cfg, set, pw, *check); err != nil {
 		die("%v", err)
 	}
 }
 
-// runFixpack 的骨架：先找出坏包和坏文件，再决定能不能修、怎么修
-func runFixpack(name string, cfg *Config, set *Settings, password string, check bool) error {
+// runFixrepo 的骨架：先找出坏包和坏文件，再决定能不能修、怎么修
+func runFixrepo(name string, cfg *Config, set *Settings, password string, check bool) error {
 	repo, err := cfg.repo(name)
 	if err != nil {
 		return err
@@ -311,7 +311,7 @@ func runFixpack(name string, cfg *Config, set *Settings, password string, check 
 // 包名不变，跟 compact 的重写策略一致（网盘同名覆盖才认得出是更新）。
 func rewritePackFixed(repo *Repo, set *Settings, pack string, fixed []badFile, password string) error {
 	sz := repo.sevenZip(set)
-	tmp, err := os.MkdirTemp("", "zinc-fixpack-")
+	tmp, err := os.MkdirTemp("", "zinc-fixrepo-")
 	if err != nil {
 		return err
 	}

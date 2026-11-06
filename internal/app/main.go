@@ -19,10 +19,9 @@ func Main() {
 		}
 	}
 	if len(args) < 1 {
-		// 双击快捷方式时这是唯一一次能看到版本和用法的机会
+		// 双击快捷方式时这是唯一一次能看到版本的机会；别再糊一整篇帮助上去。
 		fmt.Println(versionLine())
-		fmt.Println()
-		usage()
+		fmt.Println(M.BareHint)
 		if startedFromExplorer() {
 			pauseUnless(false)
 		}
@@ -50,8 +49,8 @@ func Main() {
 		cmdRestore(rest)
 	case "fixmeta":
 		cmdFixmeta(rest)
-	case "fixpack":
-		cmdFixpack(rest)
+	case "fixrepo":
+		cmdFixrepo(rest)
 	case "compact":
 		cmdCompact(rest)
 	case "verify":
@@ -79,8 +78,10 @@ func Main() {
 			die(M.TooManyArgs, rest[0])
 		}
 		printVersion()
+	case "readme":
+		cmdReadme()
 	default:
-		usage()
-		os.Exit(1)
+		// 打错命令时别把整篇帮助糊上来——先明说是哪个词不认识
+		die(M.UnknownCommand, cmd)
 	}
 }

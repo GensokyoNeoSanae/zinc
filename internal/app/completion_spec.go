@@ -65,7 +65,7 @@ var completionCommands = []CmdSpec{
 		{Name: "rehash"},
 		{Name: "check"},
 	}, PositionalKind: "repo"},
-	{Name: "fixpack", Flags: []FlagSpec{
+	{Name: "fixrepo", Flags: []FlagSpec{
 		{Name: "password", HasValue: true},
 		{Name: "check"},
 	}, PositionalKind: "repo"},
@@ -109,6 +109,7 @@ var completionCommands = []CmdSpec{
 		{Name: "hash-value", HasValue: true},
 	}},
 	{Name: "help", PositionalKind: "topic"},
+	{Name: "readme"},
 }
 
 // repoCommands 返回需要补仓库名的子命令。

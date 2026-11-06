@@ -203,7 +203,7 @@ var zhHelp = map[string]HelpTopic{
 		},
 	},
 	"set": {
-		Usage:   "set <仓库名> [--source <路径>] [--output <路径>] [--compress <0-9>] [--solid <块大小|off>] [--mhe on|off>] [--max-pack-byte <数量>] [--exclude <通配符>] [--password <密码>]",
+		Usage:   "set <仓库名> [--source <路径>] [--output <路径>] [--compress <0-9>] [--solid <块大小|off>] [--mhe on|off] [--max-pack-byte <数量>] [--exclude <通配符>] [--password <密码>]",
 		Purpose: `修改某个仓库的参数，只改动给出的项。仓库参数优先于 config 里的同名全局设置。`,
 		How:     `写进 repos.json 的对应字段。这几项只对之后新打的包生效：已经存在的包不会因为改了参数就被重新压缩一遍。compact 也不做这种转换——它只会把包里「已经被新版取代」的旧副本删掉，再按同样的参数把剩下的内容重新打包，目的是省空间，不是换格式。`,
 		Params: []string{
@@ -298,7 +298,7 @@ var zhHelp = map[string]HelpTopic{
 		Params: []string{
 			"--daily / --weekly 1,3 / --monthly 1,15：周期。",
 			"--at HH:MM[,HH:MM...]：执行时间，可多个。",
-			"--check：只打印会创建哪些任务，不真建。",
+			"--check：只打印将要执行的动作，不写盘、不询问。这里列的是会创建哪些计划任务。",
 			"--no-notify：任务里不带 --notify。",
 			"--password <密码>：写进任务里，之后改密码要重建任务。",
 		},
@@ -341,13 +341,13 @@ var zhHelp = map[string]HelpTopic{
 		Params:  []string{"--force：即使已经注册过也重做。"},
 		Notes:   []string{"改完 PATH 要重开终端才生效。"},
 	},
-	"fixpack": {
-		Usage:   "fixpack <仓库名> [--check] [--password <密码>]",
+	"fixrepo": {
+		Usage:   "fixrepo <仓库名> [--check] [--password <密码>]",
 		Purpose: `修复损坏的包：保留还能读取的文件，为读不出来的文件找替代来源，然后重新打包成同名文件。它只处理包内容，不修改 manifest.json（账本）。`,
 		How:     `先对每个包跑一遍 7z t，拿到坏掉的文件名（非固实包下 7-Zip 会逐文件报出具体是哪个）。对每个坏文件按优先级找替代：先看源目录（还在、大小和时间跟 index.tsv 记的一样，就是那一份），再按从新到旧的顺序翻其他历史包，并且用 7z t 确认那份没坏。全都没有就标记为无法恢复。确认后逐个重写坏包：解压出好文件、补上替代来源、按原参数重新打包。`,
 		Params: []string{
 			"<仓库名>：要修哪个仓库。",
-			"--check：只检查并列出计划，不动任何文件。",
+			"--check：只打印将要执行的动作，不写盘、不询问。",
 			"--password <密码>：不给时按「仓库 > settings」取，取不到会交互询问。",
 		},
 		Notes: []string{
@@ -368,7 +368,7 @@ var zhHelp = map[string]HelpTopic{
 		Params: []string{
 			"--pack-start <包名> / --pack-end <包名>：只重建这一段的索引，不全量读一遍。",
 			"--rehash：重算每个已登记包的哈希。修 compact 中途失败留下的旧哈希。",
-			"--check：只打印计划、不写盘。写之前想看一遍会改什么就用它。",
+			"--check：只打印将要执行的动作，不写盘、不询问。写盘之前想看一遍会改什么就用它。",
 			"--password <密码>：读归档头需要密码；不给时按「仓库 > settings」取。",
 		},
 		Notes: []string{
@@ -416,7 +416,7 @@ var zhHelp = map[string]HelpTopic{
 				"  裸数字表示百分比：5 = 至少省下这个包大小的 5% 才动手。\n" +
 				"  带单位表示绝对大小：8M = 至少省 8 MB 才动手，K/M/G/T 都可以。\n" +
 				"  百分号不认，写成 5% 会被当成绝对值。不给就用 config 里的 compact_min_gain（默认 5%）。",
-			"--check：只打印计划、不执行。想先看看会重打哪些包时用它。",
+			"--check：只打印将要执行的动作，不写盘、不询问。想先看看会重打哪些包就用它。",
 			"--password <密码>：不给时按「仓库 > settings」取，取不到会交互询问。",
 		},
 		Notes: []string{
@@ -442,7 +442,7 @@ var zhHelp = map[string]HelpTopic{
 			"--from <包名>：只解压指定的这一个包，不往后累积，也不重放删除记录。必须配合 --only 使用。",
 			"--no-overwrite：目标已存在同名文件时保留它，不覆盖。",
 			"--no-delete：不执行删除记录，目标目录里多出来的旧文件统统保留。",
-			"--check：只打印将要执行的清单，不询问、不写盘；此时可以不写目标路径。",
+			"--check：只打印将要执行的动作，不写盘、不询问；这时可以不写目标路径。",
 			"--password <密码>：不给时按「仓库 > settings」取，取不到会交互询问。",
 		},
 		Notes: []string{
@@ -478,7 +478,7 @@ var enHelp = map[string]HelpTopic{
 		},
 	},
 	"set": {
-		Usage:   "set <repo_name> [--source <path>] [--output <path>] [--compress <0-9>] [--solid <block|off>] [--mhe on|off>] [--max-pack-byte <quantity>] [--exclude <glob>] [--password <password>]",
+		Usage:   "set <repo_name> [--source <path>] [--output <path>] [--compress <0-9>] [--solid <block|off>] [--mhe on|off] [--max-pack-byte <quantity>] [--exclude <glob>] [--password <password>]",
 		Purpose: `Change one repo's settings, passing only what you want to change. Repo settings override the same-named global settings in config.`,
 		How:     `Written to repos.json. These settings only affect packs built afterwards: an existing pack is never recompressed because a setting changed. compact does not convert them either — it drops the copies a newer version has superseded and repacks the rest with the same settings, to save space rather than to change the format.`,
 		Params: []string{
@@ -560,7 +560,7 @@ Several times can be given, comma separated, creating one task each. Days 29-31 
 		Params: []string{
 			"--daily / --weekly 1,3 / --monthly 1,15: the period.",
 			"--at HH:MM[,HH:MM...]: when to run, one or more times.",
-			"--check: print the tasks it would create, create nothing.",
+			"--check: print the plan, write nothing, ask nothing. This lists the scheduled tasks it would create.",
 			"--no-notify: leave --notify out of the task.",
 			"--password <password>: baked into the task; changing the password later means recreating it.",
 		},
@@ -603,13 +603,13 @@ Several times can be given, comma separated, creating one task each. Days 29-31 
 		Params:  []string{"--force: run the setup again even if it was already done."},
 		Notes:   []string{"Reopen the terminal after changing PATH."},
 	},
-	"fixpack": {
-		Usage:   "fixpack <repo_name> [--check] [--password <password>]",
+	"fixrepo": {
+		Usage:   "fixrepo <repo_name> [--check] [--password <password>]",
 		Purpose: `Repair damaged packs: keep the files that still read, find a replacement for the ones that do not, and repack under the same name. It only touches pack content, never manifest.json (the ledger).`,
 		How:     `Run 7z t on every pack first; on a non-solid archive 7-Zip reports each unreadable file by name. For every bad file, look for a replacement in order: the source directory first (still there, size and mtime matching index.tsv = that copy), then other packs from newest to oldest, each confirmed with 7z t so a damaged history copy is skipped. Nothing found means unrecoverable. After confirmation each bad pack is rewritten: extract what reads, drop in the replacements, repack with the same settings.`,
 		Params: []string{
 			"<repo_name>: which repo to repair.",
-			"--check: only inspect and print the plan; change nothing.",
+			"--check: print the plan, write nothing, ask nothing.",
 			"--password <password>: omit to use repo > settings; prompt if neither has one.",
 		},
 		Notes: []string{
@@ -632,7 +632,7 @@ Step 3 is the reason the command exists: nothing else can repair a stale manifes
 		Params: []string{
 			"--pack-start <pack_name> / --pack-end <pack_name>: rebuild only that slice of the index.",
 			"--rehash: recompute every registered pack's hash; repairs a compact that died mid-way.",
-			"--check: print the plan, write nothing.",
+			"--check: print the plan, write nothing, ask nothing.",
 			"--password <password>: reading archive headers needs one; repo > settings, else prompt.",
 		},
 		Notes: []string{
@@ -680,7 +680,7 @@ The repack uses the exact same arguments as a backup (compression level, solid b
 				"  A percentage (5%) means \"only if it saves at least 5% of this pack\";\n" +
 				"  an absolute size (8M) means \"only if it saves at least 8 MB\". K/M/G/T all work.\n" +
 				"  Omit to use compact_min_gain from settings (default 5%).",
-			"--check: print the plan and stop. Use it to see which packs would be rewritten.",
+			"--check: print the plan, write nothing, ask nothing. Use it to see which packs would be rewritten.",
 			"--password <password>: omit to use repo > settings; prompt if neither has one.",
 		},
 		Notes: []string{
@@ -706,7 +706,7 @@ Deletion is a separate layer. Every backup records not just the files that exist
 			"--from <pack_name>: extract only that one pack — no forward accumulation, no deletion replay. Must be combined with --only.",
 			"--no-overwrite: keep an existing same-name file instead of overwriting it.",
 			"--no-delete: do not replay deletions; keep the extra old files in the destination.",
-			"--check: print the plan, ask nothing, write nothing; the destination may be omitted.",
+			"--check: print the plan, write nothing, ask nothing; the destination may be omitted.",
 			"--password <password>: omit to use repo > settings; prompt if neither has one.",
 		},
 		Notes: []string{

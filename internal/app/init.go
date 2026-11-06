@@ -123,8 +123,10 @@ func cmdInit(args []string) {
 		fmt.Print(M.Init7zipMissing)
 	}
 
-	fmt.Print(M.InitHint)
 	if !ok {
+		// 有步骤失败时别再说「完成」——那会让人以为已经好了
+		fmt.Print(M.InitFailedHint)
 		os.Exit(1)
 	}
+	fmt.Print(M.InitHint)
 }

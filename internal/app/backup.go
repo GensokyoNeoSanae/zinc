@@ -797,8 +797,14 @@ func runBackup(name string, cfg *Config, set *Settings, scan ScanResult, passwor
 
 	filesPacked := len(ready) - len(packSkipped)
 	if len(packs) > 0 {
+		// 报出包名：只写「1 包」的话，用户想知道刚才到底生成了什么还得自己 ls
+		names := make([]string, len(packs))
+		for i, p := range packs {
+			names[i] = p.Name
+		}
 		printColored(M.DetailLine+"\n", name, filesPacked, humanSize(total), len(packs),
-			fmt.Sprintf(M.EncFrom, encFrom), res.ScanDur.Milliseconds(), shortHash(res.BatchHash))
+			packNamesBrief(names), fmt.Sprintf(M.EncFrom, encFrom),
+			res.ScanDur.Milliseconds(), shortHash(res.BatchHash))
 	}
 	if len(del) > 0 {
 		printColored(M.DeletedLine, name, len(del), rmName)
@@ -1132,4 +1138,15 @@ func updateManifestPackHash(output, repo, pack, hash string) error {
 		Packs: map[string]string{pack: hash},
 	})
 	return writeManifestFile(output, m)
+}
+
+// packNamesBrief 把这次的包名压成一小段：一两个就全列，多了只列第一个。
+func packNamesBrief(packs []string) string {
+	if len(packs) == 0 {
+		return "-"
+	}
+	if len(packs) <= 2 {
+		return strings.Join(packs, ", ")
+	}
+	return fmt.Sprintf("%s 等 %d 个", packs[0], len(packs))
 }

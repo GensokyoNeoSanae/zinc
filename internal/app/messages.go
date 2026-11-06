@@ -130,8 +130,8 @@ type Messages struct {
 	VerifySomeSkipped    string
 	VerifyCorruptWarn    string
 	VerifyCorruptFix     string
-	// fixpack：修包（剔坏文件、找替代、重打包）
-	UsageFixpack        string
+	// fixrepo：修包（剔坏文件、找替代、重打包）
+	UsageFixrepo        string
 	FixNoPacks          string
 	FixTesting          string
 	FixPackOK           string
@@ -267,6 +267,7 @@ type Messages struct {
 	Init7zipOK      string
 	Init7zipMissing string
 	InitHint        string
+	InitFailedHint  string
 
 	// install / uninstall（独立可执行文件，与主程序共用这套消息表）
 	FlagInstall7zip  string
@@ -389,26 +390,36 @@ type Messages struct {
 	CheckListItem        string
 	CheckListTotal       string
 	// 危险操作确认（confirm_tips=on 时生效）
-	ConfirmPrompt      string
-	ConfirmAgain       string
-	ConfirmCancelled   string
-	RestoreConfirmHead string
-	RemoveConfirm      string
-	PackOrderBroken    string
-	NoPacksRestore     string
-	FlagOnly           string
-	FlagFrom           string
-	FromRequiresOnly   string
-	RestorePartial     string
-	MissingOnly        string
-	PathNotBackedUp    string
-	FromPackNoSuchPath string
-	OnlyPasswordBad    string
-	PackNotSpecified   string
-	OnlyOrigin         string
-	OnlyDone           string
-	OnlyVersions       string
-	OnlyNoVersions     string
+	ConfirmPrompt         string
+	ConfirmAgain          string
+	BareHint              string
+	UnknownCommand        string
+	ReadmeTitle           string
+	ReadmeText            string
+	ConfirmCancelled      string
+	RestoreConfirmHead    string
+	RemoveConfirm         string
+	PackOrderBroken       string
+	NoPacksRestore        string
+	FlagOnly              string
+	FlagFrom              string
+	FromRequiresOnly      string
+	RestorePartial        string
+	MissingOnly           string
+	PathNotBackedUp       string
+	FromPackNoSuchPath    string
+	OnlyPasswordBad       string
+	OnlyCheckDest         string
+	OnlyCheckWrapOn       string
+	OnlyCheckWrapOff      string
+	OnlyCheckOverwriteOn  string
+	OnlyCheckOverwriteOff string
+	OnlyCheckNoDest       string
+	PackNotSpecified      string
+	OnlyOrigin            string
+	OnlyDone              string
+	OnlyVersions          string
+	OnlyNoVersions        string
 
 	// fixmeta（原 reindex + remanifest 合并）
 	FlagPackStart      string
@@ -516,6 +527,7 @@ var zhMessages = &Messages{
 
 元:
   zinc help [<命令>]                     显示用法；给命令名时展开该命令的详细说明
+  zinc readme                            内置说明：zinc 做什么、数据怎么记的、怎么确认没坏
   zinc version | --version | -v          显示版本
   zinc [--lang zh|en]                    切换界面语言（写入设置，之后一直生效）
   zinc init [--force]                    一次性初始化：注册通知 + 把本目录加入用户 PATH
@@ -544,7 +556,7 @@ var zhMessages = &Messages{
   zinc status [--expand] [<仓库名>]
   zinc fixmeta <仓库名> [--pack-start <包名>] [--pack-end <包名>] [--rehash]
                         [--check] [--password <密码>]
-  zinc fixpack <仓库名> [--check] [--password <密码>]
+  zinc fixrepo <仓库名> [--check] [--password <密码>]
                         修包：捞回坏包里还能用的文件，给读不出来的找替代来源后重打包
 
 自动化:
@@ -623,7 +635,7 @@ var zhMessages = &Messages{
 	AddedRepo:          "已添加 %s\n  源:   %s\n  输出: %s\n",
 	UsageRemove:        "用法: zinc remove <仓库名>",
 	RemovedRepo:        "已移除仓库 %s（包文件和索引未删除）\n",
-	UsageSet:           "用法: zinc set <仓库名> [--source <路径>] [--output <路径>] [--compress <0-9>] [--solid <块大小|off>] [--mhe on|off>] [--max-pack-byte <数量>] [--exclude <通配符>] [--password <密码>]",
+	UsageSet:           "用法: zinc set <仓库名> [--source <路径>] [--output <路径>] [--compress <0-9>] [--solid <块大小|off>] [--mhe on|off] [--max-pack-byte <数量>] [--exclude <通配符>] [--password <密码>]",
 	NeedSourceOrOutput: "至少给一个设置项：--source / --output / --password / --max-pack-byte / --compress / --solid / --mhe / --exclude",
 	UpdatedRepo:        "已更新 %s\n  源:   %s\n  输出: %s\n",
 	PathInvalid:        "路径无效: %s（%v）",
@@ -700,7 +712,7 @@ var zhMessages = &Messages{
 	VerifyCorruptWarn:    "如果你确定没有手动修改过输出目录里的压缩包，那它很可能已经损坏了。\n",
 	VerifyCorruptFix:     "如果原文件还在，可以这样补救：删掉被改动的包和该仓库的 index.tsv，执行 zinc fixmeta %[1]s 重建账本，再跑一次 zinc backup %[1]s 把文件重新打包。\n",
 
-	UsageFixpack:        "用法: zinc fixpack <仓库名> [--check] [--password <密码>]",
+	UsageFixrepo:        "用法: zinc fixrepo <仓库名> [--check] [--password <密码>]",
 	FixNoPacks:          "输出目录里没有包: %s",
 	FixTesting:          "[检查] %s\n",
 	FixPackOK:           "[ok] %s 完好\n",
@@ -824,6 +836,7 @@ var zhMessages = &Messages{
 	Init7zipOK:      "[ok] 7za: %s\n",
 	Init7zipMissing: "[警告] 找不到 7z.exe / 7za.exe（可用 zinc config set 7zip_path 指定）\n",
 	InitHint:        "\n完成。新开一个终端就能直接敲 zinc；通知不弹就再跑一次 zinc init --force。\n",
+	InitFailedHint:  "\n有步骤没成功，见上面的错误。先按提示把原因修好（权限、杀毒软件拦截之类），再重新跑一次 zinc init --force——光重跑不解决问题。\n",
 
 	FlagInstall7zip:  "指定 7z.exe / 7za.exe 的路径",
 	FlagNoPause:      "结束后不等待按键（给脚本用）",
@@ -891,7 +904,7 @@ var zhMessages = &Messages{
 	PackTooBig:       "[警告] %s (%s) 超过单包上限 %s，单独成包\n",
 	ClockRollback:    "[警告] 系统时钟似乎回退，包名时刻取 %s\n",
 	RenamePackFailed: "重命名成品包失败: %w",
-	DetailLine:       "[ok] %s · %d 文件 · %s · %d 包 · %s · scan %dms · hash %s",
+	DetailLine:       "[ok] %s · %d 文件 · %s · %d 包（%s） · %s · scan %dms · hash %s",
 	EncFrom:          "enc✓(%s)",
 	ScanSkipItem:     "[跳过] %s\n",
 	LockedItem:       "[占用] %s（下次备份会重试）\n",
@@ -928,36 +941,69 @@ var zhMessages = &Messages{
 	VerifyRmCorrupt:      "[不一致] 删除记录 %s\n",
 	VerifyRmSummary:      "删除记录: 通过 %d, 不一致 %d, 缺失 %d\n",
 
-	FlagNoOverwrite:      "恢复时不覆盖，同名文件重命名为 _1",
-	FlagCheck:            "只打印计划，不执行、不询问",
-	ConfirmPrompt:        "继续吗？[y/N] ",
-	ConfirmAgain:         "[请输入 y 或 n] ",
-	ConfirmCancelled:     "已取消，未做任何改动。\n",
-	RestoreConfirmHead:   "目标目录 %s 里已有文件，恢复可能覆盖或删除它们。\n",
-	RemoveConfirm:        "确定移除仓库「%s」？只删配置，输出目录里的包不会动。\n",
-	ModeOverwrite:        "覆盖",
-	ModeRename:           "不覆盖",
-	DestUnset:            "(未指定)",
-	RestoreOverwriteWarn: "[警告] 覆盖模式：目标目录中的同名文件将被替换\n",
-	RestoreWrapLine:      "[外层] 恢复写入 %s（restore_wrap_folder=on）\n",
-	CheckListHeader:      "恢复顺序（%d 个包，%d 份删除记录）· 模式：%s · 目标：%s\n",
-	CheckListItem:        "  %2d. %-44s %10s\n",
-	CheckListTotal:       "合计 %s\n",
-	PackOrderBroken:      "包顺序不单调：%s 与 %s 的顺序无法确定。请检查输出目录里的文件名，恢复已中止",
-	NoPacksRestore:       "没有找到任何包: %s",
-	FlagOnly:             "只恢复这个相对路径（文件或目录），不动其他文件",
-	FlagFrom:             "从指定包恢复：包名、名字前缀或序号（1 起）",
-	FromRequiresOnly:     "--from 只能和 --only 一起使用",
-	RestorePartial:       "[警告] 恢复已中止，目标目录可能只完成了一部分\n",
-	MissingOnly:          "--only 的路径不能为空",
-	PathNotBackedUp:      "索引和所有包里都没找到这个路径: %s",
-	FromPackNoSuchPath:   "--from 指定的包 %s 里没有这个路径: %s（什么都没恢复）",
-	OnlyPasswordBad:      "有 %d 个包无法用当前密码打开，没法判断这些包里有没有你要的路径（这是密码不对，不是路径不存在）",
-	PackNotSpecified:     "找不到包: %s",
-	OnlyOrigin:           "[来自] %s\n",
-	OnlyDone:             "[完成] %s → %s\n",
-	OnlyVersions:         "包含 %s 的包（%d 个，时间升序）\n",
-	OnlyNoVersions:       "没有任何包包含这个路径: %s",
+	FlagNoOverwrite: "恢复时不覆盖，同名文件重命名为 _1",
+	FlagCheck:       "只打印计划，不执行、不询问",
+	ConfirmPrompt:   "继续吗？[y/N] ",
+	ConfirmAgain:    "[请输入 y 或 n] ",
+	BareHint:        "用 zinc help 查看全部命令，zinc readme 看它怎么工作。",
+	UnknownCommand:  "未知命令: %s（用 zinc help 查看全部命令）",
+	ReadmeTitle:     "zinc — 文件级增量、加密独立包备份",
+	ReadmeText: `zinc 把多个目录增量地备份成一批独立的加密 7z 包，再按时间线还原回来。
+每个包都能单独解压，不依赖前面的包；包名就是打包时刻。
+
+三种操作是怎么记的
+  新增 / 修改：backup 把「新的或改动过的」文件打成一个新包。同一个文件改了三次，
+    就有三个版本，分散在三个包里，谁也不会覆盖谁。
+  删除：backup 发现源目录里少了文件时，不删任何东西，只在输出目录写一个 .rm
+    删除记录（与那一批的包同名）。恢复时会按时间线重放这些删除。
+  覆盖：还原时按包名升序依次解压，后一个包覆盖前一个，最后得到「最新状态」。
+
+怎么确认备份没坏
+  每个包写入时算一份 SHA-256 记进 manifest.json（账本）。之后随时可以用
+  zinc verify 重算一遍比对。对不上叫「不一致」——不一定已经坏了，但复算不通过
+  就不能信任它。
+  真坏了可以用 zinc fixrepo，从源目录或历史包里还能读的副本把坏包重写一遍；
+  如果坏的是账本本身（index.tsv / manifest.json），用 zinc fixmeta 从输出目录重建。
+
+常用命令
+  zinc help                 全部命令，按用途分组
+  zinc help <命令>          某一条命令的详细说明
+  zinc add / backup        创建仓库、开始备份
+  zinc status               每个仓库占多少空间、最后一次备份是什么时候
+  zinc restore              从备份里拿回来
+`,
+	ConfirmCancelled:      "已取消，未做任何改动。\n",
+	RestoreConfirmHead:    "目标目录 %s 里已有文件，恢复可能覆盖或删除它们。\n",
+	RemoveConfirm:         "确定移除仓库「%s」？只删配置，输出目录里的包不会动。\n",
+	ModeOverwrite:         "覆盖",
+	ModeRename:            "不覆盖",
+	DestUnset:             "(未指定)",
+	RestoreOverwriteWarn:  "[警告] 覆盖模式：目标目录中的同名文件将被替换\n",
+	RestoreWrapLine:       "[外层] 恢复写入 %s（restore_wrap_folder=on）\n",
+	CheckListHeader:       "恢复顺序（%d 个包，%d 份删除记录）· 模式：%s · 目标：%s\n",
+	CheckListItem:         "  %2d. %-44s %10s\n",
+	CheckListTotal:        "合计 %s\n",
+	PackOrderBroken:       "包顺序不单调：%s 与 %s 的顺序无法确定。请检查输出目录里的文件名，恢复已中止",
+	NoPacksRestore:        "没有找到任何包: %s",
+	FlagOnly:              "只恢复这个相对路径（文件或目录），不动其他文件",
+	FlagFrom:              "从指定包恢复：包名、名字前缀或序号（1 起）",
+	FromRequiresOnly:      "--from 只能和 --only 一起使用",
+	RestorePartial:        "[警告] 恢复已中止，目标目录可能只完成了一部分\n",
+	MissingOnly:           "--only 的路径不能为空",
+	PathNotBackedUp:       "索引和所有包里都没找到这个路径: %s",
+	FromPackNoSuchPath:    "--from 指定的包 %s 里没有这个路径: %s（什么都没恢复）",
+	OnlyPasswordBad:       "有 %d 个包无法用当前密码打开，没法判断这些包里有没有你要的路径（这是密码不对，不是路径不存在）",
+	OnlyCheckDest:         "[落点] 恢复到 %s\n",
+	OnlyCheckWrapOn:       "  会套一层 restore-<仓库名>-<时间戳> 目录（restore_wrap_folder=on），写进新目录，不问。\n",
+	OnlyCheckWrapOff:      "  直接写进这个目录（restore_wrap_folder=off）。\n",
+	OnlyCheckOverwriteOn:  "  同名文件会被覆盖。\n",
+	OnlyCheckOverwriteOff: "  同名文件保留不覆盖（--no-overwrite）。\n",
+	OnlyCheckNoDest:       "[落点] 没写 --dest，所以不知道会落到哪（正式执行时 --dest 是必填的）。\n",
+	PackNotSpecified:      "找不到包: %s",
+	OnlyOrigin:            "[来自] %s\n",
+	OnlyDone:              "[完成] %s → %s\n",
+	OnlyVersions:          "包含 %s 的包（%d 个，时间升序）\n",
+	OnlyNoVersions:        "没有任何包包含这个路径: %s",
 
 	FlagPackStart:      "只重建从该包名开始的范围",
 	FlagPackEnd:        "只重建到该包名为止的范围",
@@ -1057,6 +1103,7 @@ var enMessages = &Messages{
 
 Meta:
   zinc help [<command>]                  show usage; with a command, expand its details
+  zinc readme                            built-in overview: what zinc does, how data is recorded
   zinc version | --version | -v          show the version
   zinc [--lang zh|en]                    switch the UI language (saved; applies to later runs)
   zinc init [--force]                    one-time setup: notifications + this dir on user PATH
@@ -1085,7 +1132,7 @@ Verify and fixmeta:
   zinc status [--expand] [<repo_name>]
   zinc fixmeta <repo_name> [--pack-start <pack_name>] [--pack-end <pack_name>]
                         [--rehash] [--check] [--password <password>]
-  zinc fixpack <repo_name> [--check] [--password <password>]
+  zinc fixrepo <repo_name> [--check] [--password <password>]
                         repair packs: salvage what is readable, find replacements, repack
 
 Automation:
@@ -1164,7 +1211,7 @@ Notes:
 	AddedRepo:          "added %s\n  source: %s\n  output: %s\n",
 	UsageRemove:        "usage: zinc remove <repo_name>",
 	RemovedRepo:        "removed repo %s (packs and index are kept)\n",
-	UsageSet:           "usage: zinc set <repo_name> [--source <path>] [--output <path>] [--compress <0-9>] [--solid <block|off>] [--mhe on|off>] [--max-pack-byte <quantity>] [--exclude <glob>] [--password <password>]",
+	UsageSet:           "usage: zinc set <repo_name> [--source <path>] [--output <path>] [--compress <0-9>] [--solid <block|off>] [--mhe on|off] [--max-pack-byte <quantity>] [--exclude <glob>] [--password <password>]",
 	NeedSourceOrOutput: "at least one setting is required: --source / --output / --password / --max-pack-byte / --compress / --solid / --mhe / --exclude",
 	UpdatedRepo:        "updated %s\n  source: %s\n  output: %s\n",
 	PathInvalid:        "invalid path: %s (%v)",
@@ -1241,7 +1288,7 @@ Notes:
 	VerifyCorruptWarn:    "If you never edited the packs in the output directory yourself, this one is probably damaged.\n",
 	VerifyCorruptFix:     "If the source files are still there: delete the changed pack and the repo's index.tsv, run zinc fixmeta %[1]s to rebuild the ledger, then zinc backup %[1]s to pack them again.\n",
 
-	UsageFixpack:        "usage: zinc fixpack <repo_name> [--check] [--password <password>]",
+	UsageFixrepo:        "usage: zinc fixrepo <repo_name> [--check] [--password <password>]",
 	FixNoPacks:          "no packs in the output directory: %s",
 	FixTesting:          "[check] %s\n",
 	FixPackOK:           "[ok] %s is intact\n",
@@ -1365,6 +1412,7 @@ Notes:
 	Init7zipOK:      "[ok] 7za: %s\n",
 	Init7zipMissing: "[warn] 7z.exe / 7za.exe not found (set it with zinc config set 7zip_path)\n",
 	InitHint:        "\nDone. Open a new terminal and type zinc; if notifications still fail, run zinc init --force again.\n",
+	InitFailedHint:  "\nsome steps failed; see the errors above. Fix the cause first (permissions, antivirus interference and so on), then run zinc init --force again — re-running alone will not fix it.\n",
 
 	FlagInstall7zip:  "path to 7z.exe / 7za.exe",
 	FlagNoPause:      "do not wait for a key press (for scripts)",
@@ -1432,7 +1480,7 @@ Notes:
 	PackTooBig:       "[warn] %s (%s) exceeds pack limit %s, packed alone\n",
 	ClockRollback:    "[warn] system clock went backwards; using %s as pack time\n",
 	RenamePackFailed: "failed to rename finished pack: %w",
-	DetailLine:       "[ok] %s · %d files · %s · %d packs · %s · scan %dms · hash %s",
+	DetailLine:       "[ok] %s · %d files · %s · %d packs (%s) · %s · scan %dms · hash %s",
 	EncFrom:          "enc✓(%s)",
 	ScanSkipItem:     "[skip] %s\n",
 	LockedItem:       "[locked] %s (will retry next backup)\n",
@@ -1469,36 +1517,73 @@ Notes:
 	VerifyRmCorrupt:      "[inconsistent] deletion record %s\n",
 	VerifyRmSummary:      "deletion records: %d ok, %d inconsistent, %d missing\n",
 
-	FlagNoOverwrite:      "keep both: same-name files are restored as _1",
-	FlagCheck:            "print the plan only; do not run or ask",
-	ConfirmPrompt:        "Continue? [y/N] ",
-	ConfirmAgain:         "[please answer y or n] ",
-	ConfirmCancelled:     "Cancelled; nothing changed.\n",
-	RestoreConfirmHead:   "The destination %s already has files; restoring may overwrite or delete them.\n",
-	RemoveConfirm:        "Remove repo \"%s\"? Only its config goes away; the packs in its output directory stay.\n",
-	ModeOverwrite:        "overwrite",
-	ModeRename:           "no-overwrite",
-	DestUnset:            "(not specified)",
-	RestoreOverwriteWarn: "[warn] overwrite mode: same-name files in the destination will be replaced\n",
-	RestoreWrapLine:      "[wrap] restoring into %s (restore_wrap_folder=on)\n",
-	CheckListHeader:      "restore order (packs %d, deletion records %d) · mode: %s · dest: %s\n",
-	CheckListItem:        "  %2d. %-44s %10s\n",
-	CheckListTotal:       "total %s\n",
-	PackOrderBroken:      "pack order is not monotonic: %s and %s cannot be ordered. Check the file names in the output directory; restore aborted",
-	NoPacksRestore:       "no packs found: %s",
-	FlagOnly:             "restore only this relative path (file or directory), leave the rest alone",
-	FlagFrom:             "restore from a specific pack: name, name prefix or index (1-based)",
-	FromRequiresOnly:     "--from can only be used together with --only",
-	RestorePartial:       "[warn] restore aborted; the destination may be partially restored\n",
-	MissingOnly:          "--only requires a non-empty path",
-	PathNotBackedUp:      "path not found in the index or in any pack: %s",
-	FromPackNoSuchPath:   "the pack named by --from (%s) does not contain this path: %s (nothing was restored)",
-	OnlyPasswordBad:      "%d pack(s) cannot be opened with the current password, so it is unknown whether they contain the path (the password is wrong, the path may exist)",
-	PackNotSpecified:     "pack not found: %s",
-	OnlyOrigin:           "[from] %s\n",
-	OnlyDone:             "[done] %s → %s\n",
-	OnlyVersions:         "packs containing %s (%d, oldest first)\n",
-	OnlyNoVersions:       "no pack contains that path: %s",
+	FlagNoOverwrite: "keep both: same-name files are restored as _1",
+	FlagCheck:       "print the plan only; do not run or ask",
+	ConfirmPrompt:   "Continue? [y/N] ",
+	ConfirmAgain:    "[please answer y or n] ",
+	BareHint:        "Run zinc help to see every command, or zinc readme for how it works.",
+	UnknownCommand:  "unknown command: %s (run zinc help to see every command)",
+	ReadmeTitle:     "zinc — file-level incremental backup into independent encrypted packs",
+	ReadmeText: `zinc backs up directories incrementally into batches of independent encrypted 7z
+packs, then replays them along a timeline to restore. Every pack extracts on its
+own; the pack name is the moment it was written.
+
+How the three operations are recorded
+  New / modified: backup packs only the files that are new or changed. Edit a file
+    three times and you get three versions in three packs; nothing overwrites anything.
+  Deleted: when backup notices a file has disappeared from the source, it deletes
+    nothing. It writes a .rm deletion record next to that batch's packs, and a restore
+    replays those deletions along the timeline.
+  Overwrite: a restore extracts packs in name order (ascending), each later pack
+    overwriting the earlier one, which leaves you with the latest state.
+
+How to tell a backup is still good
+  Every pack gets a SHA-256 written to manifest.json (the ledger). zinc verify
+  recomputes them at any time. A mismatch is reported as "inconsistent" — not proof
+  that it is damaged, but you cannot trust a pack that fails the check.
+  If one really is damaged, zinc fixrepo rewrites it from readable copies in the
+  source directory or in older packs. If the ledger itself is broken (index.tsv /
+  manifest.json), zinc fixmeta rebuilds it from the output directory.
+
+Common commands
+  zinc help                 every command, grouped by what you are trying to do
+  zinc help <command>       details for one command
+  zinc add / backup        create a repo, start backing up
+  zinc status               how much space each repo takes, when it last ran
+  zinc restore              get files back out
+`,
+	ConfirmCancelled:      "Cancelled; nothing changed.\n",
+	RestoreConfirmHead:    "The destination %s already has files; restoring may overwrite or delete them.\n",
+	RemoveConfirm:         "Remove repo \"%s\"? Only its config goes away; the packs in its output directory stay.\n",
+	ModeOverwrite:         "overwrite",
+	ModeRename:            "no-overwrite",
+	DestUnset:             "(not specified)",
+	RestoreOverwriteWarn:  "[warn] overwrite mode: same-name files in the destination will be replaced\n",
+	RestoreWrapLine:       "[wrap] restoring into %s (restore_wrap_folder=on)\n",
+	CheckListHeader:       "restore order (packs %d, deletion records %d) · mode: %s · dest: %s\n",
+	CheckListItem:         "  %2d. %-44s %10s\n",
+	CheckListTotal:        "total %s\n",
+	PackOrderBroken:       "pack order is not monotonic: %s and %s cannot be ordered. Check the file names in the output directory; restore aborted",
+	NoPacksRestore:        "no packs found: %s",
+	FlagOnly:              "restore only this relative path (file or directory), leave the rest alone",
+	FlagFrom:              "restore from a specific pack: name, name prefix or index (1-based)",
+	FromRequiresOnly:      "--from can only be used together with --only",
+	RestorePartial:        "[warn] restore aborted; the destination may be partially restored\n",
+	MissingOnly:           "--only requires a non-empty path",
+	PathNotBackedUp:       "path not found in the index or in any pack: %s",
+	FromPackNoSuchPath:    "the pack named by --from (%s) does not contain this path: %s (nothing was restored)",
+	OnlyPasswordBad:       "%d pack(s) cannot be opened with the current password, so it is unknown whether they contain the path (the password is wrong, the path may exist)",
+	OnlyCheckDest:         "[destination] would restore into %s\n",
+	OnlyCheckWrapOn:       "  nested inside a restore-<repo>-<timestamp> directory (restore_wrap_folder=on), so nothing is overwritten and no question is asked.\n",
+	OnlyCheckWrapOff:      "  written straight into that directory (restore_wrap_folder=off).\n",
+	OnlyCheckOverwriteOn:  "  same-name files would be overwritten.\n",
+	OnlyCheckOverwriteOff: "  same-name files are kept (--no-overwrite).\n",
+	OnlyCheckNoDest:       "[destination] no --dest given, so the destination is unknown (it is required when actually restoring).\n",
+	PackNotSpecified:      "pack not found: %s",
+	OnlyOrigin:            "[from] %s\n",
+	OnlyDone:              "[done] %s → %s\n",
+	OnlyVersions:          "packs containing %s (%d, oldest first)\n",
+	OnlyNoVersions:        "no pack contains that path: %s",
 
 	FlagPackStart:      "rebuild only from this pack name onwards",
 	FlagPackEnd:        "rebuild only up to this pack name",

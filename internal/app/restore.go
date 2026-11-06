@@ -438,6 +438,25 @@ func runRestoreOnly(name string, cfg *Config, set *Settings, dest, password, onl
 			}
 			fmt.Printf(M.CheckListDelItem, i+1, e.Del, n)
 		}
+		// --check 不该只说「有哪些版本」，还得说清「会落到哪、会不会覆盖」。
+		if dest != "" {
+			target, terr := restoreDest(name, dest, wrap)
+			if terr == nil {
+				fmt.Printf(M.OnlyCheckDest, target)
+				if wrap {
+					fmt.Print(M.OnlyCheckWrapOn)
+				} else {
+					fmt.Print(M.OnlyCheckWrapOff)
+					if overwrite {
+						fmt.Print(M.OnlyCheckOverwriteOn)
+					} else {
+						fmt.Print(M.OnlyCheckOverwriteOff)
+					}
+				}
+			}
+		} else {
+			fmt.Print(M.OnlyCheckNoDest)
+		}
 		return nil
 	}
 
